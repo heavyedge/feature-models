@@ -1,2 +1,3 @@
 pandas
+scikit-learn
 gpytorch-qr==0.1.0

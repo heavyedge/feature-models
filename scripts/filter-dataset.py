@@ -8,7 +8,7 @@ parser.add_argument("dataset", type=pathlib.Path, help="Dataset csv file.")
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
 
-df = pd.read_csv(args.dataset).drop(columns=["Reynolds_number"])
+df = pd.read_csv(args.dataset)
 groups = df.groupby("Slurry")
 
 subdfs = []
