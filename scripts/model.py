@@ -1,4 +1,5 @@
 import gpytorch
+import numpy as np
 import torch
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
@@ -12,6 +13,7 @@ __all__ = [
     "PriorMean_H",
     "MTGP_H",
     "MTGPQR_H",
+    "quantile_interpolation",
 ]
 
 
@@ -130,8 +132,25 @@ class MTGPQR_H(MTGPQR):
             X_min=X_min,
         )
         super().__init__(taus, gp)
+        self.taus = taus
         self.scaler = Scaler(X_scale, X_min)
 
     def forward(self, x):
         x_scaled = self.scaler(x)
         return super().forward(x_scaled)
+
+
+def quantile_interpolation(q_values, q_levels, threshold):
+    idx = np.array([np.searchsorted(row, threshold) for row in q_values])
+    idx_clamped = np.clip(idx, 1, len(q_levels) - 1)
+
+    rows = np.arange(len(q_values))
+    x0 = q_values[rows, idx_clamped - 1]
+    x1 = q_values[rows, idx_clamped]
+    y0 = q_levels[idx_clamped - 1]
+    y1 = q_levels[idx_clamped]
+    probs = y0 + (threshold - x0) * (y1 - y0) / (x1 - x0)
+
+    probs = np.where(idx == 0, 0.0, probs)
+    probs = np.where(idx == len(q_levels), 1.0, probs)
+    return probs

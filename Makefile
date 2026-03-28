@@ -4,7 +4,7 @@
 all: model/H-model.pth
 
 clean:
-	rm -rf _temp model/H-model.pth
+	rm -rf _temp _artifacts model/H-model.pth
 
 _temp/Dataset.csv: scripts/filter-dataset.py _data/Dataset.csv
 	@mkdir -p $(@D)
@@ -19,5 +19,9 @@ _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['phi', 'H', 'b']].to_csv('$@', index=False)"
 
 model/H-model.pth: scripts/train-qr.py _temp/X.csv _temp/y.csv
+	@mkdir -p $(@D)
+	python3 $^ --target H -o $@
+
+_artifacts/H-model.png: scripts/plot-qr.py _temp/X.csv model/H-model.pth
 	@mkdir -p $(@D)
 	python3 $^ --target H -o $@

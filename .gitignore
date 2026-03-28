@@ -1,7 +1,9 @@
 _data
 _temp
+_artifacts
 model/*
 !model/README.md
+!model/requirements.txt
 
 
 .vscode

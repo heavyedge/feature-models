@@ -1,0 +1,2 @@
+pandas
+gpytorch-qr==0.1.0

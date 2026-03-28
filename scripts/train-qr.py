@@ -35,7 +35,7 @@ model.train()
 mll = VariationalELBO(model.likelihood, model.gp, num_data=y.numel())
 optimizer = torch.optim.Adam(list(model.parameters()), lr=0.001)
 
-N_ITER = 10
+N_ITER = 10_000
 for i in range(N_ITER):
     output = model.gp(torch.tensor(X_scaled).float())
     loss = -mll(output, y)
