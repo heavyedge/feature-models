@@ -1,10 +1,10 @@
 .ONESHELL:
 .PHONY: all clean
 
-all:
+all: model/H-model.pth
 
 clean:
-	rm -rf _temp
+	rm -rf _temp model/H-model.pth
 
 _temp/Dataset.csv: scripts/filter-dataset.py _data/Dataset.csv
 	@mkdir -p $(@D)
@@ -18,6 +18,6 @@ _temp/y.csv: _temp/Dataset.csv
 	@mkdir -p $(@D)
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['phi', 'H', 'b']].to_csv('$@', index=False)"
 
-_temp/X-scaler.pkl: scripts/train-scaler.py _temp/X.csv
+model/H-model.pth: scripts/train-qr.py _temp/X.csv _temp/y.csv
 	@mkdir -p $(@D)
-	python3 $^ -o $@
+	python3 $^ --target H -o $@
