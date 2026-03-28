@@ -7,7 +7,7 @@ import torch
 from gpytorch.mlls import VariationalELBO
 from sklearn.preprocessing import MinMaxScaler
 
-from model import MTGPQR_H
+from model import MTGPQR_H, save_mtgpqr
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
@@ -44,10 +44,4 @@ for i in range(N_ITER):
     optimizer.zero_grad()
     print(f"Iter {i + 1}/{N_ITER} - Loss: {loss.item():.3f}")
 
-torch.save(
-    {
-        "inducing_points": inducing_points,
-        "state_dict": model.state_dict(),
-    },
-    args.out,
-)
+save_mtgpqr(model, args.out)

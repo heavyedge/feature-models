@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from model import MTGPQR_H, quantile_interpolation
+from model import MTGPQR_H, load_mtgpqr, quantile_interpolation
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
@@ -31,14 +31,11 @@ for st, _ in reversed(list(X.groupby("Surface_tension"))):
     surface_tensions.append(st)
     X_preds.append(np.concatenate([mesh, np.full(mesh.shape[:-1] + (1,), st)], axis=-1))
 
-checkpoint = torch.load(args.model)
 if args.target == "H":
-    model_class = MTGPQR_H
+    model = load_mtgpqr(MTGPQR_H, args.model)
     threshold = 1.2
 else:
     raise NotImplementedError
-model = model_class(checkpoint["inducing_points"])
-model.load_state_dict(checkpoint["state_dict"])
 
 fig, axes = plt.subplots(
     1,

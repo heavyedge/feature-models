@@ -13,6 +13,8 @@ __all__ = [
     "PriorMean_H",
     "MTGP_H",
     "MTGPQR_H",
+    "save_mtgpqr",
+    "load_mtgpqr",
     "quantile_interpolation",
 ]
 
@@ -132,12 +134,30 @@ class MTGPQR_H(MTGPQR):
             X_min=X_min,
         )
         super().__init__(taus, gp)
+        self.inducing_points = inducing_points
         self.taus = taus
         self.scaler = Scaler(X_scale, X_min)
 
     def forward(self, x):
         x_scaled = self.scaler(x)
         return super().forward(x_scaled)
+
+
+def save_mtgpqr(model, path):
+    torch.save(
+        {
+            "inducing_points": model.inducing_points,
+            "state_dict": model.state_dict(),
+        },
+        path,
+    )
+
+
+def load_mtgpqr(model_class, path):
+    checkpoint = torch.load(path)
+    model = model_class(checkpoint["inducing_points"])
+    model.load_state_dict(checkpoint["state_dict"])
+    return model
 
 
 def quantile_interpolation(q_values, q_levels, threshold):
