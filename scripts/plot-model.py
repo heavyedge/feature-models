@@ -33,7 +33,8 @@ Cas = X["Capillary_number"]
 if args.target == "H":
     from model import PriorMean_H
 
-    mean_module = PriorMean_H(X_scaler)
+    D = X.shape[1]
+    mean_module = PriorMean_H(torch.ones(D).float(), torch.zeros(D).float())
 else:
     raise NotImplementedError
 

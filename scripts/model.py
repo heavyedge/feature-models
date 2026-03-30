@@ -12,6 +12,8 @@ from gpytorch_qr import (
 from torch.nn import Module
 
 __all__ = [
+    "Scaler",
+    "Unscaler",
     "PriorMean_H",
     "MedianGapGP",
     "MTGPQR",
@@ -21,23 +23,46 @@ __all__ = [
 ]
 
 
+class Scaler(torch.nn.Module):
+    """Min-max-scaling."""
+
+    def __init__(self, X_scale, X_min):
+        super().__init__()
+        self.register_buffer("X_scale", X_scale)
+        self.register_buffer("X_min", X_min)
+
+    def forward(self, x):
+        return x * self.X_scale + self.X_min
+
+
+class Unscaler(torch.nn.Module):
+    """Un-min-max-scaling."""
+
+    def __init__(self, X_scale, X_min):
+        super().__init__()
+        self.register_buffer("X_scale", X_scale)
+        self.register_buffer("X_min", X_min)
+
+    def forward(self, x):
+        return (x - self.X_min) / self.X_scale
+
+
 class PriorMean_H(gpytorch.means.Mean):
     """Modified version of model by Schmitt.
 
     Input X must be [Rgt, Ca, surface_tension, ...].
     """
 
-    def __init__(self, scaler):
+    def __init__(self, X_scale, X_min):
         super().__init__()
-        self.register_buffer("X_scale", torch.tensor(scaler.scale_).float())
-        self.register_buffer("X_min", torch.tensor(scaler.min_).float())
+        self.unscaler = Unscaler(X_scale, X_min)
         self.register_parameter(
             "mean_params",
             torch.nn.Parameter(torch.tensor([0.25, -0.27, -1.0, -1.0])),
         )
 
     def forward(self, x):
-        x_unscaled = (x - self.X_min) / self.X_scale
+        x_unscaled = self.unscaler(x)
         Rgt = x_unscaled[..., 0]
         Ca = x_unscaled[..., 1]
         st = x_unscaled[..., 2]

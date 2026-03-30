@@ -42,7 +42,10 @@ y = torch.tensor(pd.read_csv(args.y).values.reshape(-1)).float().to(device)
 taus = torch.tensor(sorted(args.taus)).float().to(device)
 
 if args.target == "H":
-    mean_module = PriorMean_H(X_scaler)
+    mean_module = PriorMean_H(
+        torch.tensor(X_scaler.scale_).float(),
+        torch.tensor(X_scaler.min_).float(),
+    )
 else:
     raise NotImplementedError
 
