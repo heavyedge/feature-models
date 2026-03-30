@@ -1,18 +1,15 @@
 import gpytorch
 import torch
-import torch.nn.functional as F
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
     UnwhitenedVariationalStrategy,
 )
-from gpytorch_qr import CenterGapLmcVariationalStrategy
+from gpytorch_qr import ALD, CenterGapLmcVariationalStrategy, centergap_to_quantiles
 from torch.nn import Module
 
 __all__ = [
     "PriorMean_H",
-    "median_gaps_to_quantiles",
     "MedianGapGP",
-    "BatchALD",
     "MedianGapLikelihood",
     "MTGPQR",
     "train_mtgpqr",
@@ -49,20 +46,6 @@ class PriorMean_H(gpytorch.means.Mean):
         model = Rgt / E
         corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
         return corrected_model
-
-
-def median_gaps_to_quantiles(median, lower_gaps, upper_gaps):
-    # median: (..., 1)
-    # lower_gaps: (..., T_lower)
-    # upper_gaps: (..., T_upper)
-    lower_gaps = F.softplus(lower_gaps)
-    lower_quantiles = median - lower_gaps.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
-
-    upper_gaps = F.softplus(upper_gaps)
-    upper_quantiles = median + upper_gaps.cumsum(dim=-1)
-
-    ret = torch.concat([lower_quantiles, median, upper_quantiles], dim=-1)
-    return ret
 
 
 class FirstDimIntervalConstraint(gpytorch.constraints.Interval):
@@ -152,33 +135,6 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
         return gpytorch.distributions.MultivariateNormal(mean, covar)
 
 
-class BatchALD(torch.distributions.Distribution):
-    arg_constraints = {
-        "locs": torch.distributions.constraints.real,
-        "scales": torch.distributions.constraints.positive,
-        "taus": torch.distributions.constraints.unit_interval,
-    }
-    support = torch.distributions.constraints.real
-    has_rsample = False
-
-    def __init__(self, locs, scales, taus):
-        # locs: (..., N, T), scales: (T,), taus: (T,)
-        # Reshape scalses and taus as (1, 1, ..., 1, T)
-        self.locs = locs
-        self.scales = scales.view(*([1] * (locs.ndim - 1)), -1)
-        self.taus = taus.view(*([1] * (locs.ndim - 1)), -1)
-        super().__init__(locs.size())
-
-    def log_prob(self, value):
-        # value: (N,), locs: (..., N, T), scales & taus: (1, ..., 1, T)
-        diff = value.unsqueeze(-1) - self.locs  # (..., N, T)
-        rho = diff * (self.taus - (diff < 0).float())  # (..., N, T)
-        logp = (
-            torch.log(self.taus * (1 - self.taus) / self.scales) - rho / self.scales
-        )  # (..., N, T)
-        return logp
-
-
 class MedianGapLikelihood(gpytorch.likelihoods.Likelihood):
     def __init__(self, taus):
         super().__init__()
@@ -203,8 +159,8 @@ class MedianGapLikelihood(gpytorch.likelihoods.Likelihood):
         median = function_samples[:, :, :1]
         lower_gaps = function_samples[:, :, 1 : 1 + self.lower_count]
         upper_gaps = function_samples[:, :, 1 + self.lower_count :]
-        quantiles = median_gaps_to_quantiles(median, lower_gaps, upper_gaps)
-        return BatchALD(
+        quantiles = centergap_to_quantiles(median, lower_gaps, upper_gaps)
+        return ALD(
             locs=quantiles,  # (S, N, T)
             scales=self.scales,  # (T,)
             taus=self.taus,  # (T,)
@@ -240,7 +196,7 @@ class MTGPQR(Module):
         median = function_means[..., :1]
         lower_gaps = function_means[..., 1 : 1 + len(self.gp.lower_taus)]
         upper_gaps = function_means[..., 1 + len(self.gp.lower_taus) :]
-        return median_gaps_to_quantiles(median, lower_gaps, upper_gaps)
+        return centergap_to_quantiles(median, lower_gaps, upper_gaps)
 
 
 def train_mtgpqr(
