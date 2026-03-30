@@ -28,5 +28,9 @@ _artifacts/H-model.png: scripts/plot-model.py _temp/X.csv _temp/X_scaler.pkl mod
 	@mkdir -p $(@D)
 	python3 $^ --target H -o $@
 
+_artifacts/H-probability.png: scripts/plot-probability.py _temp/X.csv _temp/X_scaler.pkl model/H-model.pth
+	@mkdir -p $(@D)
+	python3 $^ --target H -o $@
+
 model/model.py: scripts/model.py
 	cp $< $@
