@@ -5,12 +5,12 @@ from gpytorch.variational import (
     CholeskyVariationalDistribution,
     UnwhitenedVariationalStrategy,
 )
+from gpytorch_qr import CenterGapLmcVariationalStrategy
 from torch.nn import Module
 
 __all__ = [
     "PriorMean_H",
     "median_gaps_to_quantiles",
-    "PartialLMCVariationalStrategy",
     "MedianGapGP",
     "BatchALD",
     "MedianGapLikelihood",
@@ -65,59 +65,6 @@ def median_gaps_to_quantiles(median, lower_gaps, upper_gaps):
     return ret
 
 
-class PartialLMCVariationalStrategy(gpytorch.variational.LMCVariationalStrategy):
-    """LMCVariationalStrategy with partial latent functions.
-
-    Unlike LMCVariationStrategy where all functions are linear combinations of
-    latent functions, here we allow the task to be directly determined by the
-    first latent function without mixing.
-
-    This means that
-    f_1 = g_1,
-    f_t = sum_{q=2}^Q a_{tq} g_q for t=2,...,T.
-    """
-
-    def __init__(
-        self,
-        base_variational_strategy,
-        num_tasks: int,  # T
-        num_latents: int = 1,  # Q
-        latent_dim: int = -1,
-        jitter_val=None,
-    ):
-        super().__init__(
-            base_variational_strategy, num_tasks, num_latents, latent_dim, jitter_val
-        )
-        self.num_half_lmc_latents = (num_latents - 1) // 2
-        self.num_half_tasks = (num_tasks - 1) // 2
-
-        lmc_coefficients = self.lmc_coefficients.detach().clone()  # (Q, T)
-        del self.lmc_coefficients
-        self.register_buffer("g0_coeff", torch.ones((1, 1)))
-        self.register_parameter(
-            "partial_lmc_coefficients_1",
-            torch.nn.Parameter(
-                lmc_coefficients[
-                    1 : 1 + self.num_half_lmc_latents, 1 : 1 + self.num_half_tasks
-                ]
-            ),
-        )
-        self.register_parameter(
-            "partial_lmc_coefficients_2",
-            torch.nn.Parameter(
-                lmc_coefficients[-self.num_half_lmc_latents :, -self.num_half_tasks :]
-            ),
-        )
-
-    @property
-    def lmc_coefficients(self):
-        return torch.block_diag(
-            self.g0_coeff,
-            self.partial_lmc_coefficients_1,
-            self.partial_lmc_coefficients_2,
-        )
-
-
 class FirstDimIntervalConstraint(gpytorch.constraints.Interval):
     def __init__(self, lower_bound, upper_bound):
         super().__init__(lower_bound, upper_bound)
@@ -161,7 +108,7 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
             N,
             batch_shape=torch.Size([Q]),
         )
-        variational_strategy = PartialLMCVariationalStrategy(
+        variational_strategy = CenterGapLmcVariationalStrategy(
             UnwhitenedVariationalStrategy(
                 self,
                 train_x,
@@ -171,6 +118,8 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
             num_tasks=T,
             num_latents=Q,
             latent_dim=-1,
+            num_lower_quantiles=len(self.lower_taus),
+            num_lower_latents=num_half_lmc_latents,
         )
         super().__init__(variational_strategy)
 
