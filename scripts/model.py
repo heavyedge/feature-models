@@ -1,46 +1,24 @@
 import gpytorch
-import numpy as np
 import torch
+import torch.nn.functional as F
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
     UnwhitenedVariationalStrategy,
 )
-from gpytorch_qr import MTGPQR, CenterGapGP, CenterGapLmcVariationalStrategy
+from torch.nn import Module
 
 __all__ = [
-    "Scaler",
-    "Unscaler",
     "PriorMean_H",
-    "MTGP_H",
-    "MTGPQR_H",
+    "median_gaps_to_quantiles",
+    "PartialLMCVariationalStrategy",
+    "MedianGapGP",
+    "BatchALD",
+    "MedianGapLikelihood",
+    "MTGPQR",
+    "train_mtgpqr",
     "save_mtgpqr",
     "load_mtgpqr",
-    "quantile_interpolation",
 ]
-
-
-class Scaler(torch.nn.Module):
-    """Min-max-scaling."""
-
-    def __init__(self, X_scale, X_min):
-        super().__init__()
-        self.register_buffer("X_scale", X_scale)
-        self.register_buffer("X_min", X_min)
-
-    def forward(self, x):
-        return x * self.X_scale + self.X_min
-
-
-class Unscaler(torch.nn.Module):
-    """Un-min-max-scaling."""
-
-    def __init__(self, X_scale, X_min):
-        super().__init__()
-        self.register_buffer("X_scale", X_scale)
-        self.register_buffer("X_min", X_min)
-
-    def forward(self, x):
-        return (x - self.X_min) / self.X_scale
 
 
 class PriorMean_H(gpytorch.means.Mean):
@@ -49,19 +27,22 @@ class PriorMean_H(gpytorch.means.Mean):
     Input X must be [Rgt, Ca, surface_tension, ...].
     """
 
-    def __init__(self):
+    def __init__(self, scaler):
         super().__init__()
+        self.register_buffer("X_scale", torch.tensor(scaler.scale_).float())
+        self.register_buffer("X_min", torch.tensor(scaler.min_).float())
         self.register_parameter(
-            "model_parameters",
-            torch.nn.Parameter(torch.tensor([0.25, -0.27, -1.0, -1.0]).float()),
+            "mean_params",
+            torch.nn.Parameter(torch.tensor([0.25, -0.27, -1.0, -1.0])),
         )
 
     def forward(self, x):
-        Rgt = x[..., 0]
-        Ca = x[..., 1]
-        st = x[..., 2]
+        x_unscaled = (x - self.X_min) / self.X_scale
+        Rgt = x_unscaled[..., 0]
+        Ca = x_unscaled[..., 1]
+        st = x_unscaled[..., 2]
 
-        a, b, c, d = self.model_parameters
+        a, b, c, d = self.mean_params
         lamda = (a * Rgt + b) * Ca**c * st**d
         E = 2 / (-lamda + torch.sqrt(lamda**2 + (4 / Rgt)))
 
@@ -70,107 +51,315 @@ class PriorMean_H(gpytorch.means.Mean):
         return corrected_model
 
 
-class MTGP_H(CenterGapGP):
+def median_gaps_to_quantiles(median, lower_gaps, upper_gaps):
+    # median: (..., 1)
+    # lower_gaps: (..., T_lower)
+    # upper_gaps: (..., T_upper)
+    lower_gaps = F.softplus(lower_gaps)
+    lower_quantiles = median - lower_gaps.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
+
+    upper_gaps = F.softplus(upper_gaps)
+    upper_quantiles = median + upper_gaps.cumsum(dim=-1)
+
+    ret = torch.concat([lower_quantiles, median, upper_quantiles], dim=-1)
+    return ret
+
+
+class PartialLMCVariationalStrategy(gpytorch.variational.LMCVariationalStrategy):
+    """LMCVariationalStrategy with partial latent functions.
+
+    Unlike LMCVariationStrategy where all functions are linear combinations of
+    latent functions, here we allow the task to be directly determined by the
+    first latent function without mixing.
+
+    This means that
+    f_1 = g_1,
+    f_t = sum_{q=2}^Q a_{tq} g_q for t=2,...,T.
+    """
+
     def __init__(
         self,
-        inducing_points,
-        num_quantiles,
-        num_lower_quantiles,
-        num_latents,
-        num_lower_latents,
-        X_scale,
-        X_min,
+        base_variational_strategy,
+        num_tasks: int,  # T
+        num_latents: int = 1,  # Q
+        latent_dim: int = -1,
+        jitter_val=None,
     ):
-        N, D = inducing_points.size()
-        variational_strategy = CenterGapLmcVariationalStrategy(
-            UnwhitenedVariationalStrategy(
-                self,
-                inducing_points,
-                CholeskyVariationalDistribution(
-                    N,
-                    batch_shape=torch.Size([num_latents]),
-                ),
-                learn_inducing_locations=False,
+        super().__init__(
+            base_variational_strategy, num_tasks, num_latents, latent_dim, jitter_val
+        )
+        self.num_half_lmc_latents = (num_latents - 1) // 2
+        self.num_half_tasks = (num_tasks - 1) // 2
+
+        lmc_coefficients = self.lmc_coefficients.detach().clone()  # (Q, T)
+        del self.lmc_coefficients
+        self.register_buffer("g0_coeff", torch.ones((1, 1)))
+        self.register_parameter(
+            "partial_lmc_coefficients_1",
+            torch.nn.Parameter(
+                lmc_coefficients[
+                    1 : 1 + self.num_half_lmc_latents, 1 : 1 + self.num_half_tasks
+                ]
             ),
-            num_tasks=num_quantiles,
-            num_latents=num_latents,
-            latent_dim=-1,
-            num_lower_quantiles=num_lower_quantiles,
-            num_lower_latents=num_lower_latents,
+        )
+        self.register_parameter(
+            "partial_lmc_coefficients_2",
+            torch.nn.Parameter(
+                lmc_coefficients[-self.num_half_lmc_latents :, -self.num_half_tasks :]
+            ),
         )
 
-        center_mean = torch.nn.Sequential(Unscaler(X_scale, X_min), PriorMean_H())
-        gap_mean = gpytorch.means.ConstantMean(
-            batch_shape=torch.Size([num_latents - 1])
+    @property
+    def lmc_coefficients(self):
+        return torch.block_diag(
+            self.g0_coeff,
+            self.partial_lmc_coefficients_1,
+            self.partial_lmc_coefficients_2,
         )
-        covar_module = gpytorch.kernels.ScaleKernel(
+
+
+class FirstDimIntervalConstraint(gpytorch.constraints.Interval):
+    def __init__(self, lower_bound, upper_bound):
+        super().__init__(lower_bound, upper_bound)
+        self._positive = gpytorch.constraints.Positive()
+
+    def _transform(self, tensor):
+        first = super()._transform(tensor[..., :1])
+        rest = self._positive._transform(tensor[..., 1:])
+        return torch.cat([first, rest], dim=-1)
+
+    def _inv_transform(self, tensor):
+        first = super()._inv_transform(tensor[..., :1])
+        rest = self._positive._inv_transform(tensor[..., 1:])
+        return torch.cat([first, rest], dim=-1)
+
+
+class MedianGapGP(gpytorch.models.ApproximateGP):
+    """
+    tasks[0] : median
+    tasks[1:1+lower_count] : lower gaps
+    tasks[1+lower_count:] : upper gaps
+    """
+
+    def __init__(self, train_x, median_mean_module, taus, num_half_lmc_latents):
+        self.lower_taus = taus[taus < 0.5]
+        self.upper_taus = taus[taus > 0.5]
+        assert len(self.lower_taus) == len(self.upper_taus)
+        self.taus = torch.cat(
+            [
+                self.lower_taus,
+                torch.tensor([0.5], device=taus.device),
+                self.upper_taus,
+            ]
+        )
+        N = train_x.size(0)
+        D = train_x.size(1)
+        T = 1 + len(self.lower_taus) + len(self.upper_taus)
+        Q = 1 + 2 * num_half_lmc_latents
+
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=torch.Size([Q]),
+        )
+        variational_strategy = PartialLMCVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                train_x,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_tasks=T,
+            num_latents=Q,
+            latent_dim=-1,
+        )
+        super().__init__(variational_strategy)
+
+        # First task (g1) determines the median, and remaining task determines gap.
+        # g1 has median mean prior, while g2, ..., gQ has constant mean prior.
+        self.median_mean_module = median_mean_module
+        self.gap_mean_module = gpytorch.means.ConstantMean(
+            batch_shape=torch.Size([Q - 1])
+        )
+        self.covar_module = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.MaternKernel(
                 nu=2.5,
                 ard_num_dims=D,
-                batch_shape=torch.Size([num_latents]),
+                batch_shape=torch.Size([Q]),
             ),
-            batch_shape=torch.Size([num_latents]),
+            batch_shape=torch.Size([Q]),
         )
-        super().__init__(variational_strategy, center_mean, gap_mean, covar_module)
 
-
-class MTGPQR_H(MTGPQR):
-    def __init__(self, inducing_points, X_scale=None, X_min=None):
-        _, D = inducing_points.size()
-        taus = torch.tensor([0.05, 0.5, 0.95])
-        central_tau = taus[(taus - 0.5).abs().argmin()]
-        num_lower_quantiles = len(taus[taus < central_tau])
-        if X_scale is None:
-            X_scale = torch.ones(D)
-        if X_min is None:
-            X_min = torch.zeros(D)
-        gp = MTGP_H(
-            inducing_points=inducing_points,
-            num_quantiles=len(taus),
-            num_lower_quantiles=num_lower_quantiles,
-            num_latents=9,
-            num_lower_latents=4,
-            X_scale=X_scale,
-            X_min=X_min,
-        )
-        super().__init__(taus, gp)
-        self.inducing_points = inducing_points
-        self.taus = taus
-        self.scaler = Scaler(X_scale, X_min)
+        # Kernel constraint is required for b and phi, but not for H.
+        # Since we don't use b and phi in this paper, this section is commented out.
+        # self.covar_module.base_kernel.register_constraint(
+        #     "raw_lengthscale", FirstDimIntervalConstraint(2, 10.0)
+        # )
 
     def forward(self, x):
-        x_scaled = self.scaler(x)
-        return super().forward(x_scaled)
+        median_mean = self.median_mean_module(x)  # (N,)
+        gap_mean = self.gap_mean_module(x)  # (Q-1, N)
+        mean = torch.concatenate([median_mean.unsqueeze(0), gap_mean], dim=0)  # (Q, N)
+        covar = self.covar_module(x)  # (Q, N, N)
+        return gpytorch.distributions.MultivariateNormal(mean, covar)
+
+
+class BatchALD(torch.distributions.Distribution):
+    arg_constraints = {
+        "locs": torch.distributions.constraints.real,
+        "scales": torch.distributions.constraints.positive,
+        "taus": torch.distributions.constraints.unit_interval,
+    }
+    support = torch.distributions.constraints.real
+    has_rsample = False
+
+    def __init__(self, locs, scales, taus):
+        # locs: (..., N, T), scales: (T,), taus: (T,)
+        # Reshape scalses and taus as (1, 1, ..., 1, T)
+        self.locs = locs
+        self.scales = scales.view(*([1] * (locs.ndim - 1)), -1)
+        self.taus = taus.view(*([1] * (locs.ndim - 1)), -1)
+        super().__init__(locs.size())
+
+    def log_prob(self, value):
+        # value: (N,), locs: (..., N, T), scales & taus: (1, ..., 1, T)
+        diff = value.unsqueeze(-1) - self.locs  # (..., N, T)
+        rho = diff * (self.taus - (diff < 0).float())  # (..., N, T)
+        logp = (
+            torch.log(self.taus * (1 - self.taus) / self.scales) - rho / self.scales
+        )  # (..., N, T)
+        return logp
+
+
+class MedianGapLikelihood(gpytorch.likelihoods.Likelihood):
+    def __init__(self, taus):
+        super().__init__()
+        self.register_buffer("taus", taus)
+        self.register_parameter(
+            name="raw_scales",
+            parameter=torch.nn.Parameter(torch.zeros(len(taus))),
+        )
+        self.register_constraint(
+            "raw_scales",
+            gpytorch.constraints.Positive(),
+        )
+        self.lower_count = (taus < 0.5).count_nonzero()
+
+    @property
+    def scales(self):
+        # (T,)
+        return self.raw_scales_constraint.transform(self.raw_scales)
+
+    def forward(self, function_samples):
+        # function_samples: (S, N, T) <- from MedianGapGP
+        median = function_samples[:, :, :1]
+        lower_gaps = function_samples[:, :, 1 : 1 + self.lower_count]
+        upper_gaps = function_samples[:, :, 1 + self.lower_count :]
+        quantiles = median_gaps_to_quantiles(median, lower_gaps, upper_gaps)
+        return BatchALD(
+            locs=quantiles,  # (S, N, T)
+            scales=self.scales,  # (T,)
+            taus=self.taus,  # (T,)
+        )
+
+    def expected_log_prob(self, observations, function_dist, *args, **kwargs):
+        lp = super().expected_log_prob(
+            observations, function_dist, *args, **kwargs
+        )  # (N, T)
+        return lp.sum(dim=1)  # (N,)
+
+    def log_marginal(self, observations, function_dist, *args, **kwargs):
+        lp = super().log_marginal(
+            observations, function_dist, *args, **kwargs
+        )  # (N, T)
+        return lp.sum(dim=1)  # (N,)
+
+
+class MTGPQR(Module):
+    """Multi-Task Gaussian Process Quantile Regression."""
+
+    def __init__(self, train_x, median_mean_module, taus, num_half_lmc_latents):
+        super().__init__()
+        self.gp = MedianGapGP(train_x, median_mean_module, taus, num_half_lmc_latents)
+        self.likelihood = MedianGapLikelihood(self.gp.taus)
+
+        self.train_x = train_x
+        self.taus = taus
+        self.num_half_lmc_latents = num_half_lmc_latents
+
+    def forward(self, x):
+        function_means = self.gp(x).mean
+        median = function_means[..., :1]
+        lower_gaps = function_means[..., 1 : 1 + len(self.gp.lower_taus)]
+        upper_gaps = function_means[..., 1 + len(self.gp.lower_taus) :]
+        return median_gaps_to_quantiles(median, lower_gaps, upper_gaps)
+
+
+def train_mtgpqr(
+    train_x,
+    train_y,
+    median_mean_module,
+    taus,
+    num_half_lmc_latents,
+    num_epochs,
+    learning_rate=0.001,
+    lmc_l2_weight=0.0,
+    device=None,
+    logger=None,
+):
+    # train_x: (N, D)
+    # train_y: (N,)
+    model = MTGPQR(train_x, median_mean_module, taus, num_half_lmc_latents).to(device)
+    model.train()
+
+    # Setup optimizer
+    parameters = list(model.parameters())
+    optimizer = torch.optim.Adam(
+        parameters,
+        lr=learning_rate,
+    )
+
+    mll = gpytorch.mlls.VariationalELBO(
+        model.likelihood, model.gp, num_data=len(train_y)
+    )
+
+    # Training loop
+    for i in range(num_epochs):
+        optimizer.zero_grad()
+        output = model.gp(train_x)
+        loss = -mll(output, train_y)
+        if lmc_l2_weight > 0.0:
+            lmc_coeff_1 = model.gp.variational_strategy.partial_lmc_coefficients_1
+            lmc_coeff_2 = model.gp.variational_strategy.partial_lmc_coefficients_2
+            loss = loss + lmc_l2_weight * (
+                lmc_coeff_1.pow(2).sum() + lmc_coeff_2.pow(2).sum()
+            )
+        loss.backward()
+        optimizer.step()
+
+        if logger is not None:
+            logger(i, num_epochs, loss.item())
+
+    return model
 
 
 def save_mtgpqr(model, path):
     torch.save(
         {
-            "inducing_points": model.inducing_points,
+            "train_x": model.train_x.detach().clone().cpu(),
+            "taus": model.taus.detach().clone().cpu(),
+            "num_half_lmc_latents": model.num_half_lmc_latents,
             "state_dict": model.state_dict(),
         },
         path,
     )
 
 
-def load_mtgpqr(model_class, path):
-    checkpoint = torch.load(path)
-    model = model_class(checkpoint["inducing_points"])
+def load_mtgpqr(path, median_mean_module, device=None):
+    checkpoint = torch.load(path, map_location=device)
+    train_x = checkpoint["train_x"].to(device)
+    taus = checkpoint["taus"].to(device)
+    num_half_lmc_latents = checkpoint["num_half_lmc_latents"]
+
+    model = MTGPQR(train_x, median_mean_module, taus, num_half_lmc_latents).to(device)
     model.load_state_dict(checkpoint["state_dict"])
     return model
-
-
-def quantile_interpolation(q_values, q_levels, threshold):
-    idx = np.array([np.searchsorted(row, threshold) for row in q_values])
-    idx_clamped = np.clip(idx, 1, len(q_levels) - 1)
-
-    rows = np.arange(len(q_values))
-    x0 = q_values[rows, idx_clamped - 1]
-    x1 = q_values[rows, idx_clamped]
-    y0 = q_levels[idx_clamped - 1]
-    y1 = q_levels[idx_clamped]
-    probs = y0 + (threshold - x0) * (y1 - y0) / (x1 - x0)
-
-    probs = np.where(idx == 0, 0.0, probs)
-    probs = np.where(idx == len(q_levels), 1.0, probs)
-    return probs

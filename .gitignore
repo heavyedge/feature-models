@@ -5,8 +5,8 @@ model/*
 !model/README.md
 !model/requirements.txt
 
-
 .vscode
+slurm*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
