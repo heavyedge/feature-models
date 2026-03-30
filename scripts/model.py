@@ -4,13 +4,16 @@ from gpytorch.variational import (
     CholeskyVariationalDistribution,
     UnwhitenedVariationalStrategy,
 )
-from gpytorch_qr import ALD, CenterGapLmcVariationalStrategy, centergap_to_quantiles
+from gpytorch_qr import (
+    CenterGapLikelihood,
+    CenterGapLmcVariationalStrategy,
+    centergap_to_quantiles,
+)
 from torch.nn import Module
 
 __all__ = [
     "PriorMean_H",
     "MedianGapGP",
-    "MedianGapLikelihood",
     "MTGPQR",
     "train_mtgpqr",
     "save_mtgpqr",
@@ -113,57 +116,13 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
         return gpytorch.distributions.MultivariateNormal(mean, covar)
 
 
-class MedianGapLikelihood(gpytorch.likelihoods.Likelihood):
-    def __init__(self, taus):
-        super().__init__()
-        self.register_buffer("taus", taus)
-        self.register_parameter(
-            name="raw_scales",
-            parameter=torch.nn.Parameter(torch.zeros(len(taus))),
-        )
-        self.register_constraint(
-            "raw_scales",
-            gpytorch.constraints.Positive(),
-        )
-        self.lower_count = (taus < 0.5).count_nonzero()
-
-    @property
-    def scales(self):
-        # (T,)
-        return self.raw_scales_constraint.transform(self.raw_scales)
-
-    def forward(self, function_samples):
-        # function_samples: (S, N, T) <- from MedianGapGP
-        median = function_samples[:, :, :1]
-        lower_gaps = function_samples[:, :, 1 : 1 + self.lower_count]
-        upper_gaps = function_samples[:, :, 1 + self.lower_count :]
-        quantiles = centergap_to_quantiles(median, lower_gaps, upper_gaps)
-        return ALD(
-            locs=quantiles,  # (S, N, T)
-            scales=self.scales,  # (T,)
-            taus=self.taus,  # (T,)
-        )
-
-    def expected_log_prob(self, observations, function_dist, *args, **kwargs):
-        lp = super().expected_log_prob(
-            observations, function_dist, *args, **kwargs
-        )  # (N, T)
-        return lp.sum(dim=1)  # (N,)
-
-    def log_marginal(self, observations, function_dist, *args, **kwargs):
-        lp = super().log_marginal(
-            observations, function_dist, *args, **kwargs
-        )  # (N, T)
-        return lp.sum(dim=1)  # (N,)
-
-
 class MTGPQR(Module):
     """Multi-Task Gaussian Process Quantile Regression."""
 
     def __init__(self, train_x, median_mean_module, taus, num_half_lmc_latents):
         super().__init__()
         self.gp = MedianGapGP(train_x, median_mean_module, taus, num_half_lmc_latents)
-        self.likelihood = MedianGapLikelihood(self.gp.taus)
+        self.likelihood = CenterGapLikelihood(self.gp.taus)
 
         self.train_x = train_x
         self.taus = taus
