@@ -48,22 +48,6 @@ class PriorMean_H(gpytorch.means.Mean):
         return corrected_model
 
 
-class FirstDimIntervalConstraint(gpytorch.constraints.Interval):
-    def __init__(self, lower_bound, upper_bound):
-        super().__init__(lower_bound, upper_bound)
-        self._positive = gpytorch.constraints.Positive()
-
-    def _transform(self, tensor):
-        first = super()._transform(tensor[..., :1])
-        rest = self._positive._transform(tensor[..., 1:])
-        return torch.cat([first, rest], dim=-1)
-
-    def _inv_transform(self, tensor):
-        first = super()._inv_transform(tensor[..., :1])
-        rest = self._positive._inv_transform(tensor[..., 1:])
-        return torch.cat([first, rest], dim=-1)
-
-
 class MedianGapGP(gpytorch.models.ApproximateGP):
     """
     tasks[0] : median
@@ -120,12 +104,6 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
             ),
             batch_shape=torch.Size([Q]),
         )
-
-        # Kernel constraint is required for b and phi, but not for H.
-        # Since we don't use b and phi in this paper, this section is commented out.
-        # self.covar_module.base_kernel.register_constraint(
-        #     "raw_lengthscale", FirstDimIntervalConstraint(2, 10.0)
-        # )
 
     def forward(self, x):
         median_mean = self.median_mean_module(x)  # (N,)
