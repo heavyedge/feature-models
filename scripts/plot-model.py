@@ -1,18 +1,16 @@
 import argparse
 import pathlib
 
-import joblib
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
 
-from model import load_mtgpqr
+from model import load_model
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
-parser.add_argument("X_scaler", type=pathlib.Path, help="Scaler model pkl file for X.")
 parser.add_argument("model", type=pathlib.Path, help="Trained model pth file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
@@ -22,7 +20,6 @@ args = parser.parse_args()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 X = pd.read_csv(args.X)
-X_scaler = joblib.load(args.X_scaler)
 y = pd.read_csv(args.y)
 data = pd.concat([X, y], axis=1)
 
@@ -31,14 +28,11 @@ Rgt_pred = np.linspace(Rgts.min(), Rgts.max(), 100)
 Cas = X["Capillary_number"]
 
 if args.target == "H":
-    from model import PriorMean_H
-
-    D = X.shape[1]
-    mean_module = PriorMean_H(torch.ones(D).float(), torch.zeros(D).float())
+    from model import MTGPQR_H as model_class
 else:
     raise NotImplementedError
 
-model = load_mtgpqr(args.model, mean_module, device=device).eval()
+model = load_model(model_class, args.model, device=device).eval()
 
 groups = list(reversed(list(data.groupby("Surface_tension"))))
 
@@ -71,7 +65,6 @@ for ax, (st, df) in zip(axes, groups):
             ],
             axis=1,
         )
-        X_pred = X_scaler.transform(pd.DataFrame(X_pred, columns=X.columns))
         X_pred = torch.tensor(X_pred).float().to(device)
 
         with torch.no_grad():
