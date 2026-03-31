@@ -2,7 +2,7 @@ import gpytorch
 import torch
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
-    UnwhitenedVariationalStrategy,
+    VariationalStrategy,
 )
 from gpytorch_qr import (
     CenterGapLikelihood,
@@ -83,7 +83,7 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
     tasks[1+lower_count:] : upper gaps
     """
 
-    def __init__(self, train_x, median_mean_module, taus, num_half_lmc_latents):
+    def __init__(self, inducing_points, median_mean_module, taus, num_half_lmc_latents):
         self.lower_taus = taus[taus < 0.5]
         self.upper_taus = taus[taus > 0.5]
         assert len(self.lower_taus) == len(self.upper_taus)
@@ -94,8 +94,8 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
                 self.upper_taus,
             ]
         )
-        N = train_x.size(0)
-        D = train_x.size(1)
+        N = inducing_points.size(0)
+        D = inducing_points.size(1)
         T = 1 + len(self.lower_taus) + len(self.upper_taus)
         Q = 1 + 2 * num_half_lmc_latents
 
@@ -104,9 +104,9 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
             batch_shape=torch.Size([Q]),
         )
         variational_strategy = CenterGapLmcVariationalStrategy(
-            UnwhitenedVariationalStrategy(
+            VariationalStrategy(
                 self,
-                train_x,
+                inducing_points,
                 variational_distribution,
                 learn_inducing_locations=False,
             ),
@@ -144,12 +144,14 @@ class MedianGapGP(gpytorch.models.ApproximateGP):
 class MTGPQR(Module):
     """Multi-Task Gaussian Process Quantile Regression."""
 
-    def __init__(self, train_x, median_mean_module, taus, num_half_lmc_latents):
+    def __init__(self, inducing_points, median_mean_module, taus, num_half_lmc_latents):
         super().__init__()
-        self.gp = MedianGapGP(train_x, median_mean_module, taus, num_half_lmc_latents)
+        self.gp = MedianGapGP(
+            inducing_points, median_mean_module, taus, num_half_lmc_latents
+        )
         self.likelihood = CenterGapLikelihood(self.gp.taus)
 
-        self.train_x = train_x
+        self.inducing_points = inducing_points
         self.taus = taus
         self.num_half_lmc_latents = num_half_lmc_latents
 
@@ -175,7 +177,10 @@ def train_mtgpqr(
 ):
     # train_x: (N, D)
     # train_y: (N,)
-    model = MTGPQR(train_x, median_mean_module, taus, num_half_lmc_latents).to(device)
+    inducing_points = train_x.unique(dim=0).clone().detach()
+    model = MTGPQR(inducing_points, median_mean_module, taus, num_half_lmc_latents).to(
+        device
+    )
     model.train()
 
     # Setup optimizer
@@ -212,7 +217,7 @@ def train_mtgpqr(
 def save_mtgpqr(model, path):
     torch.save(
         {
-            "train_x": model.train_x.detach().clone().cpu(),
+            "inducing_points": model.inducing_points.detach().clone().cpu(),
             "taus": model.taus.detach().clone().cpu(),
             "num_half_lmc_latents": model.num_half_lmc_latents,
             "state_dict": model.state_dict(),
@@ -223,10 +228,11 @@ def save_mtgpqr(model, path):
 
 def load_mtgpqr(path, median_mean_module, device=None):
     checkpoint = torch.load(path, map_location=device)
-    train_x = checkpoint["train_x"].to(device)
+    inducing_points = checkpoint["inducing_points"].to(device)
     taus = checkpoint["taus"].to(device)
     num_half_lmc_latents = checkpoint["num_half_lmc_latents"]
 
-    model = MTGPQR(train_x, median_mean_module, taus, num_half_lmc_latents).to(device)
+    model = MTGPQR(inducing_points, median_mean_module, taus, num_half_lmc_latents)
+    model.to(device)
     model.load_state_dict(checkpoint["state_dict"])
     return model
