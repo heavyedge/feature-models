@@ -11,7 +11,7 @@ __all__ = [
     "Scaler",
     "Unscaler",
     "PriorMean_H",
-    "MTGP_H",
+    "MTGP",
     "MTGPQR_H",
     "train_model",
     "save_model",
@@ -71,7 +71,7 @@ class PriorMean_H(gpytorch.means.Mean):
         return corrected_model
 
 
-class MTGP_H(CenterGapGP):
+class MTGP(CenterGapGP):
     def __init__(
         self,
         inducing_points,
@@ -79,8 +79,9 @@ class MTGP_H(CenterGapGP):
         num_lower_quantiles,
         num_latents,
         num_lower_latents,
-        X_scale,
-        X_min,
+        center_mean,
+        gap_mean,
+        covar_module,
     ):
         N, D = inducing_points.size()
         variational_strategy = CenterGapLmcVariationalStrategy(
@@ -99,19 +100,6 @@ class MTGP_H(CenterGapGP):
             num_lower_quantiles=num_lower_quantiles,
             num_lower_latents=num_lower_latents,
         )
-
-        center_mean = torch.nn.Sequential(Unscaler(X_scale, X_min), PriorMean_H())
-        gap_mean = gpytorch.means.ConstantMean(
-            batch_shape=torch.Size([num_latents - 1])
-        )
-        covar_module = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.MaternKernel(
-                nu=2.5,
-                ard_num_dims=D,
-                batch_shape=torch.Size([num_latents]),
-            ),
-            batch_shape=torch.Size([num_latents]),
-        )
         super().__init__(variational_strategy, center_mean, gap_mean, covar_module)
 
 
@@ -125,14 +113,30 @@ class MTGPQR_H(MTGPQR):
             X_scale = torch.ones(D)
         if X_min is None:
             X_min = torch.zeros(D)
-        gp = MTGP_H(
+
+        num_latents = 9
+        num_lower_latents = 4
+        center_mean = torch.nn.Sequential(Unscaler(X_scale, X_min), PriorMean_H())
+        gap_mean = gpytorch.means.ConstantMean(
+            batch_shape=torch.Size([num_latents - 1])
+        )
+        covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.MaternKernel(
+                nu=2.5,
+                ard_num_dims=D,
+                batch_shape=torch.Size([num_latents]),
+            ),
+            batch_shape=torch.Size([num_latents]),
+        )
+        gp = MTGP(
             inducing_points=inducing_points,
             num_quantiles=len(taus),
             num_lower_quantiles=num_lower_quantiles,
-            num_latents=9,
-            num_lower_latents=4,
-            X_scale=X_scale,
-            X_min=X_min,
+            num_latents=num_latents,
+            num_lower_latents=num_lower_latents,
+            center_mean=center_mean,
+            gap_mean=gap_mean,
+            covar_module=covar_module,
         )
         super().__init__(taus, gp)
         self.taus = taus
