@@ -59,7 +59,7 @@ y_test_cv = torch.stack(y_test_list).to(device)
 x_scales = torch.stack(x_scales).to(device)
 x_means = torch.stack(x_means).to(device)
 
-inducing_points = X.clone().detach()
+inducing_points = x_train_cv.clone().detach()
 if args.model == "CgLmcMtgpqr":
     model = model_cls(
         inducing_points=inducing_points,
@@ -72,7 +72,7 @@ if args.model == "CgLmcMtgpqr":
         batch_shape=(K,),
     ).to(device)
     likelihood = MultitaskCenterGapQuantileGPLikelihood(
-        QUANTILES.reshape(K, -1),
+        QUANTILES.unsqueeze(0),
         CENTER_QUANTILE_INDEX,
         torch.zeros((K, len(QUANTILES))),
         learn_scales=True,
@@ -87,5 +87,4 @@ optimizer = torch.optim.Adam(
 for _ in range(1):
     model.train()
     likelihood.train()
-
     output = model(x_train_cv)

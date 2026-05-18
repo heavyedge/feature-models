@@ -31,9 +31,8 @@ class Scaler(torch.nn.Module):
         self.register_buffer("X_mean", X_mean)
 
     def forward(self, x):
-        x_flattened = x.view(-1, x.shape[-1])
-        x_scaled = x_flattened * self.X_scale + self.X_mean
-        return x_scaled.view_as(x)
+        # x: (*B, N, D)
+        return x * self.X_scale.unsqueeze(-2) + self.X_mean.unsqueeze(-2)
 
 
 class Unscaler(torch.nn.Module):
@@ -50,9 +49,7 @@ class Unscaler(torch.nn.Module):
         self.register_buffer("X_mean", X_mean)
 
     def forward(self, x):
-        x_flattened = x.view(-1, x.shape[-1])
-        x_scaled = (x_flattened - self.X_mean) / self.X_scale
-        return x_scaled.view_as(x)
+        return (x - self.X_mean.unsqueeze(-2)) / self.X_scale.unsqueeze(-2)
 
 
 class PriorMean_H(Mean):
@@ -91,7 +88,7 @@ class CgLmcMtgpqr_H(CenterGapQuantileGP):
         X_mean=None,
         batch_shape=torch.Size(),
     ):
-        N, D = inducing_points.size()
+        N, D = inducing_points.shape[-2:]
         batch_shape = torch.Size([*batch_shape, num_latents])
         variational_distribution = CholeskyVariationalDistribution(
             N,
