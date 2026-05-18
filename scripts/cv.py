@@ -1,13 +1,23 @@
 import argparse
+import logging
 import pathlib
 
 import gpqr
+import numpy as np
 import pandas as pd
 import torch
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
+from sklearn.metrics import mean_pinball_loss
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
+
+logging.basicConfig(
+    level=getattr(logging, "INFO"),
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logger = logging.getLogger(__name__)
 
 QUANTILES = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
 CENTER_QUANTILE_INDEX = 2
@@ -22,7 +32,7 @@ parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", type=str, help="Model class prefix.")
 parser.add_argument("--n-epochs", type=int, help="Number of training epochs.")
-parser.add_argument("-o", "--out", type=pathlib.Path, help="Output file.")
+parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
 
@@ -84,7 +94,32 @@ optimizer = torch.optim.Adam(
     lr=0.001,
 )
 
-for _ in range(1):
+test_losses = []
+for i in range(args.n_epochs):
     model.train()
     likelihood.train()
     output = model(x_train_cv)
+
+    train_loss = -mll(output, y_train_cv)
+    train_loss.sum().backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+    model.eval()
+    likelihood.eval()
+    with torch.no_grad():
+        output = model.mean_quantiles_mc(x_test_cv)  # (K, N, Q)
+        pinball_losses = []
+        for j, q in enumerate(QUANTILES):
+            test_loss = mean_pinball_loss(
+                y_test_cv.cpu().numpy(), output[:, :, j].cpu().numpy(), alpha=q.item()
+            )
+            pinball_losses.append(test_loss)
+        test_losses.append(np.mean(pinball_losses))
+
+    logger.info(
+        f"{args.out}: Epoch {i+1}/{args.n_epochs}, Test Loss: {test_losses[-1]:.4f}"
+    )
+
+df = pd.DataFrame({"epoch": np.arange(1, args.n_epochs + 1), "test_loss": test_losses})
+df.to_csv(args.out, index=False)

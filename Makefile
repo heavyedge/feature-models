@@ -18,5 +18,5 @@ _temp/y.csv: _temp/Dataset.csv
 	@mkdir -p $(@D)
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
-_temp/H.%.CV.pkl: scripts/cv.py _temp/X.csv _temp/y.csv
+_temp/H.%.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model $* --n-epochs 5000 -o $@
