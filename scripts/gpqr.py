@@ -49,7 +49,9 @@ class Unscaler(torch.nn.Module):
         self.register_buffer("X_mean", X_mean)
 
     def forward(self, x):
-        return (x - self.X_mean.unsqueeze(-2)) / self.X_scale.unsqueeze(-2)
+        # x: (*B, 1, N, D)
+        ret = (x - self.X_mean[..., None, None, :]) / self.X_scale[..., None, None, :]
+        return ret
 
 
 class PriorMean_H(Mean):
