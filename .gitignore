@@ -6,6 +6,7 @@ model/*
 !model/requirements.txt
 
 .vscode
+build.sh
 slurm*
 
 # Byte-compiled / optimized / DLL files

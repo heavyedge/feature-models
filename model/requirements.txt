@@ -1,2 +1,2 @@
 pandas
-gpytorch-qr==0.1.0
+gpytorch-qr==0.4.0
