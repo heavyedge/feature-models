@@ -17,3 +17,6 @@ _temp/X.csv: _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	@mkdir -p $(@D)
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
+
+_temp/H.%.opt.pkl: scripts/optimize.py _temp/X.csv _temp/y.csv
+	python3 $^ --target H --model $* --n-epochs 5000 --n-trials 10 -o $@

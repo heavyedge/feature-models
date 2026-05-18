@@ -1,5 +1,6 @@
 pandas
 scikit-learn
 gpytorch
-gpytorch-qr==0.4.0
+gpytorch-qr>=0.4.0,<0.5.0
 matplotlib
+optuna
