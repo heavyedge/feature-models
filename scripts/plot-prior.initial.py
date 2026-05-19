@@ -73,9 +73,9 @@ for ax, ((cos_theta,), df) in zip(axes, groups):
             axis=-1,
         )
         with torch.no_grad(), gpytorch.settings.prior_mode(True):
-            central_prior = mean_cls()(torch.tensor(X_pred).unsqueeze(0).to(device))
+            central_prior = mean_cls()(torch.tensor(X_pred).to(device))
 
-        ax.plot(Rgt_pred, central_prior.cpu().detach().numpy().squeeze(), color=color)
+        ax.plot(Rgt_pred, central_prior.cpu().detach().numpy(), color=color)
 
     ax.set_title(f"Cos θ={cos_theta:.2f}")
 

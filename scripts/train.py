@@ -32,11 +32,11 @@ else:
 
 X = pd.read_csv(args.X)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float()
-scaler = MinMaxScaler().fit(X)
+scaler = MinMaxScaler().fit(X.to_numpy())
 X_scale = torch.tensor(scaler.scale_).float()
 X_min = torch.tensor(scaler.min_).float()
 
-X_scaled = torch.tensor(scaler.transform(X)).float()
+X_scaled = torch.tensor(scaler.transform(X.to_numpy())).float()
 model_cls_name = f"{args.model}_{args.target}"
 model_class = getattr(model_module, model_cls_name)
 
@@ -50,4 +50,4 @@ model = train_model(
         f"{args.out}: Epoch {i+1}/{num_epochs}, Loss: {loss:.4f}"
     ),
 )
-save_model(model, args.out)
+save_model(model, scaler, args.out)

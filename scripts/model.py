@@ -1,17 +1,16 @@
 import gpytorch
 import torch
-from gpytorch.variational import (
-    CholeskyVariationalDistribution,
-    VariationalStrategy,
-)
-from gpytorch_qr import (
+from gpqr import (
     MTGPQR,
     CenterGapGP,
     CenterGapLmcVariationalStrategy,
 )
+from gpytorch.variational import (
+    CholeskyVariationalDistribution,
+    VariationalStrategy,
+)
 
 __all__ = [
-    "Scaler",
     "Unscaler",
     "PriorMean_H",
     "MTGP",
@@ -23,18 +22,6 @@ __all__ = [
 ]
 
 
-class Scaler(torch.nn.Module):
-    """Min-max-scaling."""
-
-    def __init__(self, X_scale, X_min):
-        super().__init__()
-        self.register_buffer("X_scale", X_scale)
-        self.register_buffer("X_min", X_min)
-
-    def forward(self, x):
-        return x * self.X_scale + self.X_min
-
-
 class Unscaler(torch.nn.Module):
     """Un-min-max-scaling."""
 
@@ -44,7 +31,7 @@ class Unscaler(torch.nn.Module):
         self.register_buffer("X_min", X_min)
 
     def forward(self, x):
-        return (x - self.X_min) / self.X_scale
+        return x * self.X_scale + self.X_min
 
 
 class PriorMean_H(gpytorch.means.Mean):
@@ -136,11 +123,6 @@ class MTGPQR_H(MTGPQR):
         )
         super().__init__(taus, gp)
         self.taus = taus
-        self.scaler = Scaler(X_scale, X_min)
-
-    def forward(self, x):
-        x_scaled = self.scaler(x)
-        return super().forward(x_scaled)
 
 
 class MTGPQR_phi(MTGPQR):
@@ -191,11 +173,6 @@ class MTGPQR_phi(MTGPQR):
         )
         super().__init__(taus, gp)
         self.taus = taus
-        self.scaler = Scaler(X_scale, X_min)
-
-    def forward(self, x):
-        x_scaled = self.scaler(x)
-        return super().forward(x_scaled)
 
 
 def train_model(
@@ -235,22 +212,24 @@ def train_model(
     return model
 
 
-def save_model(model, path):
+def save_model(model, scaler, path):
     gp = model.gp
     inducing_points = gp.variational_strategy.base_variational_strategy.inducing_points
     torch.save(
         {
             "inducing_points": inducing_points,
             "state_dict": model.state_dict(),
+            "scaler": scaler,
         },
         path,
     )
 
 
 def load_model(model_class, path, device=None):
-    checkpoint = torch.load(path, map_location=device)
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
     model = model_class(checkpoint["inducing_points"])
     model.load_state_dict(checkpoint["state_dict"])
     if device is not None:
         model.to(device)
-    return model
+    scaler = checkpoint["scaler"]
+    return model, scaler
