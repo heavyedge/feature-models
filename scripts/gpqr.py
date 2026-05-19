@@ -15,6 +15,7 @@ __all__ = [
     "Scaler",
     "Unscaler",
     "PriorMean_H",
+    "PriorMean_phi",
     "CgLmcMtgpqr",
     "DirectLmcMtgpqr",
     "CgIndependentMtgpqr",
@@ -67,10 +68,11 @@ class PriorMean_H(Mean):
 
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
-        self.batch_shape = batch_shape
+        self.batch_shape = batch_shape  # (*B, 1)
 
     def forward(self, x):
         # x: (*B, 1, N, D)
+        # output: (*B, 1, N)
         Rgt = x[..., 0]
         Ca = x[..., 1]
         cos_theta = x[..., 2]
@@ -82,6 +84,27 @@ class PriorMean_H(Mean):
         model = Rgt / E
         corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
         return corrected_model
+
+
+class PriorMean_phi(Mean):
+    """Constant mean.
+
+    The last dimension of input X must be [Rgt, Ca, surface_tension, ...].
+    """
+
+    def __init__(self, batch_shape=torch.Size()):
+        super().__init__()
+        self.batch_shape = batch_shape  # (*B, 1)
+        self.register_parameter(
+            "constant", torch.nn.Parameter(torch.zeros(batch_shape))
+        )
+
+    def forward(self, x):
+        # x: (*B, 1, N, D)
+        # output: (*B, 1, N)
+        N = x.shape[-2]
+        const = self.constant.unsqueeze(-1)  # (*B, 1, 1)
+        return const.expand(*const.shape[:-1], N)
 
 
 class CgLmcMtgpqr(CenterGapQuantileGP):

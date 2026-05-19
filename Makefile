@@ -1,7 +1,11 @@
 .ONESHELL:
 .PHONY: all clean
 
-all:
+all: \
+_artifacts/H.CV.epoch.png \
+_artifacts/H.CV.min.png \
+_artifacts/phi.CV.epoch.png \
+_artifacts/phi.CV.min.png
 
 clean:
 	rm -rf _temp _artifacts
@@ -19,10 +23,21 @@ _temp/y.csv: _temp/Dataset.csv
 _temp/H.%.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model $* --n-epochs 5000 -o $@
 
+_temp/phi.%.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
+	python3 $^ --target phi --model $* --n-epochs 5000 -o $@
+
 _artifacts/H.CV.epoch.png: scripts/plot-cv.epoch.py _temp/H.CgLmcMtgpqr.CV.csv _temp/H.DirectLmcMtgpqr.CV.csv _temp/H.CgIndependentMtgpqr.CV.csv _temp/H.DirectIndependentMtgpqr.CV.csv
 	mkdir -p $(@D)
 	python3 $^ -o $@
 
 _artifacts/H.CV.min.png: scripts/plot-cv.min.py _temp/H.CgLmcMtgpqr.CV.csv _temp/H.DirectLmcMtgpqr.CV.csv _temp/H.CgIndependentMtgpqr.CV.csv _temp/H.DirectIndependentMtgpqr.CV.csv
+	mkdir -p $(@D)
+	python3 $^ --ymin 5.5e-3 -o $@
+
+_artifacts/phi.CV.epoch.png: scripts/plot-cv.epoch.py _temp/phi.CgLmcMtgpqr.CV.csv _temp/phi.DirectLmcMtgpqr.CV.csv _temp/phi.CgIndependentMtgpqr.CV.csv _temp/phi.DirectIndependentMtgpqr.CV.csv
+	mkdir -p $(@D)
+	python3 $^ -o $@
+
+_artifacts/phi.CV.min.png: scripts/plot-cv.min.py _temp/phi.CgLmcMtgpqr.CV.csv _temp/phi.DirectLmcMtgpqr.CV.csv _temp/phi.CgIndependentMtgpqr.CV.csv _temp/phi.DirectIndependentMtgpqr.CV.csv
 	mkdir -p $(@D)
 	python3 $^ --ymin 5.5e-3 -o $@
