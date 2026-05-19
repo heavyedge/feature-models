@@ -21,15 +21,15 @@ _temp/X.csv: _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
+_artifacts/H.prior.initial.png: scripts/plot-prior.initial.py _temp/X.csv _temp/y.csv
+	mkdir -p $(@D)
+	python3 $^ --target H -o $@
+
 _temp/H.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model MTGPQR -o $@
 
 _temp/phi.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
 	python3 $^ --target phi --model MTGPQR -o $@
-
-_artifacts/H.prior.initial.png: scripts/plot-prior.initial.py _temp/X.csv _temp/y.csv
-	mkdir -p $(@D)
-	python3 $^ --target H -o $@
 
 _artifacts/H.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/H.%.pt
 	mkdir -p $(@D)
