@@ -4,7 +4,7 @@ from gpytorch.variational import (
     CholeskyVariationalDistribution,
     VariationalStrategy,
 )
-from gpytorch_qr import (
+from gpqr import (
     MTGPQR,
     CenterGapGP,
     CenterGapLmcVariationalStrategy,
