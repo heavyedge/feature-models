@@ -2,14 +2,9 @@
 .PHONY: all clean
 
 all: \
-_artifacts/H.CV.epoch.png \
-_artifacts/H.CV.min.png \
-_artifacts/phi.CV.epoch.png \
-_artifacts/phi.CV.min.png \
 _artifacts/H.prior.initial.png \
-_artifacts/phi.prior.initial.png \
-_artifacts/H.CgLmcMtgpqr.quantiles.png \
-_artifacts/phi.CgLmcMtgpqr.quantiles.png \
+_artifacts/H.MTGPQR.quantiles.png \
+_artifacts/phi.MTGPQR.quantiles.png \
 model/H.pt \
 model/phi.pt
 
@@ -26,41 +21,15 @@ _temp/X.csv: _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
-_temp/H.%.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model $* --n-epochs 5000 -o $@
+_temp/H.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
+	python3 $^ --target H --model MTGPQR -o $@
 
-_temp/phi.%.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model $* --n-epochs 5000 -o $@
-
-_artifacts/H.CV.epoch.png: scripts/plot-cv.epoch.py _temp/H.CgLmcMtgpqr.CV.csv _temp/H.DirectLmcMtgpqr.CV.csv _temp/H.CgIndependentMtgpqr.CV.csv _temp/H.DirectIndependentMtgpqr.CV.csv
-	mkdir -p $(@D)
-	python3 $^ -o $@
-
-_artifacts/H.CV.min.png: scripts/plot-cv.min.py _temp/H.CgLmcMtgpqr.CV.csv _temp/H.DirectLmcMtgpqr.CV.csv _temp/H.CgIndependentMtgpqr.CV.csv _temp/H.DirectIndependentMtgpqr.CV.csv
-	mkdir -p $(@D)
-	python3 $^ --ymin 5.5e-3 -o $@
-
-_artifacts/phi.CV.epoch.png: scripts/plot-cv.epoch.py _temp/phi.CgLmcMtgpqr.CV.csv _temp/phi.DirectLmcMtgpqr.CV.csv _temp/phi.CgIndependentMtgpqr.CV.csv _temp/phi.DirectIndependentMtgpqr.CV.csv
-	mkdir -p $(@D)
-	python3 $^ -o $@
-
-_artifacts/phi.CV.min.png: scripts/plot-cv.min.py _temp/phi.CgLmcMtgpqr.CV.csv _temp/phi.DirectLmcMtgpqr.CV.csv _temp/phi.CgIndependentMtgpqr.CV.csv _temp/phi.DirectIndependentMtgpqr.CV.csv
-	mkdir -p $(@D)
-	python3 $^ --ymin 5.5e-3 -o $@
-
-_temp/H.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/H.%.CV.csv
-	python3 $^ --target H --model $* -o $@
-
-_temp/phi.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/phi.%.CV.csv
-	python3 $^ --target phi --model $* -o $@
+_temp/phi.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
+	python3 $^ --target phi --model MTGPQR -o $@
 
 _artifacts/H.prior.initial.png: scripts/plot-prior.initial.py _temp/X.csv _temp/y.csv
 	mkdir -p $(@D)
 	python3 $^ --target H -o $@
-
-_artifacts/phi.prior.initial.png: scripts/plot-prior.initial.py _temp/X.csv _temp/y.csv
-	mkdir -p $(@D)
-	python3 $^ --target phi -o $@
 
 _artifacts/H.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/H.%.pt
 	mkdir -p $(@D)
@@ -70,8 +39,8 @@ _artifacts/phi.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.cs
 	mkdir -p $(@D)
 	python3 $^ --target phi --model $* -o $@
 
-model/H.pt: _temp/H.CgLmcMtgpqr.pt
+model/H.pt: _temp/H.MTGPQR.pt
 	cp $< $@
 
-model/phi.pt: _temp/phi.CgLmcMtgpqr.pt
+model/phi.pt: _temp/phi.MTGPQR.pt
 	cp $< $@

@@ -1,7 +1,6 @@
 import argparse
 import pathlib
 
-import gpqr
 import gpytorch
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -9,6 +8,8 @@ import numpy as np
 import pandas as pd
 import torch
 from matplotlib.ticker import ScalarFormatter
+
+import model as model_module
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
@@ -24,7 +25,7 @@ else:
     device = torch.device(args.device)
 
 mean_cls_name = f"PriorMean_{args.target}"
-mean_cls = getattr(gpqr, mean_cls_name, None)
+mean_cls = getattr(model_module, mean_cls_name, None)
 if mean_cls is None:
     raise ValueError(f"Mean class {mean_cls_name} not found.")
 

@@ -1,13 +1,15 @@
 import argparse
 import pathlib
 
-import gpqr
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
 from matplotlib.ticker import ScalarFormatter
+
+import model as model_module
+from model import load_model
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
@@ -24,67 +26,13 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-model_cls_name = f"{args.model}"
-model_cls = getattr(gpqr, model_cls_name, None)
-if model_cls is None:
-    raise ValueError(f"Model class {model_cls_name} not found.")
-
-mean_cls_name = f"PriorMean_{args.target}"
-mean_cls = getattr(gpqr, mean_cls_name, None)
-if mean_cls is None:
-    raise ValueError(f"Mean class {mean_cls_name} not found.")
-
 X = pd.read_csv(args.X)
 y = pd.read_csv(args.y)
 data = pd.concat([X, y], axis=1)
 
-checkpoint = torch.load(args.checkpoint, map_location=device)
-
-inducing_points = checkpoint["inducing_points"].to(device)
-QUANTILES = checkpoint["quantiles"]
-NUM_LOWER_QUANTILES = checkpoint["num_lower_quantiles"]
-NUM_LATENTS = checkpoint["num_latents"]
-NUM_LOWER_LATENTS = checkpoint["num_lower_latents"]
-X_scale = checkpoint["X_scale"].to(device)
-X_mean = checkpoint["X_mean"].to(device)
-
-if args.model == "CgLmcMtgpqr":
-    model = model_cls(
-        inducing_points=inducing_points,
-        num_quantiles=len(QUANTILES),
-        num_lower_quantiles=NUM_LOWER_QUANTILES,
-        num_latents=NUM_LATENTS,
-        num_lower_latents=NUM_LOWER_LATENTS,
-        mean_cls=mean_cls,
-        X_scale=X_scale,
-        X_mean=X_mean,
-    ).to(device)
-elif args.model == "CgIndependentMtgpqr":
-    model = model_cls(
-        inducing_points=inducing_points,
-        num_quantiles=len(QUANTILES),
-        num_lower_quantiles=NUM_LOWER_QUANTILES,
-        mean_cls=mean_cls,
-        X_scale=X_scale,
-        X_mean=X_mean,
-    ).to(device)
-elif args.model == "DirectLmcMtgpqr":
-    model = model_cls(
-        inducing_points=inducing_points,
-        num_quantiles=len(QUANTILES),
-        num_latents=NUM_LATENTS,
-        mean_cls=mean_cls,
-        X_scale=X_scale,
-        X_mean=X_mean,
-    ).to(device)
-elif args.model == "DirectIndependentMtgpqr":
-    model = model_cls(
-        inducing_points=inducing_points,
-        num_quantiles=len(QUANTILES),
-        mean_cls=mean_cls,
-        X_scale=X_scale,
-        X_mean=X_mean,
-    ).to(device)
+model_cls_name = f"{args.model}_{args.target}"
+model_cls = getattr(model_module, model_cls_name, None)
+model = load_model(model_cls, args.checkpoint, device=device).eval()
 
 # Plot
 
@@ -126,7 +74,7 @@ for ax, ((cos_theta,), df) in zip(axes, groups):
             axis=-1,
         )
         with torch.no_grad():
-            quantiles = model.mean_quantiles_mc(torch.tensor(X_pred).float().to(device))
+            quantiles = model(torch.tensor(X_pred).float().to(device))
         q_low, q_high = quantiles.T[[0, -1], ...].cpu().numpy()
         ax.fill_between(
             Rgt_pred,
