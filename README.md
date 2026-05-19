@@ -6,7 +6,7 @@ Repository to train and distribute quantile regression model of edge shape featu
 
 ```
 curl -LsSf https://hf.co/cli/install.sh | bash
-hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.0.0 --local-dir _data
+hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.1.0 --local-dir _data
 ```
 
 ## Train & plot

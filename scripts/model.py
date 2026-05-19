@@ -1,11 +1,14 @@
 import gpytorch
-import numpy as np
 import torch
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
-    UnwhitenedVariationalStrategy,
+    VariationalStrategy,
 )
-from gpytorch_qr import MTGPQR, CenterGapGP, CenterGapLmcVariationalStrategy
+from gpytorch_qr import (
+    MTGPQR,
+    CenterGapGP,
+    CenterGapLmcVariationalStrategy,
+)
 
 __all__ = [
     "Scaler",
@@ -13,10 +16,10 @@ __all__ = [
     "PriorMean_H",
     "MTGP",
     "MTGPQR_H",
+    "MTGPQR_phi",
     "train_model",
     "save_model",
     "load_model",
-    "quantile_interpolation",
 ]
 
 
@@ -50,20 +53,13 @@ class PriorMean_H(gpytorch.means.Mean):
     Input X must be [Rgt, Ca, surface_tension, ...].
     """
 
-    def __init__(self):
-        super().__init__()
-        self.register_parameter(
-            "model_parameters",
-            torch.nn.Parameter(torch.tensor([0.25, -0.27, -1.0, -1.0]).float()),
-        )
-
     def forward(self, x):
         Rgt = x[..., 0]
         Ca = x[..., 1]
-        st = x[..., 2]
+        cos_theta = x[..., 2]
 
-        a, b, c, d = self.model_parameters
-        lamda = (a * Rgt + b) * Ca**c * st**d
+        a, b, c = 0.22, -0.43, 0.77  # From GPR prior
+        lamda = a * Ca**b * cos_theta**c
         E = 2 / (-lamda + torch.sqrt(lamda**2 + (4 / Rgt)))
 
         model = Rgt / E
@@ -83,9 +79,9 @@ class MTGP(CenterGapGP):
         gap_mean,
         covar_module,
     ):
-        N, D = inducing_points.size()
+        N, _ = inducing_points.size()
         variational_strategy = CenterGapLmcVariationalStrategy(
-            UnwhitenedVariationalStrategy(
+            VariationalStrategy(
                 self,
                 inducing_points,
                 CholeskyVariationalDistribution(
@@ -106,7 +102,7 @@ class MTGP(CenterGapGP):
 class MTGPQR_H(MTGPQR):
     def __init__(self, inducing_points, X_scale=None, X_min=None):
         _, D = inducing_points.size()
-        taus = torch.tensor([0.05, 0.5, 0.95])
+        taus = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
         central_tau = taus[(taus - 0.5).abs().argmin()]
         num_lower_quantiles = len(taus[taus < central_tau])
         if X_scale is None:
@@ -114,9 +110,55 @@ class MTGPQR_H(MTGPQR):
         if X_min is None:
             X_min = torch.zeros(D)
 
-        num_latents = 9
-        num_lower_latents = 4
-        center_mean = torch.nn.Sequential(Unscaler(X_scale, X_min), PriorMean_H())
+        num_latents = len(taus)
+        num_lower_latents = int((num_latents - 1) // 2)
+        unscaler = Unscaler(X_scale, X_min)
+        center_mean = torch.nn.Sequential(unscaler, PriorMean_H())
+        gap_mean = gpytorch.means.ConstantMean(
+            batch_shape=torch.Size([num_latents - 1])
+        )
+        covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(
+                ard_num_dims=D,
+                batch_shape=torch.Size([num_latents]),
+            ),
+            batch_shape=torch.Size([num_latents]),
+        )
+        gp = MTGP(
+            inducing_points=inducing_points,
+            num_quantiles=len(taus),
+            num_lower_quantiles=num_lower_quantiles,
+            num_latents=num_latents,
+            num_lower_latents=num_lower_latents,
+            center_mean=center_mean,
+            gap_mean=gap_mean,
+            covar_module=covar_module,
+        )
+        super().__init__(taus, gp)
+        self.taus = taus
+        self.scaler = Scaler(X_scale, X_min)
+
+    def forward(self, x):
+        x_scaled = self.scaler(x)
+        return super().forward(x_scaled)
+
+
+class MTGPQR_phi(MTGPQR):
+    """MTGPQR for phi target with ConstantMean prior."""
+
+    def __init__(self, inducing_points, X_scale=None, X_min=None):
+        _, D = inducing_points.size()
+        taus = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
+        central_tau = taus[(taus - 0.5).abs().argmin()]
+        num_lower_quantiles = len(taus[taus < central_tau])
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+
+        num_latents = len(taus)
+        num_lower_latents = int((num_latents - 1) // 2)
+        center_mean = gpytorch.means.ConstantMean()
         gap_mean = gpytorch.means.ConstantMean(
             batch_shape=torch.Size([num_latents - 1])
         )
@@ -128,6 +170,15 @@ class MTGPQR_H(MTGPQR):
             ),
             batch_shape=torch.Size([num_latents]),
         )
+        lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
+        upper = torch.tensor([1e4 for _ in range(D)])
+        init_ls = torch.tensor([2, 2, 2] + [0.5 for _ in range(D - 3)])
+        covar_module.base_kernel.register_constraint(
+            "raw_lengthscale", gpytorch.constraints.Interval(lower, upper)
+        )
+        with torch.no_grad():
+            covar_module.base_kernel.lengthscale = init_ls
+
         gp = MTGP(
             inducing_points=inducing_points,
             num_quantiles=len(taus),
@@ -203,19 +254,3 @@ def load_model(model_class, path, device=None):
     if device is not None:
         model.to(device)
     return model
-
-
-def quantile_interpolation(q_values, q_levels, threshold):
-    idx = np.array([np.searchsorted(row, threshold) for row in q_values])
-    idx_clamped = np.clip(idx, 1, len(q_levels) - 1)
-
-    rows = np.arange(len(q_values))
-    x0 = q_values[rows, idx_clamped - 1]
-    x1 = q_values[rows, idx_clamped]
-    y0 = q_levels[idx_clamped - 1]
-    y1 = q_levels[idx_clamped]
-    probs = y0 + (threshold - x0) * (y1 - y0) / (x1 - x0)
-
-    probs = np.where(idx == 0, 0.0, probs)
-    probs = np.where(idx == len(q_levels), 1.0, probs)
-    return probs

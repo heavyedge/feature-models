@@ -6,7 +6,8 @@ import pandas as pd
 import torch
 from sklearn.preprocessing import MinMaxScaler
 
-from model import MTGPQR_H, save_model, train_model
+import model as model_module
+from model import save_model, train_model
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -19,6 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
+parser.add_argument("--model", help="Model class prefix.")
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
@@ -35,10 +37,8 @@ X_scale = torch.tensor(scaler.scale_).float()
 X_min = torch.tensor(scaler.min_).float()
 
 X_scaled = torch.tensor(scaler.transform(X)).float()
-if args.target == "H":
-    model_class = MTGPQR_H
-else:
-    raise NotImplementedError
+model_cls_name = f"{args.model}_{args.target}"
+model_class = getattr(model_module, model_cls_name)
 
 model = train_model(
     X_scaled.to(device),

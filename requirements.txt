@@ -1,5 +1,4 @@
 pandas
 scikit-learn
 gpytorch
-gpytorch-qr==0.1.1
 matplotlib
