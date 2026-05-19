@@ -1,13 +1,13 @@
 import gpytorch
 import torch
-from gpytorch.variational import (
-    CholeskyVariationalDistribution,
-    VariationalStrategy,
-)
 from gpqr import (
     MTGPQR,
     CenterGapGP,
     CenterGapLmcVariationalStrategy,
+)
+from gpytorch.variational import (
+    CholeskyVariationalDistribution,
+    VariationalStrategy,
 )
 
 __all__ = [
