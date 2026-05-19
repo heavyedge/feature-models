@@ -6,8 +6,10 @@ _artifacts/H.CV.epoch.png \
 _artifacts/H.CV.min.png \
 _artifacts/phi.CV.epoch.png \
 _artifacts/phi.CV.min.png \
-model/H.GPQR.pt \
-model/phi.GPQR.pt
+model/H.pt \
+model/phi.pt \
+_artifacts/H.png \
+_artifacts/phi.png
 
 clean:
 	rm -rf _temp _artifacts model/*.pt
@@ -50,8 +52,12 @@ _temp/H.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/H.%.CV.csv
 _temp/phi.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/phi.%.CV.csv
 	python3 $^ --target phi --model $* -o $@
 
-model/H.GPQR.pt: _temp/H.CgLmcMtgpqr.pt
+model/H.pt: _temp/H.CgLmcMtgpqr.pt
 	cp $< $@
 
-model/phi.GPQR.pt: _temp/phi.CgLmcMtgpqr.pt
+model/phi.pt: _temp/phi.CgLmcMtgpqr.pt
 	cp $< $@
+
+_artifacts/%.png: scripts/plot-model.py _temp/X.csv _temp/y.csv model/H.pt
+	@mkdir -p $(@D)
+	python3 $^ --target $* --model CgLmcMtgpqr -o $@

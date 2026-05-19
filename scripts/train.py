@@ -32,7 +32,7 @@ parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("cv", type=pathlib.Path, help="Cross-validation csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
-parser.add_argument("--model", type=str, help="Model class prefix.")
+parser.add_argument("--model", type=str, help="Model class name.")
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
@@ -147,6 +147,14 @@ for i in range(NUM_EPOCHS):
 
 torch.save(
     {
+        "quantiles": QUANTILES,
+        "inducing_points": inducing_points.cpu(),
+        "center_quantile_index": CENTER_QUANTILE_INDEX,
+        "num_lower_quantiles": NUM_LOWER_QUANTILES,
+        "num_latents": NUM_LATENTS,
+        "num_lower_latents": NUM_LOWER_LATENTS,
+        "X_scale": X_scale.cpu(),
+        "X_mean": X_mean.cpu(),
         "model_state_dict": model.state_dict(),
         "likelihood_state_dict": likelihood.state_dict(),
     },
