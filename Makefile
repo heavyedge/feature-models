@@ -6,10 +6,12 @@ _artifacts/H.CV.epoch.png \
 _artifacts/H.CV.min.png \
 _artifacts/phi.CV.epoch.png \
 _artifacts/phi.CV.min.png \
+_artifacts/H.prior.png \
+_artifacts/phi.prior.png \
+_artifacts/H.CgLmcMtgpqr.quantiles.png \
+_artifacts/phi.CgLmcMtgpqr.quantiles.png \
 model/H.pt \
-model/phi.pt \
-_artifacts/H.png \
-_artifacts/phi.png
+model/phi.pt
 
 clean:
 	rm -rf _temp _artifacts model/*.pt
@@ -52,12 +54,24 @@ _temp/H.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/H.%.CV.csv
 _temp/phi.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/phi.%.CV.csv
 	python3 $^ --target phi --model $* -o $@
 
+_artifacts/H.prior.png: scripts/plot-prior.py _temp/X.csv _temp/y.csv
+	mkdir -p $(@D)
+	python3 $^ --target H -o $@
+
+_artifacts/phi.prior.png: scripts/plot-prior.py _temp/X.csv _temp/y.csv
+	mkdir -p $(@D)
+	python3 $^ --target phi -o $@
+
+_artifacts/H.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/H.%.pt
+	mkdir -p $(@D)
+	python3 $^ --target H --model $* -o $@
+
+_artifacts/phi.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/phi.%.pt
+	mkdir -p $(@D)
+	python3 $^ --target phi --model $* -o $@
+
 model/H.pt: _temp/H.CgLmcMtgpqr.pt
 	cp $< $@
 
 model/phi.pt: _temp/phi.CgLmcMtgpqr.pt
 	cp $< $@
-
-_artifacts/%.png: scripts/plot-model.py _temp/X.csv _temp/y.csv model/H.pt
-	@mkdir -p $(@D)
-	python3 $^ --target $* --model CgLmcMtgpqr -o $@
