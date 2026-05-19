@@ -5,7 +5,9 @@ all: \
 _artifacts/H.CV.epoch.png \
 _artifacts/H.CV.min.png \
 _artifacts/phi.CV.epoch.png \
-_artifacts/phi.CV.min.png
+_artifacts/phi.CV.min.png \
+model/H.GPQR.pt \
+model/phi.GPQR.pt
 
 clean:
 	rm -rf _temp _artifacts
@@ -41,3 +43,15 @@ _artifacts/phi.CV.epoch.png: scripts/plot-cv.epoch.py _temp/phi.CgLmcMtgpqr.CV.c
 _artifacts/phi.CV.min.png: scripts/plot-cv.min.py _temp/phi.CgLmcMtgpqr.CV.csv _temp/phi.DirectLmcMtgpqr.CV.csv _temp/phi.CgIndependentMtgpqr.CV.csv _temp/phi.DirectIndependentMtgpqr.CV.csv
 	mkdir -p $(@D)
 	python3 $^ --ymin 5.5e-3 -o $@
+
+_temp/H.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/H.%.CV.csv
+	python3 $^ --target H --model $* -o $@
+
+_temp/phi.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/phi.%.CV.csv
+	python3 $^ --target phi --model $* -o $@
+
+model/H.GPQR.pt: _temp/H.CgLmcMtgpqr.pt
+	cp $< $@
+
+model/phi.GPQR.pt: _temp/phi.CgLmcMtgpqr.pt
+	cp $< $@
