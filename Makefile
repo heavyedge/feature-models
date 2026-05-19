@@ -10,7 +10,7 @@ model/H.GPQR.pt \
 model/phi.GPQR.pt
 
 clean:
-	rm -rf _temp _artifacts
+	rm -rf _temp _artifacts model/*.pt
 
 _temp/Dataset.csv: scripts/filter-dataset.py _data/Dataset.csv
 	@mkdir -p $(@D)
