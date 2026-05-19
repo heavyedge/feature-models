@@ -19,6 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "cv", type=pathlib.Path, nargs="+", help="Cross-validation csv files."
 )
+parser.add_argument("--ymin", type=float, help="Minimum y-axis value.")
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output image file.")
 args = parser.parse_args()
 
@@ -43,7 +44,7 @@ for bar in bars:
 plt.xlabel("Model")
 plt.ylabel("Minimum Test Loss")
 plt.yticks([])
-plt.ylim(bottom=5e-3)
+plt.ylim(bottom=float(args.ymin) if args.ymin is not None else 0)
 plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda y, _: sci_label(y)))
 plt.tight_layout()
 plt.savefig(args.out)

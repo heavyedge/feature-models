@@ -15,10 +15,10 @@ __all__ = [
     "Scaler",
     "Unscaler",
     "PriorMean_H",
-    "CgLmcMtgpqr_H",
-    "DirectLmcMtgpqr_H",
-    "CgIndependentMtgpqr_H",
-    "DirectIndependentMtgpqr_H",
+    "CgLmcMtgpqr",
+    "DirectLmcMtgpqr",
+    "CgIndependentMtgpqr",
+    "DirectIndependentMtgpqr",
 ]
 
 
@@ -62,7 +62,7 @@ class Unscaler(torch.nn.Module):
 class PriorMean_H(Mean):
     """Modified version of model by Schmitt.
 
-    Input X must be [Rgt, Ca, surface_tension, ...].
+    The last dimension of input X must be [Rgt, Ca, surface_tension, ...].
     """
 
     def __init__(self, batch_shape=torch.Size()):
@@ -70,6 +70,7 @@ class PriorMean_H(Mean):
         self.batch_shape = batch_shape
 
     def forward(self, x):
+        # x: (*B, 1, N, D)
         Rgt = x[..., 0]
         Ca = x[..., 1]
         cos_theta = x[..., 2]
@@ -83,7 +84,7 @@ class PriorMean_H(Mean):
         return corrected_model
 
 
-class CgLmcMtgpqr_H(CenterGapQuantileGP):
+class CgLmcMtgpqr(CenterGapQuantileGP):
     def __init__(
         self,
         inducing_points,
@@ -91,6 +92,7 @@ class CgLmcMtgpqr_H(CenterGapQuantileGP):
         num_lower_quantiles,
         num_latents,
         num_lower_latents,
+        mean_cls,
         X_scale=None,
         X_mean=None,
         batch_shape=torch.Size(),
@@ -122,7 +124,7 @@ class CgLmcMtgpqr_H(CenterGapQuantileGP):
 
         mean = CenterGapMean(
             torch.nn.Sequential(
-                unscaler, PriorMean_H(batch_shape=torch.Size([*batch_shape[:-1], 1]))
+                unscaler, mean_cls(batch_shape=torch.Size([*batch_shape[:-1], 1]))
             ),
             ConstantMean(batch_shape=torch.Size([*batch_shape[:-1], num_latents - 1])),
             latent_dim=-1,
@@ -139,12 +141,13 @@ class CgLmcMtgpqr_H(CenterGapQuantileGP):
         return super().forward(x_scaled)
 
 
-class DirectLmcMtgpqr_H(DirectQuantileGP):
+class DirectLmcMtgpqr(DirectQuantileGP):
     def __init__(
         self,
         inducing_points,
         num_quantiles,
         num_latents,
+        mean_cls,
         X_scale=None,
         X_mean=None,
         batch_shape=torch.Size(),
@@ -173,7 +176,7 @@ class DirectLmcMtgpqr_H(DirectQuantileGP):
         unscaler = Unscaler(X_scale=X_scale, X_mean=X_mean)
 
         mean = torch.nn.Sequential(
-            unscaler, PriorMean_H(batch_shape=torch.Size([*batch_shape[:-1], 1]))
+            unscaler, mean_cls(batch_shape=torch.Size([*batch_shape[:-1], 1]))
         )
         covar = ScaleKernel(
             RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
@@ -187,12 +190,13 @@ class DirectLmcMtgpqr_H(DirectQuantileGP):
         return super().forward(x_scaled)
 
 
-class CgIndependentMtgpqr_H(CenterGapQuantileGP):
+class CgIndependentMtgpqr(CenterGapQuantileGP):
     def __init__(
         self,
         inducing_points,
         num_quantiles,
         num_lower_quantiles,
+        mean_cls,
         X_scale=None,
         X_mean=None,
         batch_shape=torch.Size(),
@@ -221,7 +225,7 @@ class CgIndependentMtgpqr_H(CenterGapQuantileGP):
 
         mean = CenterGapMean(
             torch.nn.Sequential(
-                unscaler, PriorMean_H(batch_shape=torch.Size([*batch_shape[:-1], 1]))
+                unscaler, mean_cls(batch_shape=torch.Size([*batch_shape[:-1], 1]))
             ),
             ConstantMean(
                 batch_shape=torch.Size([*batch_shape[:-1], num_quantiles - 1])
@@ -240,11 +244,12 @@ class CgIndependentMtgpqr_H(CenterGapQuantileGP):
         return super().forward(x_scaled)
 
 
-class DirectIndependentMtgpqr_H(DirectQuantileGP):
+class DirectIndependentMtgpqr(DirectQuantileGP):
     def __init__(
         self,
         inducing_points,
         num_quantiles,
+        mean_cls,
         X_scale=None,
         X_mean=None,
         batch_shape=torch.Size(),
@@ -272,7 +277,7 @@ class DirectIndependentMtgpqr_H(DirectQuantileGP):
         unscaler = Unscaler(X_scale=X_scale, X_mean=X_mean)
 
         mean = torch.nn.Sequential(
-            unscaler, PriorMean_H(batch_shape=torch.Size([*batch_shape[:-1], 1]))
+            unscaler, mean_cls(batch_shape=torch.Size([*batch_shape[:-1], 1]))
         )
         covar = ScaleKernel(
             RBFKernel(ard_num_dims=D, batch_shape=batch_shape),

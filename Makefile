@@ -25,4 +25,4 @@ _artifacts/H.CV.epoch.png: scripts/plot-cv.epoch.py _temp/H.CgLmcMtgpqr.CV.csv _
 
 _artifacts/H.CV.min.png: scripts/plot-cv.min.py _temp/H.CgLmcMtgpqr.CV.csv _temp/H.DirectLmcMtgpqr.CV.csv _temp/H.CgIndependentMtgpqr.CV.csv _temp/H.DirectIndependentMtgpqr.CV.csv
 	mkdir -p $(@D)
-	python3 $^ -o $@
+	python3 $^ --ymin 5.5e-3 -o $@

@@ -46,10 +46,15 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-model_cls_name = f"{args.model}_{args.target}"
+model_cls_name = f"{args.model}"
 model_cls = getattr(gpqr, model_cls_name, None)
 if model_cls is None:
     raise ValueError(f"Model class {model_cls_name} not found.")
+
+mean_cls_name = f"PriorMean_{args.target}"
+mean_cls = getattr(gpqr, mean_cls_name, None)
+if mean_cls is None:
+    raise ValueError(f"Mean class {mean_cls_name} not found.")
 
 X = torch.tensor(pd.read_csv(args.X).values).float()
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float()
@@ -82,6 +87,7 @@ if args.model == "CgLmcMtgpqr":
         num_lower_quantiles=NUM_LOWER_QUANTILES,
         num_latents=NUM_LATENTS,
         num_lower_latents=NUM_LOWER_LATENTS,
+        mean_cls=mean_cls,
         X_scale=x_scales,
         X_mean=x_means,
         batch_shape=(K,),
@@ -97,6 +103,7 @@ elif args.model == "CgIndependentMtgpqr":
         inducing_points=inducing_points,
         num_quantiles=len(QUANTILES),
         num_lower_quantiles=NUM_LOWER_QUANTILES,
+        mean_cls=mean_cls,
         X_scale=x_scales,
         X_mean=x_means,
         batch_shape=(K,),
@@ -112,6 +119,7 @@ elif args.model == "DirectLmcMtgpqr":
         inducing_points=inducing_points,
         num_quantiles=len(QUANTILES),
         num_latents=NUM_LATENTS,
+        mean_cls=mean_cls,
         X_scale=x_scales,
         X_mean=x_means,
         batch_shape=(K,),
@@ -125,6 +133,7 @@ elif args.model == "DirectIndependentMtgpqr":
     model = model_cls(
         inducing_points=inducing_points,
         num_quantiles=len(QUANTILES),
+        mean_cls=mean_cls,
         X_scale=x_scales,
         X_mean=x_means,
         batch_shape=(K,),
