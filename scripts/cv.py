@@ -29,6 +29,8 @@ NUM_LATENTS = 3
 NUM_LOWER_LATENTS = 1
 K = 5
 
+torch.manual_seed(42)
+
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
@@ -90,11 +92,39 @@ if args.model == "CgLmcMtgpqr":
         torch.zeros((K, len(QUANTILES))),
         learn_scales=True,
     ).to(device)
+elif args.model == "CgIndependentMtgpqr":
+    model = model_cls(
+        inducing_points=inducing_points,
+        num_quantiles=len(QUANTILES),
+        num_lower_quantiles=NUM_LOWER_QUANTILES,
+        X_scale=x_scales,
+        X_mean=x_means,
+        batch_shape=(K,),
+    ).to(device)
+    likelihood = MultitaskCenterGapQuantileGPLikelihood(
+        QUANTILES.unsqueeze(0),
+        CENTER_QUANTILE_INDEX,
+        torch.zeros((K, len(QUANTILES))),
+        learn_scales=True,
+    ).to(device)
 elif args.model == "DirectLmcMtgpqr":
     model = model_cls(
         inducing_points=inducing_points,
         num_quantiles=len(QUANTILES),
         num_latents=NUM_LATENTS,
+        X_scale=x_scales,
+        X_mean=x_means,
+        batch_shape=(K,),
+    ).to(device)
+    likelihood = MultitaskQuantileGPLikelihood(
+        QUANTILES.unsqueeze(0),
+        torch.zeros((K, len(QUANTILES))),
+        learn_scales=True,
+    ).to(device)
+elif args.model == "DirectIndependentMtgpqr":
+    model = model_cls(
+        inducing_points=inducing_points,
+        num_quantiles=len(QUANTILES),
         X_scale=x_scales,
         X_mean=x_means,
         batch_shape=(K,),
