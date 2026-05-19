@@ -7,7 +7,10 @@ import numpy as np
 import pandas as pd
 import torch
 from gpytorch.mlls import VariationalELBO
-from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
+from gpytorch_qr.likelihoods import (
+    MultitaskCenterGapQuantileGPLikelihood,
+    MultitaskQuantileGPLikelihood,
+)
 from sklearn.metrics import mean_pinball_loss
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
@@ -84,6 +87,20 @@ if args.model == "CgLmcMtgpqr":
     likelihood = MultitaskCenterGapQuantileGPLikelihood(
         QUANTILES.unsqueeze(0),
         CENTER_QUANTILE_INDEX,
+        torch.zeros((K, len(QUANTILES))),
+        learn_scales=True,
+    ).to(device)
+elif args.model == "DirectLmcMtgpqr":
+    model = model_cls(
+        inducing_points=inducing_points,
+        num_quantiles=len(QUANTILES),
+        num_latents=NUM_LATENTS,
+        X_scale=x_scales,
+        X_mean=x_means,
+        batch_shape=(K,),
+    ).to(device)
+    likelihood = MultitaskQuantileGPLikelihood(
+        QUANTILES.unsqueeze(0),
         torch.zeros((K, len(QUANTILES))),
         learn_scales=True,
     ).to(device)

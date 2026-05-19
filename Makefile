@@ -19,6 +19,10 @@ _temp/y.csv: _temp/Dataset.csv
 _temp/H.%.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model $* --n-epochs 5000 -o $@
 
-_artifacts/H.CV.png: scripts/plot-cv.py _temp/H.CgLmcMtgpqr.CV.csv
+_artifacts/H.CV.epoch.png: scripts/plot-cv.epoch.py _temp/H.CgLmcMtgpqr.CV.csv _temp/H.DirectLmcMtgpqr.CV.csv
+	@mkdir -p $(@D)
+	python3 $^ -o $@
+
+_artifacts/H.CV.min.png: scripts/plot-cv.min.py _temp/H.CgLmcMtgpqr.CV.csv _temp/H.DirectLmcMtgpqr.CV.csv
 	@mkdir -p $(@D)
 	python3 $^ -o $@

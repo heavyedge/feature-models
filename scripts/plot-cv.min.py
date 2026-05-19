@@ -1,0 +1,33 @@
+import argparse
+import pathlib
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "cv", type=pathlib.Path, nargs="+", help="Cross-validation csv files."
+)
+parser.add_argument("-o", "--out", type=pathlib.Path, help="Output image file.")
+args = parser.parse_args()
+
+names, losses = [], []
+for cv_path in args.cv:
+    cv_df = pd.read_csv(cv_path)
+    min_loss = cv_df["test_loss"].min()
+    losses.append(min_loss)
+    names.append(cv_path.stem.split(".")[1])
+
+bars = plt.bar(names, losses)
+for bar in bars:
+    height = bar.get_height()
+    plt.text(
+        bar.get_x() + bar.get_width() / 2.0,
+        height,
+        f"{height:.6f}",
+        ha="center",
+        va="bottom",
+    )
+plt.xlabel("Model")
+plt.ylabel("Minimum Test Loss")
+plt.savefig(args.out)
