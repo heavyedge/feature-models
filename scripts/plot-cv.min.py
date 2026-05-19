@@ -26,7 +26,9 @@ args = parser.parse_args()
 names, losses = [], []
 for cv_path in args.cv:
     cv_df = pd.read_csv(cv_path)
-    min_loss = cv_df["test_loss"].min()
+    fold_cols = [col for col in cv_df.columns if col.startswith("test_loss_fold")]
+    avg_test_loss = cv_df[fold_cols].mean(axis=1)
+    min_loss = avg_test_loss.min()
     losses.append(min_loss)
     label = cv_path.stem.split(".")[1].removesuffix("Mtgpqr")
     names.append(label)

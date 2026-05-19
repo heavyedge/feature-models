@@ -150,7 +150,7 @@ optimizer = torch.optim.Adam(
     lr=0.001,
 )
 
-test_losses = []
+test_losses_per_fold = []
 for i in range(args.n_epochs):
     model.train()
     likelihood.train()
@@ -165,17 +165,26 @@ for i in range(args.n_epochs):
     likelihood.eval()
     with torch.no_grad():
         output = model.mean_quantiles_mc(x_test_cv)  # (K, N, Q)
-        pinball_losses = []
-        for j, q in enumerate(QUANTILES):
-            test_loss = mean_pinball_loss(
-                y_test_cv.cpu().numpy(), output[:, :, j].cpu().numpy(), alpha=q.item()
-            )
-            pinball_losses.append(test_loss)
-        test_losses.append(np.mean(pinball_losses))
+        epoch_fold_losses = []
+        for fold_idx in range(K):
+            pinball_losses = []
+            for j, q in enumerate(QUANTILES):
+                test_loss = mean_pinball_loss(
+                    y_test_cv[fold_idx].cpu().numpy(),
+                    output[fold_idx, :, j].cpu().numpy(),
+                    alpha=q.item(),
+                )
+                pinball_losses.append(test_loss)
+            epoch_fold_losses.append(np.mean(pinball_losses))
+        test_losses_per_fold.append(epoch_fold_losses)
 
     logger.info(
-        f"{args.out}: Epoch {i+1}/{args.n_epochs}, Test Loss: {test_losses[-1]:.4f}"
+        f"{args.out}: Epoch {i+1}/{args.n_epochs}, "
+        f"Average loss: {np.round(np.mean(epoch_fold_losses), 4)}"
     )
 
-df = pd.DataFrame({"epoch": np.arange(1, args.n_epochs + 1), "test_loss": test_losses})
+fold_loss_array = np.array(test_losses_per_fold)
+df = pd.DataFrame({"epoch": np.arange(1, args.n_epochs + 1)})
+for fold_idx in range(K):
+    df[f"test_loss_fold{fold_idx + 1}"] = fold_loss_array[:, fold_idx]
 df.to_csv(args.out, index=False)

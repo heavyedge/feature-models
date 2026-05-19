@@ -37,7 +37,10 @@ parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
 
-NUM_EPOCHS = pd.read_csv(args.cv)["test_loss"].argmin() + 1
+cv_df = pd.read_csv(args.cv)
+fold_cols = [col for col in cv_df.columns if col.startswith("test_loss_fold")]
+best_epochs_per_fold = cv_df[fold_cols].idxmin() + 1
+NUM_EPOCHS = int(best_epochs_per_fold.median())
 
 if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
