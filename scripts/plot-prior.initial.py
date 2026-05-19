@@ -65,9 +65,9 @@ for ax, ((cos_theta,), df) in zip(axes, groups):
 
         X_pred = np.stack(
             [
-                np.full_like(Rgt_pred, cos_theta),
-                np.full_like(Rgt_pred, Ca),
                 Rgt_pred,
+                np.full_like(Rgt_pred, Ca),
+                np.full_like(Rgt_pred, cos_theta),
             ],
             axis=-1,
         )

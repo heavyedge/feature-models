@@ -6,8 +6,8 @@ _artifacts/H.CV.epoch.png \
 _artifacts/H.CV.min.png \
 _artifacts/phi.CV.epoch.png \
 _artifacts/phi.CV.min.png \
-_artifacts/H.prior.png \
-_artifacts/phi.prior.png \
+_artifacts/H.prior.initial.png \
+_artifacts/phi.prior.initial.png \
 _artifacts/H.CgLmcMtgpqr.quantiles.png \
 _artifacts/phi.CgLmcMtgpqr.quantiles.png \
 model/H.pt \
@@ -54,11 +54,11 @@ _temp/H.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/H.%.CV.csv
 _temp/phi.%.pt: scripts/train.py _temp/X.csv _temp/y.csv _temp/phi.%.CV.csv
 	python3 $^ --target phi --model $* -o $@
 
-_artifacts/H.prior.png: scripts/plot-prior.py _temp/X.csv _temp/y.csv
+_artifacts/H.prior.initial.png: scripts/plot-prior.initial.py _temp/X.csv _temp/y.csv
 	mkdir -p $(@D)
 	python3 $^ --target H -o $@
 
-_artifacts/phi.prior.png: scripts/plot-prior.py _temp/X.csv _temp/y.csv
+_artifacts/phi.prior.initial.png: scripts/plot-prior.initial.py _temp/X.csv _temp/y.csv
 	mkdir -p $(@D)
 	python3 $^ --target phi -o $@
 
