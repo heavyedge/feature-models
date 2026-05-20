@@ -1,0 +1,87 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+
+  lint:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: get repo
+        uses: actions/checkout@v3
+
+      - name: set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: install dependencies
+        run: |
+          pip install flake8 black[jupyter] isort
+
+      - name: lint with flake8
+        run: |
+          flake8
+
+      - name: lint with black
+        run: |
+          black --check .
+
+      - name: lint with isort
+        run: |
+          isort --check .
+
+  find-notebooks:
+
+      needs: lint
+
+      runs-on: ubuntu-latest
+
+      outputs:
+        notebooks: ${{ steps.list.outputs.notebooks }}
+
+      steps:
+
+        - name: get repo
+          uses: actions/checkout@v3
+
+        - name: list notebooks
+          id: list
+          run: |
+            notebooks=$(find notebooks -name "*.ipynb" | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "notebooks=$notebooks" >> $GITHUB_OUTPUT
+
+  notebooks:
+
+      needs: find-notebooks
+
+      runs-on: ubuntu-latest
+
+      strategy:
+        fail-fast: false
+        matrix:
+          notebook: ${{ fromJson(needs.find-notebooks.outputs.notebooks) }}
+
+      steps:
+
+        - name: get repo
+          uses: actions/checkout@v3
+
+        - name: set up Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: "3.12"
+
+        - name: Download feature dataset
+          run: |
+            curl -LsSf https://hf.co/cli/install.sh | bash
+            hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.1.0 --local-dir _data
+
+        - name: install package
+          run: |
+            pip install -r requirements.txt
+
+        - run: HEAVYEDGE_N_EPOCHS=1 make ${{ matrix.notebook }}
