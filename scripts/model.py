@@ -31,7 +31,7 @@ class Unscaler(torch.nn.Module):
         self.register_buffer("X_min", X_min)
 
     def forward(self, x):
-        return x * self.X_scale + self.X_min
+        return (x - self.X_min) / self.X_scale
 
 
 class PriorMean_H(gpytorch.means.Mean):

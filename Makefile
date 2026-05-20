@@ -5,6 +5,7 @@ all: \
 _artifacts/H.prior.initial.png \
 _artifacts/H.MTGPQR.quantiles.png \
 _artifacts/phi.MTGPQR.quantiles.png \
+_artifacts/H.prior.trained.png \
 model/H.pt \
 model/phi.pt
 
@@ -30,6 +31,10 @@ _temp/H.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
 
 _temp/phi.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
 	python3 $^ --target phi --model MTGPQR -o $@
+
+_artifacts/H.prior.trained.png: scripts/plot-prior.trained.py _temp/X.csv _temp/y.csv _temp/H.MTGPQR.pt
+	mkdir -p $(@D)
+	python3 $^ --target H --model MTGPQR -o $@
 
 _artifacts/H.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/H.%.pt
 	mkdir -p $(@D)
