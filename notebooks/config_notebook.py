@@ -1,9 +1,13 @@
 """Make notebook output deterministic."""
 
+import warnings
+
 import matplotlib.pyplot as plt
 from IPython import get_ipython
 from matplotlib.figure import Figure
 from matplotlib_inline.backend_inline import set_matplotlib_formats
+
+warnings.filterwarnings("ignore")
 
 set_matplotlib_formats("svg")
 
