@@ -8,7 +8,6 @@ __all__ = [
     "ALD",
     "CenterGapLikelihood",
     "CenterGapLmcVariationalStrategy",
-    "MTGPQR",
 ]
 
 
@@ -219,29 +218,29 @@ class CenterGapLmcVariationalStrategy(gpytorch.variational.LMCVariationalStrateg
         )
 
 
-class MTGPQR(torch.nn.Module):
-    """Multi-task Gaussian process quantile regression model.
+# class MTGPQR(torch.nn.Module):
+#     """Multi-task Gaussian process quantile regression model.
 
-    Parameters
-    ----------
-    taus : tensor with shape (T,)
-        The quantile levels of the distribution.
-    gp : CenterGapGP
-        The Gaussian process modeling the center-gap representation of quantiles.
-    """
+#     Parameters
+#     ----------
+#     taus : tensor with shape (T,)
+#         The quantile levels of the distribution.
+#     gp : CenterGapGP
+#         The Gaussian process modeling the center-gap representation of quantiles.
+#     """
 
-    def __init__(self, taus, gp):
-        super().__init__()
-        self.gp = gp
-        self.likelihood = CenterGapLikelihood(taus=taus)
+#     def __init__(self, taus, gp):
+#         super().__init__()
+#         self.gp = gp
+#         self.likelihood = CenterGapLikelihood(taus=taus)
 
-        central_tau = taus[(taus - 0.5).abs().argmin()]
-        self.num_lower_quantiles = len(taus[taus < central_tau])
+#         central_tau = taus[(taus - 0.5).abs().argmin()]
+#         self.num_lower_quantiles = len(taus[taus < central_tau])
 
-    def forward(self, x):
-        """Compute quantile functions."""
-        function_means = self.gp(x).mean
-        median = function_means[..., :1]
-        lower_gaps = function_means[..., 1 : 1 + self.num_lower_quantiles]
-        upper_gaps = function_means[..., 1 + self.num_lower_quantiles :]
-        return centergap_to_quantiles(median, lower_gaps, upper_gaps)
+#     def forward(self, x):
+#         """Compute quantile functions."""
+#         function_means = self.gp(x).mean
+#         median = function_means[..., :1]
+#         lower_gaps = function_means[..., 1 : 1 + self.num_lower_quantiles]
+#         upper_gaps = function_means[..., 1 + self.num_lower_quantiles :]
+#         return centergap_to_quantiles(median, lower_gaps, upper_gaps)

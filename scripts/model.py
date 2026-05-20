@@ -1,9 +1,10 @@
 import gpytorch
 import torch
 from gpqr import (
-    MTGPQR,
     CenterGapGP,
+    CenterGapLikelihood,
     CenterGapLmcVariationalStrategy,
+    centergap_to_quantiles,
 )
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
@@ -84,21 +85,34 @@ class MTGP(CenterGapGP):
             num_lower_latents=num_lower_latents,
         )
         super().__init__(variational_strategy, center_mean, gap_mean, covar_module)
+        self.num_lower_quantiles = num_lower_quantiles
+
+    def mean_quantiles(self, x):
+        """Compute quantile functions."""
+        function_means = self(x).mean
+        median = function_means[..., :1]
+        lower_gaps = function_means[..., 1 : 1 + self.num_lower_quantiles]
+        upper_gaps = function_means[..., 1 + self.num_lower_quantiles :]
+        return centergap_to_quantiles(median, lower_gaps, upper_gaps)
 
 
-class MTGPQR_H(MTGPQR):
-    def __init__(self, inducing_points, X_scale=None, X_min=None):
+class MTGPQR_H(MTGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+    ):
         _, D = inducing_points.size()
-        taus = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
-        central_tau = taus[(taus - 0.5).abs().argmin()]
-        num_lower_quantiles = len(taus[taus < central_tau])
         if X_scale is None:
             X_scale = torch.ones(D)
         if X_min is None:
             X_min = torch.zeros(D)
 
-        num_latents = len(taus)
-        num_lower_latents = int((num_latents - 1) // 2)
         unscaler = Unscaler(X_scale, X_min)
         center_mean = torch.nn.Sequential(unscaler, PriorMean_H())
         gap_mean = gpytorch.means.ConstantMean(
@@ -111,36 +125,38 @@ class MTGPQR_H(MTGPQR):
             ),
             batch_shape=torch.Size([num_latents]),
         )
-        gp = MTGP(
-            inducing_points=inducing_points,
-            num_quantiles=len(taus),
-            num_lower_quantiles=num_lower_quantiles,
-            num_latents=num_latents,
-            num_lower_latents=num_lower_latents,
-            center_mean=center_mean,
-            gap_mean=gap_mean,
-            covar_module=covar_module,
+
+        super().__init__(
+            inducing_points,
+            num_quantiles,
+            num_lower_quantiles,
+            num_latents,
+            num_lower_latents,
+            center_mean,
+            gap_mean,
+            covar_module,
         )
-        super().__init__(taus, gp)
-        self.taus = taus
 
 
-class MTGPQR_phi(MTGPQR):
-    """MTGPQR for phi target with ConstantMean prior."""
-
-    def __init__(self, inducing_points, X_scale=None, X_min=None):
+class MTGPQR_phi(MTGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+    ):
         _, D = inducing_points.size()
-        taus = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
-        central_tau = taus[(taus - 0.5).abs().argmin()]
-        num_lower_quantiles = len(taus[taus < central_tau])
         if X_scale is None:
             X_scale = torch.ones(D)
         if X_min is None:
             X_min = torch.zeros(D)
 
-        num_latents = len(taus)
-        num_lower_latents = int((num_latents - 1) // 2)
-        center_mean = gpytorch.means.ConstantMean()
+        unscaler = Unscaler(X_scale, X_min)
+        center_mean = torch.nn.Sequential(unscaler, gpytorch.means.ConstantMean())
         gap_mean = gpytorch.means.ConstantMean(
             batch_shape=torch.Size([num_latents - 1])
         )
@@ -161,24 +177,23 @@ class MTGPQR_phi(MTGPQR):
         with torch.no_grad():
             covar_module.base_kernel.lengthscale = init_ls
 
-        gp = MTGP(
-            inducing_points=inducing_points,
-            num_quantiles=len(taus),
-            num_lower_quantiles=num_lower_quantiles,
-            num_latents=num_latents,
-            num_lower_latents=num_lower_latents,
-            center_mean=center_mean,
-            gap_mean=gap_mean,
-            covar_module=covar_module,
+        super().__init__(
+            inducing_points,
+            num_quantiles,
+            num_lower_quantiles,
+            num_latents,
+            num_lower_latents,
+            center_mean,
+            gap_mean,
+            covar_module,
         )
-        super().__init__(taus, gp)
-        self.taus = taus
 
 
 def train_model(
     train_x,
     train_y,
     model,
+    likelihood,
     num_epochs,
     learning_rate=0.001,
     logger=None,
@@ -186,25 +201,24 @@ def train_model(
     # train_x: (N, D)
     # train_y: (N,)
     model.train()
+    likelihood.train()
 
     # Setup optimizer
-    parameters = list(model.parameters())
+    parameters = list(model.parameters()) + list(likelihood.parameters())
     optimizer = torch.optim.Adam(
         parameters,
         lr=learning_rate,
     )
 
-    mll = gpytorch.mlls.VariationalELBO(
-        model.likelihood, model.gp, num_data=len(train_y)
-    )
+    mll = gpytorch.mlls.VariationalELBO(likelihood, model, num_data=len(train_y))
 
     # Training loop
     for i in range(num_epochs):
-        optimizer.zero_grad()
-        output = model.gp(train_x)
+        output = model(train_x)
         loss = -mll(output, train_y)
         loss.backward()
         optimizer.step()
+        optimizer.zero_grad()
 
         if logger is not None:
             logger(i, num_epochs, loss.item())
@@ -212,14 +226,27 @@ def train_model(
     return model
 
 
-def save_model(model, scaler, path):
-    gp = model.gp
-    inducing_points = gp.variational_strategy.base_variational_strategy.inducing_points
+def save_model(
+    model,
+    likelihood,
+    scaler,
+    inducing_points,
+    quantiles,
+    num_lower_quantiles,
+    num_latents,
+    num_lower_latents,
+    path,
+):
     torch.save(
         {
-            "inducing_points": inducing_points,
-            "state_dict": model.state_dict(),
+            "model_state_dict": model.state_dict(),
+            "likelihood_state_dict": likelihood.state_dict(),
             "scaler": scaler,
+            "inducing_points": inducing_points,
+            "quantiles": quantiles,
+            "num_lower_quantiles": num_lower_quantiles,
+            "num_latents": num_latents,
+            "num_lower_latents": num_lower_latents,
         },
         path,
     )
@@ -227,9 +254,18 @@ def save_model(model, scaler, path):
 
 def load_model(model_class, path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
-    model = model_class(checkpoint["inducing_points"])
-    model.load_state_dict(checkpoint["state_dict"])
+    model = model_class(
+        inducing_points=checkpoint["inducing_points"],
+        num_quantiles=len(checkpoint["quantiles"]),
+        num_lower_quantiles=checkpoint["num_lower_quantiles"],
+        num_latents=checkpoint["num_latents"],
+        num_lower_latents=checkpoint["num_lower_latents"],
+    )
+    likelihood = CenterGapLikelihood(taus=checkpoint["quantiles"])
+    model.load_state_dict(checkpoint["model_state_dict"])
+    likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
     if device is not None:
         model.to(device)
+        likelihood.to(device)
     scaler = checkpoint["scaler"]
-    return model, scaler
+    return model, likelihood, scaler

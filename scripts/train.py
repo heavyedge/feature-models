@@ -4,6 +4,7 @@ import pathlib
 
 import pandas as pd
 import torch
+from gpqr import CenterGapLikelihood
 from sklearn.preprocessing import MinMaxScaler
 
 import model as model_module
@@ -15,6 +16,14 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
+
+QUANTILES = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
+CENTER_QUANTILE_INDEX = 2
+NUM_LOWER_QUANTILES = 2
+NUM_LATENTS = 3
+NUM_LOWER_LATENTS = 1
+
+torch.manual_seed(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
@@ -39,15 +48,37 @@ X_min = torch.tensor(scaler.min_).float()
 X_scaled = torch.tensor(scaler.transform(X.to_numpy())).float()
 model_cls_name = f"{args.model}_{args.target}"
 model_class = getattr(model_module, model_cls_name)
+inducing_points = X_scaled.clone()
+model = model_class(
+    inducing_points=inducing_points,
+    num_quantiles=len(QUANTILES),
+    num_lower_quantiles=NUM_LOWER_QUANTILES,
+    num_latents=NUM_LATENTS,
+    num_lower_latents=NUM_LOWER_LATENTS,
+    X_scale=X_scale,
+    X_min=X_min,
+).to(device)
+likelihood = CenterGapLikelihood(taus=QUANTILES).to(device)
 
 model = train_model(
     X_scaled.to(device),
     y.to(device),
-    model_class(X_scaled, X_scale, X_min).to(device),
+    model,
+    likelihood,
     num_epochs=10_000,
     learning_rate=0.001,
     logger=lambda i, num_epochs, loss: logger.info(
         f"{args.out}: Epoch {i+1}/{num_epochs}, Loss: {loss:.4f}"
     ),
 )
-save_model(model, scaler, args.out)
+save_model(
+    model,
+    likelihood,
+    scaler,
+    inducing_points,
+    QUANTILES,
+    NUM_LOWER_QUANTILES,
+    NUM_LATENTS,
+    NUM_LOWER_LATENTS,
+    args.out,
+)

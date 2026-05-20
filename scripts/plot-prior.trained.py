@@ -33,7 +33,7 @@ data = pd.concat([X, y], axis=1)
 
 model_cls_name = f"{args.model}_{args.target}"
 model_cls = getattr(model_module, model_cls_name, None)
-model, scaler = load_model(model_cls, args.checkpoint, device=device)
+model, _, scaler = load_model(model_cls, args.checkpoint, device=device)
 model.eval()
 
 # Plot
@@ -77,7 +77,7 @@ for ax, ((cos_theta,), df) in zip(axes, groups):
         )
         X_pred_scaled = torch.tensor(scaler.transform(X_pred)).float().to(device)
         with torch.no_grad(), gpytorch.settings.prior_mode(state=True):
-            prior_mean = model.gp.center_mean(X_pred_scaled)
+            prior_mean = model.center_mean(X_pred_scaled)
         q_central = prior_mean.cpu().numpy()
         ax.plot(
             Rgt_pred,

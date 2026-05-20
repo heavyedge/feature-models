@@ -32,7 +32,7 @@ data = pd.concat([X, y], axis=1)
 
 model_cls_name = f"{args.model}_{args.target}"
 model_cls = getattr(model_module, model_cls_name, None)
-model, scaler = load_model(model_cls, args.checkpoint, device=device)
+model, _, scaler = load_model(model_cls, args.checkpoint, device=device)
 model.eval()
 
 # Plot
@@ -76,7 +76,9 @@ for ax, ((cos_theta,), df) in zip(axes, groups):
         )
         X_pred_scaled = scaler.transform(X_pred)
         with torch.no_grad():
-            quantiles = model(torch.tensor(X_pred_scaled).float().to(device))
+            quantiles = model.mean_quantiles(
+                torch.tensor(X_pred_scaled).float().to(device)
+            )
         q_low, q_high = quantiles.T[[0, -1], ...].cpu().numpy()
         ax.fill_between(
             Rgt_pred,

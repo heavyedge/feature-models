@@ -3,9 +3,9 @@
 
 all: \
 _artifacts/H.prior.initial.png \
+_artifacts/H.prior.trained.png \
 _artifacts/H.MTGPQR.quantiles.png \
 _artifacts/phi.MTGPQR.quantiles.png \
-_artifacts/H.prior.trained.png \
 model/H.pt \
 model/phi.pt
 
