@@ -1,20 +1,19 @@
 import gpytorch
 import torch
-from gpqr import (
-    CenterGapGP,
-    CenterGapLikelihood,
-    CenterGapLmcVariationalStrategy,
-    centergap_to_quantiles,
-)
+from gpytorch.kernels import MaternKernel, RBFKernel, ScaleKernel
+from gpytorch.means import ConstantMean
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
-    VariationalStrategy,
+    UnwhitenedVariationalStrategy,
 )
+from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
+from gpytorch_qr.means import CenterGapMean
+from gpytorch_qr.models import CenterGapQuantileGP
+from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
 
 __all__ = [
     "Unscaler",
     "PriorMean_H",
-    "MTGP",
     "MTGPQR_H",
     "MTGPQR_phi",
     "train_model",
@@ -32,7 +31,9 @@ class Unscaler(torch.nn.Module):
         self.register_buffer("X_min", X_min)
 
     def forward(self, x):
-        return (x - self.X_min) / self.X_scale
+        x_flattened = x.view(-1, x.shape[-1])
+        x_unscaled = (x_flattened - self.X_min) / self.X_scale
+        return x_unscaled.view_as(x)
 
 
 class PriorMean_H(gpytorch.means.Mean):
@@ -40,6 +41,10 @@ class PriorMean_H(gpytorch.means.Mean):
 
     Input X must be [Rgt, Ca, surface_tension, ...].
     """
+
+    def __init__(self, batch_shape=torch.Size()):
+        super().__init__()
+        self.batch_shape = batch_shape
 
     def forward(self, x):
         Rgt = x[..., 0]
@@ -55,7 +60,7 @@ class PriorMean_H(gpytorch.means.Mean):
         return corrected_model
 
 
-class MTGP(CenterGapGP):
+class MTGPQR_H(CenterGapQuantileGP):
     def __init__(
         self,
         inducing_points,
@@ -63,40 +68,47 @@ class MTGP(CenterGapGP):
         num_lower_quantiles,
         num_latents,
         num_lower_latents,
-        center_mean,
-        gap_mean,
-        covar_module,
+        X_scale=None,
+        X_min=None,
     ):
-        N, _ = inducing_points.size()
-        variational_strategy = CenterGapLmcVariationalStrategy(
-            VariationalStrategy(
+        N, D = inducing_points.size()
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=torch.Size([num_latents]),
+        )
+        variational_strategy = CGBlkdiagLmcVariationalStrategy(
+            UnwhitenedVariationalStrategy(
                 self,
                 inducing_points,
-                CholeskyVariationalDistribution(
-                    N,
-                    batch_shape=torch.Size([num_latents]),
-                ),
+                variational_distribution,
                 learn_inducing_locations=False,
             ),
-            num_tasks=num_quantiles,
+            num_quantiles=num_quantiles,
             num_latents=num_latents,
-            latent_dim=-1,
             num_lower_quantiles=num_lower_quantiles,
             num_lower_latents=num_lower_latents,
         )
-        super().__init__(variational_strategy, center_mean, gap_mean, covar_module)
-        self.num_lower_quantiles = num_lower_quantiles
 
-    def mean_quantiles(self, x):
-        """Compute quantile functions."""
-        function_means = self(x).mean
-        median = function_means[..., :1]
-        lower_gaps = function_means[..., 1 : 1 + self.num_lower_quantiles]
-        upper_gaps = function_means[..., 1 + self.num_lower_quantiles :]
-        return centergap_to_quantiles(median, lower_gaps, upper_gaps)
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = CenterGapMean(
+            torch.nn.Sequential(unscaler, PriorMean_H(batch_shape=torch.Size([1]))),
+            ConstantMean(batch_shape=torch.Size([num_latents - 1])),
+            latent_dim=-1,
+        )
+        covar = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=torch.Size([num_latents])),
+            batch_shape=torch.Size([num_latents]),
+        )
+
+        super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
 
-class MTGPQR_H(MTGP):
+class MTGPQR_phi(CenterGapQuantileGP):
     def __init__(
         self,
         inducing_points,
@@ -107,86 +119,51 @@ class MTGPQR_H(MTGP):
         X_scale=None,
         X_min=None,
     ):
-        _, D = inducing_points.size()
+        N, D = inducing_points.size()
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=torch.Size([num_latents]),
+        )
+        variational_strategy = CGBlkdiagLmcVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_quantiles=num_quantiles,
+            num_latents=num_latents,
+            num_lower_quantiles=num_lower_quantiles,
+            num_lower_latents=num_lower_latents,
+        )
+
         if X_scale is None:
             X_scale = torch.ones(D)
         if X_min is None:
             X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
 
-        unscaler = Unscaler(X_scale, X_min)
-        center_mean = torch.nn.Sequential(unscaler, PriorMean_H())
-        gap_mean = gpytorch.means.ConstantMean(
-            batch_shape=torch.Size([num_latents - 1])
+        mean = CenterGapMean(
+            torch.nn.Sequential(unscaler, ConstantMean(batch_shape=torch.Size([1]))),
+            ConstantMean(batch_shape=torch.Size([num_latents - 1])),
+            latent_dim=-1,
         )
-        covar_module = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel(
-                ard_num_dims=D,
-                batch_shape=torch.Size([num_latents]),
-            ),
+        covar = ScaleKernel(
+            MaternKernel(nu=2.5, ard_num_dims=D, batch_shape=torch.Size([num_latents])),
             batch_shape=torch.Size([num_latents]),
         )
+        super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
-        super().__init__(
-            inducing_points,
-            num_quantiles,
-            num_lower_quantiles,
-            num_latents,
-            num_lower_latents,
-            center_mean,
-            gap_mean,
-            covar_module,
-        )
-
-
-class MTGPQR_phi(MTGP):
-    def __init__(
-        self,
-        inducing_points,
-        num_quantiles,
-        num_lower_quantiles,
-        num_latents,
-        num_lower_latents,
-        X_scale=None,
-        X_min=None,
-    ):
-        _, D = inducing_points.size()
-        if X_scale is None:
-            X_scale = torch.ones(D)
-        if X_min is None:
-            X_min = torch.zeros(D)
-
-        unscaler = Unscaler(X_scale, X_min)
-        center_mean = torch.nn.Sequential(unscaler, gpytorch.means.ConstantMean())
-        gap_mean = gpytorch.means.ConstantMean(
-            batch_shape=torch.Size([num_latents - 1])
-        )
-        covar_module = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.MaternKernel(
-                nu=2.5,
-                ard_num_dims=D,
-                batch_shape=torch.Size([num_latents]),
-            ),
-            batch_shape=torch.Size([num_latents]),
-        )
         lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
         upper = torch.tensor([1e4 for _ in range(D)])
         init_ls = torch.tensor([2, 2, 2] + [0.5 for _ in range(D - 3)])
-        covar_module.base_kernel.register_constraint(
+        covar.base_kernel.register_constraint(
             "raw_lengthscale", gpytorch.constraints.Interval(lower, upper)
         )
         with torch.no_grad():
-            covar_module.base_kernel.lengthscale = init_ls
+            covar.base_kernel.lengthscale = init_ls
 
-        super().__init__(
-            inducing_points,
-            num_quantiles,
-            num_lower_quantiles,
-            num_latents,
-            num_lower_latents,
-            center_mean,
-            gap_mean,
-            covar_module,
-        )
+        super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
 
 def train_model(
@@ -261,7 +238,10 @@ def load_model(model_class, path, device=None):
         num_latents=checkpoint["num_latents"],
         num_lower_latents=checkpoint["num_lower_latents"],
     )
-    likelihood = CenterGapLikelihood(taus=checkpoint["quantiles"])
+    likelihood = MultitaskCenterGapQuantileGPLikelihood(
+        checkpoint["quantiles"],
+        checkpoint["num_lower_quantiles"],
+    )
     model.load_state_dict(checkpoint["model_state_dict"])
     likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
     if device is not None:

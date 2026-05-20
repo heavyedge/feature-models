@@ -4,7 +4,7 @@ import pathlib
 
 import pandas as pd
 import torch
-from gpqr import CenterGapLikelihood
+from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
 from sklearn.preprocessing import MinMaxScaler
 
 import model as model_module
@@ -58,7 +58,9 @@ model = model_class(
     X_scale=X_scale,
     X_min=X_min,
 ).to(device)
-likelihood = CenterGapLikelihood(taus=QUANTILES).to(device)
+likelihood = MultitaskCenterGapQuantileGPLikelihood(
+    QUANTILES, CENTER_QUANTILE_INDEX
+).to(device)
 
 model = train_model(
     X_scaled.to(device),

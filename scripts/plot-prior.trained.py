@@ -77,8 +77,8 @@ for ax, ((cos_theta,), df) in zip(axes, groups):
         )
         X_pred_scaled = torch.tensor(scaler.transform(X_pred)).float().to(device)
         with torch.no_grad(), gpytorch.settings.prior_mode(state=True):
-            prior_mean = model.center_mean(X_pred_scaled)
-        q_central = prior_mean.cpu().numpy()
+            prior_mean = model(X_pred_scaled).mean
+        q_central = prior_mean[..., 0].cpu().numpy()
         ax.plot(
             Rgt_pred,
             q_central,
