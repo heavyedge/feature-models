@@ -18,7 +18,10 @@ clean:
 
 # Notebooks
 
-notebooks/%.ipynb: _temp/X.csv _temp/y.csv FORCE
+notebooks/CrossValidation.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+	jupyter nbconvert --to notebook --execute --inplace $@
+
+notebooks/Model.%.ipynb: _temp/X.csv _temp/y.csv model/%.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
@@ -58,10 +61,10 @@ _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
 _temp/H.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model MTGPQR -o $@
+	python3 $^ --target H --model MTGPQR --num-epochs 3127 -o $@
 
 _temp/phi.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model MTGPQR -o $@
+	python3 $^ --target phi --model MTGPQR --num-epochs 5764 -o $@
 
 model/H.pt: _temp/H.MTGPQR.pt
 	cp $< $@
