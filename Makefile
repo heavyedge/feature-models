@@ -1,5 +1,7 @@
+NOTEBOOKS := $(wildcard notebooks/*)
+
 .ONESHELL:
-.PHONY: all clean
+.PHONY: all notebooks clean FORCE
 
 all: \
 _artifacts/H.CV.epoch.png \
@@ -13,8 +15,17 @@ _artifacts/phi.MTGPQR.quantiles.png \
 model/H.pt \
 model/phi.pt
 
+notebooks: $(NOTEBOOKS)
+
 clean:
 	rm -rf _temp _artifacts model/*.pt
+
+# Notebooks
+
+notebooks/%.ipynb: _temp/X.csv _temp/y.csv FORCE
+	jupyter nbconvert --to notebook --execute --inplace $@
+
+FORCE:  # dummy target to force execution of dependent targets
 
 # Figures
 
