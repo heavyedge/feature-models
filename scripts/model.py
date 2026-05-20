@@ -22,7 +22,12 @@ __all__ = [
 
 
 class Unscaler(torch.nn.Module):
-    """Un-min-max-scaling."""
+    """Un-min-max-scaling.
+
+    Parameters
+    ----------
+    X_scale, X_min: torch.Tensor in shape (*B, D)
+    """
 
     def __init__(self, X_scale, X_min):
         super().__init__()
@@ -30,8 +35,11 @@ class Unscaler(torch.nn.Module):
         self.register_buffer("X_min", X_min)
 
     def forward(self, x):
-        x_flattened = x.view(-1, x.shape[-1])
-        x_unscaled = (x_flattened - self.X_min) / self.X_scale
+        # x: (*B, 1, N, D)
+        # BELOW IS CORRECT FOR MinMaxScaler (different from StandardScaler)
+        X_min = self.X_min[..., None, None, :]
+        X_scale = self.X_scale[..., None, None, :]
+        x_unscaled = (x - X_min) / X_scale
         return x_unscaled.view_as(x)
 
 
@@ -69,11 +77,13 @@ class MTGPQR_H(CenterGapQuantileGP):
         num_lower_latents,
         X_scale=None,
         X_min=None,
+        batch_shape=torch.Size(),
     ):
-        N, D = inducing_points.size()
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
         variational_distribution = CholeskyVariationalDistribution(
             N,
-            batch_shape=torch.Size([num_latents]),
+            batch_shape=full_batch_shape,
         )
         variational_strategy = CGBlkdiagLmcVariationalStrategy(
             UnwhitenedVariationalStrategy(
@@ -95,13 +105,16 @@ class MTGPQR_H(CenterGapQuantileGP):
         unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
 
         mean = CenterGapMean(
-            torch.nn.Sequential(unscaler, PriorMean_H(batch_shape=torch.Size([1]))),
-            ConstantMean(batch_shape=torch.Size([num_latents - 1])),
+            torch.nn.Sequential(
+                unscaler,
+                PriorMean_H(batch_shape=torch.Size([*batch_shape, 1])),
+            ),
+            ConstantMean(batch_shape=torch.Size([*batch_shape, num_latents - 1])),
             latent_dim=-1,
         )
         covar = ScaleKernel(
-            RBFKernel(ard_num_dims=D, batch_shape=torch.Size([num_latents])),
-            batch_shape=torch.Size([num_latents]),
+            RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
         )
 
         super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
@@ -117,11 +130,13 @@ class MTGPQR_phi(CenterGapQuantileGP):
         num_lower_latents,
         X_scale=None,
         X_min=None,
+        batch_shape=torch.Size(),
     ):
-        N, D = inducing_points.size()
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
         variational_distribution = CholeskyVariationalDistribution(
             N,
-            batch_shape=torch.Size([num_latents]),
+            batch_shape=full_batch_shape,
         )
         variational_strategy = CGBlkdiagLmcVariationalStrategy(
             UnwhitenedVariationalStrategy(
@@ -143,13 +158,18 @@ class MTGPQR_phi(CenterGapQuantileGP):
         unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
 
         mean = CenterGapMean(
-            torch.nn.Sequential(unscaler, ConstantMean(batch_shape=torch.Size([1]))),
-            ConstantMean(batch_shape=torch.Size([num_latents - 1])),
+            torch.nn.Sequential(
+                unscaler,
+                ConstantMean(
+                    batch_shape=torch.Size([*batch_shape, 1]),
+                ),
+            ),
+            ConstantMean(batch_shape=torch.Size([*batch_shape, num_latents - 1])),
             latent_dim=-1,
         )
         covar = ScaleKernel(
-            MaternKernel(nu=2.5, ard_num_dims=D, batch_shape=torch.Size([num_latents])),
-            batch_shape=torch.Size([num_latents]),
+            MaternKernel(nu=2.5, ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
         )
         super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
