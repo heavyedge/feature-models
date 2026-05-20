@@ -4,8 +4,6 @@ NOTEBOOKS := $(wildcard notebooks/*)
 .PHONY: all notebooks clean FORCE
 
 all: \
-_artifacts/phi.CV.epoch.png \
-_artifacts/phi.CV.min.png \
 _artifacts/H.prior.initial.png \
 _artifacts/H.prior.trained.png \
 _artifacts/H.MTGPQR.quantiles.png \
@@ -26,16 +24,6 @@ notebooks/%.ipynb: _temp/X.csv _temp/y.csv FORCE
 FORCE:  # dummy target to force execution of dependent targets
 
 # Figures
-
-## CV
-
-_artifacts/%.CV.epoch.png: scripts/plot-cv.epoch.py _temp/%.MTGPQR.CV.csv
-	mkdir -p $(@D)
-	python3 $^ -o $@
-
-_artifacts/%.CV.min.png: scripts/plot-cv.min.py _temp/%.MTGPQR.CV.csv
-	mkdir -p $(@D)
-	python3 $^ --ymin 5.5e-3 -o $@
 
 ## Prior
 
@@ -68,9 +56,6 @@ _temp/X.csv: _temp/Dataset.csv
 
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
-
-_temp/phi.MTGPQR.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model MTGPQR --n-epochs 10000 -o $@
 
 _temp/H.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model MTGPQR -o $@
