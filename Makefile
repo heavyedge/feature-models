@@ -4,10 +4,6 @@ NOTEBOOKS := $(wildcard notebooks/*)
 .PHONY: all notebooks clean FORCE
 
 all: \
-_artifacts/H.prior.initial.png \
-_artifacts/H.prior.trained.png \
-_artifacts/H.MTGPQR.quantiles.png \
-_artifacts/phi.MTGPQR.quantiles.png \
 model/H.pt \
 model/phi.pt
 
@@ -25,28 +21,6 @@ notebooks/Model.%.ipynb: _temp/X.csv _temp/y.csv model/%.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
-
-# Figures
-
-## Prior
-
-_artifacts/H.prior.initial.png: scripts/plot-prior.initial.py _temp/X.csv _temp/y.csv
-	mkdir -p $(@D)
-	python3 $^ --target H -o $@
-
-_artifacts/H.prior.trained.png: scripts/plot-prior.trained.py _temp/X.csv _temp/y.csv _temp/H.MTGPQR.pt
-	mkdir -p $(@D)
-	python3 $^ --target H --model MTGPQR -o $@
-
-## Quantiles
-
-_artifacts/H.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/H.%.pt
-	mkdir -p $(@D)
-	python3 $^ --target H --model $* -o $@
-
-_artifacts/phi.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/phi.%.pt
-	mkdir -p $(@D)
-	python3 $^ --target phi --model $* -o $@
 
 # Data
 
