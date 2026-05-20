@@ -2,13 +2,14 @@ import argparse
 import logging
 import pathlib
 
+import gpytorch
 import pandas as pd
 import torch
 from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
 from sklearn.preprocessing import MinMaxScaler
 
 import model as model_module
-from model import save_model, train_model
+from model import save_model
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -62,17 +63,32 @@ likelihood = MultitaskCenterGapQuantileGPLikelihood(
     QUANTILES, CENTER_QUANTILE_INDEX
 ).to(device)
 
-model = train_model(
-    X_scaled.to(device),
-    y.to(device),
-    model,
-    likelihood,
-    num_epochs=10_000,
-    learning_rate=0.001,
-    logger=lambda i, num_epochs, loss: logger.info(
-        f"{args.out}: Epoch {i+1}/{num_epochs}, Loss: {loss:.4f}"
-    ),
+# Train
+train_x = X_scaled.to(device)
+train_y = y.to(device)
+
+model.train()
+likelihood.train()
+
+parameters = list(model.parameters()) + list(likelihood.parameters())
+optimizer = torch.optim.Adam(
+    parameters,
+    lr=0.001,
 )
+
+mll = gpytorch.mlls.VariationalELBO(likelihood, model, num_data=len(train_y))
+
+NUM_EPOCHS = 10_000
+for i in range(NUM_EPOCHS):
+    output = model(train_x)
+    loss = -mll(output, train_y)
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+    logger.info(f"{args.out}: Epoch {i+1}/{NUM_EPOCHS}, Loss: {loss.item():.4f}")
+
+# Save
 save_model(
     model,
     likelihood,

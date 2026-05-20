@@ -16,7 +16,6 @@ __all__ = [
     "PriorMean_H",
     "MTGPQR_H",
     "MTGPQR_phi",
-    "train_model",
     "save_model",
     "load_model",
 ]
@@ -164,43 +163,6 @@ class MTGPQR_phi(CenterGapQuantileGP):
             covar.base_kernel.lengthscale = init_ls
 
         super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
-
-
-def train_model(
-    train_x,
-    train_y,
-    model,
-    likelihood,
-    num_epochs,
-    learning_rate=0.001,
-    logger=None,
-):
-    # train_x: (N, D)
-    # train_y: (N,)
-    model.train()
-    likelihood.train()
-
-    # Setup optimizer
-    parameters = list(model.parameters()) + list(likelihood.parameters())
-    optimizer = torch.optim.Adam(
-        parameters,
-        lr=learning_rate,
-    )
-
-    mll = gpytorch.mlls.VariationalELBO(likelihood, model, num_data=len(train_y))
-
-    # Training loop
-    for i in range(num_epochs):
-        output = model(train_x)
-        loss = -mll(output, train_y)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
-        if logger is not None:
-            logger(i, num_epochs, loss.item())
-
-    return model
 
 
 def save_model(
