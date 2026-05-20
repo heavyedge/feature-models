@@ -14,8 +14,8 @@ from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
 __all__ = [
     "Unscaler",
     "PriorMean_H",
-    "MTGPQR_H",
-    "MTGPQR_phi",
+    "CgLmcMtgpqr_H",
+    "CgLmcMtgpqr_phi",
     "save_model",
     "load_model",
 ]
@@ -67,7 +67,10 @@ class PriorMean_H(gpytorch.means.Mean):
         return corrected_model
 
 
-class MTGPQR_H(CenterGapQuantileGP):
+# Center-gap LMC MTGPQR
+
+
+class CgLmcMtgpqr_H(CenterGapQuantileGP):
     def __init__(
         self,
         inducing_points,
@@ -120,7 +123,7 @@ class MTGPQR_H(CenterGapQuantileGP):
         super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
 
-class MTGPQR_phi(CenterGapQuantileGP):
+class CgLmcMtgpqr_phi(CenterGapQuantileGP):
     def __init__(
         self,
         inducing_points,

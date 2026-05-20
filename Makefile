@@ -34,14 +34,14 @@ _temp/X.csv: _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
-_temp/H.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model MTGPQR --num-epochs 3127 -o $@
+_temp/H.CgLmcMtgpqr.pt: scripts/train.py _temp/X.csv _temp/y.csv
+	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3127 -o $@
 
-_temp/phi.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model MTGPQR --num-epochs 5764 -o $@
+_temp/phi.CgLmcMtgpqr.pt: scripts/train.py _temp/X.csv _temp/y.csv
+	python3 $^ --target phi --model CgLmcMtgpqr --num-epochs 5764 -o $@
 
-model/H.pt: _temp/H.MTGPQR.pt
+model/H.pt: _temp/H.CgLmcMtgpqr.pt
 	cp $< $@
 
-model/phi.pt: _temp/phi.MTGPQR.pt
+model/phi.pt: _temp/phi.CgLmcMtgpqr.pt
 	cp $< $@
