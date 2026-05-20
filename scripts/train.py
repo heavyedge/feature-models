@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import pathlib
 
 import gpytorch
@@ -31,9 +32,17 @@ parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", help="Model class prefix.")
+parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
+
+NUM_EPOCHS = int(
+    os.getenv(
+        "HEAVYEDGE_N_EPOCHS",
+        args.num_epochs if args.num_epochs is not None else 10_000,
+    )
+)
 
 if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -78,7 +87,6 @@ optimizer = torch.optim.Adam(
 
 mll = gpytorch.mlls.VariationalELBO(likelihood, model, num_data=len(train_y))
 
-NUM_EPOCHS = 10_000
 for i in range(NUM_EPOCHS):
     output = model(train_x)
     loss = -mll(output, train_y)

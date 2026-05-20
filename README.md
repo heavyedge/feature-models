@@ -17,3 +17,21 @@ make
 ```
 
 You may want to run `make` in the CUDA environment.
+
+## Developing
+
+### Re-building examples
+
+Configure the local git filter (run once after cloning):
+
+```
+git config filter.nbstripout.clean "nbstripout --keep-output --keep-metadata-keys 'metadata.language_info'"
+git config filter.nbstripout.smudge cat
+git config filter.nbstripout.required true
+```
+
+Then build the examples:
+
+```
+make notebooks
+```

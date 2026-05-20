@@ -1,52 +1,26 @@
+NOTEBOOKS := $(wildcard notebooks/*)
+
 .ONESHELL:
-.PHONY: all clean
+.PHONY: all notebooks clean FORCE
 
 all: \
-_artifacts/H.CV.epoch.png \
-_artifacts/H.CV.min.png \
-_artifacts/phi.CV.epoch.png \
-_artifacts/phi.CV.min.png \
-_artifacts/H.prior.initial.png \
-_artifacts/H.prior.trained.png \
-_artifacts/H.MTGPQR.quantiles.png \
-_artifacts/phi.MTGPQR.quantiles.png \
 model/H.pt \
 model/phi.pt
+
+notebooks: $(NOTEBOOKS)
 
 clean:
 	rm -rf _temp _artifacts model/*.pt
 
-# Figures
+# Notebooks
 
-## CV
+notebooks/CrossValidation.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+	jupyter nbconvert --to notebook --execute --inplace $@
 
-_artifacts/%.CV.epoch.png: scripts/plot-cv.epoch.py _temp/%.MTGPQR.CV.csv
-	mkdir -p $(@D)
-	python3 $^ -o $@
+notebooks/Model.%.ipynb: _temp/X.csv _temp/y.csv model/%.pt FORCE
+	jupyter nbconvert --to notebook --execute --inplace $@
 
-_artifacts/%.CV.min.png: scripts/plot-cv.min.py _temp/%.MTGPQR.CV.csv
-	mkdir -p $(@D)
-	python3 $^ --ymin 5.5e-3 -o $@
-
-## Prior
-
-_artifacts/H.prior.initial.png: scripts/plot-prior.initial.py _temp/X.csv _temp/y.csv
-	mkdir -p $(@D)
-	python3 $^ --target H -o $@
-
-_artifacts/H.prior.trained.png: scripts/plot-prior.trained.py _temp/X.csv _temp/y.csv _temp/H.MTGPQR.pt
-	mkdir -p $(@D)
-	python3 $^ --target H --model MTGPQR -o $@
-
-## Quantiles
-
-_artifacts/H.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/H.%.pt
-	mkdir -p $(@D)
-	python3 $^ --target H --model $* -o $@
-
-_artifacts/phi.%.quantiles.png: scripts/plot-quantiles.py _temp/X.csv _temp/y.csv _temp/phi.%.pt
-	mkdir -p $(@D)
-	python3 $^ --target phi --model $* -o $@
+FORCE:  # dummy target to force execution of dependent targets
 
 # Data
 
@@ -60,17 +34,11 @@ _temp/X.csv: _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
-_temp/H.MTGPQR.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model MTGPQR --n-epochs 10000 -o $@
-
-_temp/phi.MTGPQR.CV.csv: scripts/cv.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model MTGPQR --n-epochs 10000 -o $@
-
 _temp/H.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model MTGPQR -o $@
+	python3 $^ --target H --model MTGPQR --num-epochs 3127 -o $@
 
 _temp/phi.MTGPQR.pt: scripts/train.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model MTGPQR -o $@
+	python3 $^ --target phi --model MTGPQR --num-epochs 5764 -o $@
 
 model/H.pt: _temp/H.MTGPQR.pt
 	cp $< $@
