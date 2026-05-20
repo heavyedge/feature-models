@@ -2,6 +2,10 @@
 .PHONY: all clean
 
 all: \
+_artifacts/H.CV.epoch.png \
+_artifacts/H.CV.min.png \
+_artifacts/phi.CV.epoch.png \
+_artifacts/phi.CV.min.png \
 _artifacts/H.prior.initial.png \
 _artifacts/H.prior.trained.png \
 _artifacts/H.MTGPQR.quantiles.png \
@@ -15,6 +19,14 @@ clean:
 # Figures
 
 ## CV
+
+_artifacts/%.CV.epoch.png: scripts/plot-cv.epoch.py _temp/%.MTGPQR.CV.csv
+	mkdir -p $(@D)
+	python3 $^ -o $@
+
+_artifacts/%.CV.min.png: scripts/plot-cv.min.py _temp/%.MTGPQR.CV.csv
+	mkdir -p $(@D)
+	python3 $^ --ymin 5.5e-3 -o $@
 
 ## Prior
 
