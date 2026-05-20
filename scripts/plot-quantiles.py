@@ -76,7 +76,7 @@ for ax, ((cos_theta,), df) in zip(axes, groups):
         )
         X_pred_scaled = torch.tensor(scaler.transform(X_pred)).float().to(device)
         with torch.no_grad():
-            quantiles = model.mean_quantiles_mc(X_pred_scaled)
+            quantiles = model.mean_quantiles_delta(X_pred_scaled)
         q_low, q_high = quantiles.T[[0, -1], ...].cpu().numpy()
         ax.fill_between(
             Rgt_pred,

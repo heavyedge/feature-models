@@ -9,6 +9,7 @@ from gpytorch.variational import (
 from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
 from gpytorch_qr.means import CenterGapMean
 from gpytorch_qr.models import CenterGapQuantileGP
+from gpytorch_qr.utils import centergap_to_quantiles
 from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
 
 __all__ = [
@@ -107,6 +108,25 @@ class MTGPQR_H(CenterGapQuantileGP):
 
         super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
+    def mean_quantiles_delta(self, x):
+        """Posterior mean of quantiles by 0th-order delta method.
+
+        Parameters
+        ----------
+        x : torch.Tensor with shape ``(*B, N, D)``
+            The input locations.
+
+        Returns
+        -------
+        quantiles : torch.Tensor
+            The predicted quantiles at the input locations.
+        """
+        latent_mean = self(x).mean
+        center_mean = latent_mean[..., :1]
+        lower_gaps = latent_mean[..., 1 : 1 + self.num_lower_quantiles]
+        upper_gaps = latent_mean[..., 1 + self.num_lower_quantiles :]
+        return centergap_to_quantiles(center_mean, lower_gaps, upper_gaps)
+
 
 class MTGPQR_phi(CenterGapQuantileGP):
     def __init__(
@@ -164,6 +184,25 @@ class MTGPQR_phi(CenterGapQuantileGP):
             covar.base_kernel.lengthscale = init_ls
 
         super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
+
+    def mean_quantiles_delta(self, x):
+        """Posterior mean of quantiles by 0th-order delta method.
+
+        Parameters
+        ----------
+        x : torch.Tensor with shape ``(*B, N, D)``
+            The input locations.
+
+        Returns
+        -------
+        quantiles : torch.Tensor
+            The predicted quantiles at the input locations.
+        """
+        latent_mean = self(x).mean
+        center_mean = latent_mean[..., :1]
+        lower_gaps = latent_mean[..., 1 : 1 + self.num_lower_quantiles]
+        upper_gaps = latent_mean[..., 1 + self.num_lower_quantiles :]
+        return centergap_to_quantiles(center_mean, lower_gaps, upper_gaps)
 
 
 def train_model(
