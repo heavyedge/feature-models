@@ -21,6 +21,7 @@ __all__ = [
     "Unscaler",
     "PriorMean_H",
     "GPR_H",
+    "GPR_phi",
     "CgLmcMtgpqr_H",
     "CgLmcMtgpqr_H_ConstantMean",
     "CgLmcMtgpqr_phi",
@@ -91,7 +92,7 @@ class PriorMean_H(gpytorch.means.Mean):
 
         model = Rgt / E
         corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
-        return corrected_model + self.offset[..., None]
+        return corrected_model + self.offset[..., None]  # (*B, N)
 
 
 # Gaussian proces regression
@@ -153,6 +154,58 @@ class GPR_H(ExactGP):
         self.mean_module = torch.nn.Sequential(
             unscaler,
             _PriorMean_H_GPR(offset=False, batch_shape=batch_shape),
+        )
+        self.covar_module = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
+            batch_shape=batch_shape,
+        )
+
+    def forward(self, x):
+        mean_x = self.mean_module(x.unsqueeze(-3)).squeeze(-2)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
+    def quantiles(self, x, quantiles):
+        """Estimate quantile levels of response variable.
+
+        Parameters
+        ----------
+        x: torch.Tensor in shape (*B, N, D)
+        quantiles: torch.Tensor in shape (Q,)
+
+        Returns
+        -------
+        quantiles_x: torch.Tensor in shape (*B, N, Q)
+        """
+        pred = self.likelihood(self(x))
+        mean = pred.mean  # (*B, N)
+        std = pred.variance.sqrt()  # (*B, N)
+        z = torch.distributions.Normal(0, 1).icdf(quantiles)  # (Q,)
+        return mean[..., None] + std[..., None] * z  # (*B, N, Q)
+
+
+class GPR_phi(ExactGP):
+    def __init__(
+        self,
+        train_x,
+        train_y,
+        likelihood,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        D = train_x.shape[-1]
+        super().__init__(train_x, train_y, likelihood)
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        self.mean_module = torch.nn.Sequential(
+            unscaler,
+            ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
         )
         self.covar_module = ScaleKernel(
             RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
