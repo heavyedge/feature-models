@@ -39,10 +39,10 @@ _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
 _temp/H.CgLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3127 -o $@
+	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3167 -o $@
 
 _temp/phi.CgIndependentMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9579 -o $@
+	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9543 -o $@
 
 model/GPQR.H.pt: _temp/H.CgLmcMtgpqr.pt
 	cp $< $@
@@ -60,4 +60,4 @@ _temp/window.npy: _temp/window.H.npy _temp/window.phi.npy
 	python3 -c "import numpy as np; qw = np.all([np.load(f) for f in '$^'.split(' ')], axis=0).flatten(); np.save('$@', qw)"
 
 model/QW.SVC.pkl: scripts/train-svc.py _temp/X.csv _temp/window.npy
-	python3 $^ -o $@
+	python3 $^ --n-trials 100 -o $@

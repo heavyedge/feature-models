@@ -14,10 +14,10 @@ from sklearn.svm import SVC
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Observed X csv file.")
 parser.add_argument("window", type=pathlib.Path, help="Quality window npy file.")
-parser.add_argument("-o", "--out", type=pathlib.Path, help="Output pkl file.")
 parser.add_argument(
     "--n-trials", type=int, default=100, help="Number of Optuna trials per slurry."
 )
+parser.add_argument("-o", "--out", type=pathlib.Path, help="Output pkl file.")
 args = parser.parse_args()
 
 X = pd.read_csv(args.X).drop(columns="Slurry").to_numpy()
