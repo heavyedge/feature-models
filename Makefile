@@ -4,8 +4,8 @@ NOTEBOOKS := $(wildcard notebooks/*)
 .PHONY: all notebooks clean FORCE
 
 all: \
-model/H.pt \
-model/phi.pt
+model/GPQR.H.pt \
+model/GPQR.phi.pt
 
 notebooks: $(NOTEBOOKS)
 
@@ -14,10 +14,10 @@ clean:
 
 # Notebooks
 
-notebooks/CrossValidation.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Model.%.ipynb: _temp/X.csv _temp/y.csv model/%.pt FORCE
+notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
@@ -34,14 +34,14 @@ _temp/X.csv: _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
-_temp/H.CgLmcMtgpqr.pt: scripts/train.py _temp/X.csv _temp/y.csv
+_temp/H.CgLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3127 -o $@
 
-_temp/phi.CgIndependentMtgpqr.pt: scripts/train.py _temp/X.csv _temp/y.csv
+_temp/phi.CgIndependentMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9579 -o $@
 
-model/H.pt: _temp/H.CgLmcMtgpqr.pt
+model/GPQR.H.pt: _temp/H.CgLmcMtgpqr.pt
 	cp $< $@
 
-model/phi.pt: _temp/phi.CgIndependentMtgpqr.pt
+model/GPQR.phi.pt: _temp/phi.CgIndependentMtgpqr.pt
 	cp $< $@
