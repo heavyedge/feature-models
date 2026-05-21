@@ -5,12 +5,13 @@ NOTEBOOKS := $(wildcard notebooks/*)
 
 all: \
 model/GPQR.H.pt \
-model/GPQR.phi.pt
+model/GPQR.phi.pt \
+model/QW.SVC.pkl
 
 notebooks: $(NOTEBOOKS)
 
 clean:
-	rm -rf _temp _artifacts model/*.pt
+	rm -rf _temp _artifacts model/*.pt model/*.pkl
 
 # Notebooks
 
@@ -48,3 +49,15 @@ model/GPQR.H.pt: _temp/H.CgLmcMtgpqr.pt
 
 model/GPQR.phi.pt: _temp/phi.CgIndependentMtgpqr.pt
 	cp $< $@
+
+_temp/window.H.npy: _temp/y.csv
+	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<')['H'].apply(lambda x: x <= 1.1).to_numpy())"
+
+_temp/window.phi.npy: _temp/y.csv
+	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<')['phi'].apply(lambda x: x <= 1.0).to_numpy())"
+
+_temp/window.npy: _temp/window.H.npy _temp/window.phi.npy
+	python3 -c "import numpy as np; qw = np.all([np.load(f) for f in '$^'.split(' ')], axis=0).flatten(); np.save('$@', qw)"
+
+model/QW.SVC.pkl: scripts/train-svc.py _temp/X.csv _temp/window.npy
+	python3 $^ --n-trials 100 -o $@
