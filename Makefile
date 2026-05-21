@@ -29,7 +29,7 @@ FORCE:  # dummy target to force execution of dependent targets
 # Data
 
 _temp/Dataset.csv: scripts/filter-dataset.py _data/Dataset.csv
-	@mkdir -p $(@D)
+	mkdir -p $(@D)
 	python3 $^ -o $@
 
 _temp/X.csv: _temp/Dataset.csv
