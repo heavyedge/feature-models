@@ -49,7 +49,7 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-X = pd.read_csv(args.X)
+X = pd.read_csv(args.X).drop(columns="Slurry")
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float()
 scaler = MinMaxScaler().fit(X.to_numpy())
 X_scale = torch.tensor(scaler.scale_).float()

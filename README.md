@@ -9,7 +9,7 @@ Repository to train and distribute models related to heavy edge shape features.
 
 ```
 curl -LsSf https://hf.co/cli/install.sh | bash
-hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.1.0 --local-dir _data
+hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
 ```
 
 ## Train & plot
