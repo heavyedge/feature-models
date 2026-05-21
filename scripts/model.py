@@ -2,6 +2,7 @@ import gpytorch
 import torch
 from gpytorch.kernels import MaternKernel, RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
+from gpytorch.models import ExactGP
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
     IndependentMultitaskVariationalStrategy,
@@ -19,6 +20,7 @@ from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
 __all__ = [
     "Unscaler",
     "PriorMean_H",
+    "GPR_H",
     "CgLmcMtgpqr_H",
     "CgLmcMtgpqr_H_ConstantMean",
     "CgLmcMtgpqr_phi",
@@ -90,6 +92,95 @@ class PriorMean_H(gpytorch.means.Mean):
         model = Rgt / E
         corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
         return corrected_model + self.offset[..., None]
+
+
+# Gaussian proces regression
+
+
+class _PriorMean_H_GPR(gpytorch.means.Mean):
+    """Modified version of model by Schmitt.
+
+    Input X must be [Rgt, Ca, surface_tension, ...].
+    """
+
+    def __init__(self, offset=False, batch_shape=torch.Size()):
+        super().__init__()
+        self.batch_shape = batch_shape
+        if offset:
+            self.register_parameter(
+                "offset",
+                torch.nn.Parameter(torch.zeros(*batch_shape)),
+            )
+        else:
+            self.register_buffer(
+                "offset",
+                torch.zeros(*batch_shape),
+            )
+
+    def forward(self, x):
+        Rgt = x[..., 0]
+        Ca = x[..., 1]
+        cos_theta = x[..., 2]
+
+        a, b, c = 0.22, -0.43, 0.77  # From GPR prior
+        lamda = a * Ca**b * cos_theta**c
+        E = 2 / (-lamda + torch.sqrt(lamda**2 + (4 / Rgt)))
+
+        model = Rgt / E
+        corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
+        return corrected_model + self.offset[..., None, None]
+
+
+class GPR_H(ExactGP):
+    def __init__(
+        self,
+        train_x,
+        train_y,
+        likelihood,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        D = train_x.shape[-1]
+        super().__init__(train_x, train_y, likelihood)
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        self.mean_module = torch.nn.Sequential(
+            unscaler,
+            _PriorMean_H_GPR(offset=False, batch_shape=batch_shape),
+        )
+        self.covar_module = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
+            batch_shape=batch_shape,
+        )
+
+    def forward(self, x):
+        mean_x = self.mean_module(x.unsqueeze(-3)).squeeze(-2)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
+    def quantiles(self, x, quantiles):
+        """Estimate quantile levels of response variable.
+
+        Parameters
+        ----------
+        x: torch.Tensor in shape (*B, N, D)
+        quantiles: torch.Tensor in shape (Q,)
+
+        Returns
+        -------
+        quantiles_x: torch.Tensor in shape (*B, N, Q)
+        """
+        pred = self.likelihood(self(x))
+        mean = pred.mean  # (*B, N)
+        std = pred.variance.sqrt()  # (*B, N)
+        z = torch.distributions.Normal(0, 1).icdf(quantiles)  # (Q,)
+        return mean[..., None] + std[..., None] * z  # (*B, N, Q)
 
 
 # Center-gap LMC MTGPQR

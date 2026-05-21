@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from gpytorch.mlls import VariationalELBO
+from gpytorch.mlls import ExactMarginalLogLikelihood, VariationalELBO
 from sklearn.metrics import mean_pinball_loss
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import MinMaxScaler
@@ -8,6 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 __all__ = [
     "split_data",
     "cross_validate",
+    "cross_validate_gpr",
 ]
 
 
@@ -60,6 +61,46 @@ def cross_validate(
         likelihood.eval()
         with torch.no_grad():
             output = model.mean_quantiles_delta(x_test)  # (K, N, Q)
+            epoch_fold_losses = []
+            for y_test_fold, output_fold in zip(y_test, output):
+                pinball_losses = []
+                for j, q in enumerate(quantiles):
+                    test_loss = mean_pinball_loss(
+                        y_test_fold.cpu().numpy(),
+                        output_fold[:, j].cpu().numpy(),
+                        alpha=q.item(),
+                    )
+                    pinball_losses.append(test_loss)
+                epoch_fold_losses.append(np.mean(pinball_losses))
+            test_losses_per_fold.append(epoch_fold_losses)
+
+    return np.array(test_losses_per_fold)
+
+
+def cross_validate_gpr(
+    x_train, y_train, x_test, y_test, quantiles, model, likelihood, n_epochs
+):
+    mll = ExactMarginalLogLikelihood(likelihood, model)
+    optimizer = torch.optim.Adam(
+        list(model.parameters()) + list(likelihood.parameters()),
+        lr=0.001,
+    )
+
+    test_losses_per_fold = []
+    for _ in range(n_epochs):
+        model.train()
+        likelihood.train()
+        output = model(x_train)
+
+        train_loss = -mll(output, y_train)
+        train_loss.sum().backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        model.eval()
+        likelihood.eval()
+        with torch.no_grad():
+            output = model.quantiles(x_test, quantiles)  # (K, N, Q)
             epoch_fold_losses = []
             for y_test_fold, output_fold in zip(y_test, output):
                 pinball_losses = []
