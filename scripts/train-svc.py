@@ -1,4 +1,5 @@
 import argparse
+import os
 import pathlib
 import pickle
 
@@ -19,6 +20,13 @@ parser.add_argument(
 )
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output pkl file.")
 args = parser.parse_args()
+
+NUM_TRIALS = int(
+    os.getenv(
+        "HEAVYEDGE_N_TRIALS",
+        args.n_trials if args.n_trials is not None else 100,
+    )
+)
 
 X = pd.read_csv(args.X).drop(columns="Slurry").to_numpy()
 W = np.load(args.window)
@@ -50,7 +58,7 @@ study = optuna.create_study(
     direction="maximize", sampler=optuna.samplers.TPESampler(seed=42)
 )
 study.optimize(
-    lambda trial: objective(trial, X, W), n_trials=args.n_trials, show_progress_bar=True
+    lambda trial: objective(trial, X, W), n_trials=NUM_TRIALS, show_progress_bar=True
 )
 
 best = study.best_params

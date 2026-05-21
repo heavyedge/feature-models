@@ -84,4 +84,4 @@ jobs:
           run: |
             pip install -r requirements.txt
 
-        - run: HEAVYEDGE_N_EPOCHS=1 make ${{ matrix.notebook }}
+        - run: HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 make ${{ matrix.notebook }}
