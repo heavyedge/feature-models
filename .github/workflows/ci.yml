@@ -78,7 +78,7 @@ jobs:
         - name: Download feature dataset
           run: |
             curl -LsSf https://hf.co/cli/install.sh | bash
-            hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.1.0 --local-dir _data
+            hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.2.0 --local-dir _data
 
         - name: install package
           run: |
