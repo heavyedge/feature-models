@@ -5,20 +5,32 @@ from gpytorch.means import ConstantMean
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
     IndependentMultitaskVariationalStrategy,
+    LMCVariationalStrategy,
     UnwhitenedVariationalStrategy,
 )
-from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
+from gpytorch_qr.likelihoods import (
+    MultitaskCenterGapQuantileGPLikelihood,
+    MultitaskQuantileGPLikelihood,
+)
 from gpytorch_qr.means import CenterGapMean
-from gpytorch_qr.models import CenterGapQuantileGP
+from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
 from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
 
 __all__ = [
     "Unscaler",
     "PriorMean_H",
     "CgLmcMtgpqr_H",
+    "CgLmcMtgpqr_H_ConstantMean",
     "CgLmcMtgpqr_phi",
     "CgIndependentMtgpqr_H",
+    "CgIndependentMtgpqr_H_ConstantMean",
     "CgIndependentMtgpqr_phi",
+    "DirectLmcMtgpqr_H",
+    "DirectLmcMtgpqr_H_ConstantMean",
+    "DirectLmcMtgpqr_phi",
+    "DirectIndependentMtgpqr_H",
+    "DirectIndependentMtgpqr_H_ConstantMean",
+    "DirectIndependentMtgpqr_phi",
     "save_model",
     "load_model",
 ]
@@ -52,9 +64,19 @@ class PriorMean_H(gpytorch.means.Mean):
     Input X must be [Rgt, Ca, surface_tension, ...].
     """
 
-    def __init__(self, batch_shape=torch.Size()):
+    def __init__(self, offset=False, batch_shape=torch.Size()):
         super().__init__()
         self.batch_shape = batch_shape
+        if offset:
+            self.register_parameter(
+                "offset",
+                torch.nn.Parameter(torch.zeros(*batch_shape)),
+            )
+        else:
+            self.register_buffer(
+                "offset",
+                torch.zeros(*batch_shape),
+            )
 
     def forward(self, x):
         Rgt = x[..., 0]
@@ -67,7 +89,7 @@ class PriorMean_H(gpytorch.means.Mean):
 
         model = Rgt / E
         corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
-        return corrected_model
+        return corrected_model + self.offset[..., None]
 
 
 # Center-gap LMC MTGPQR
@@ -114,6 +136,59 @@ class CgLmcMtgpqr_H(CenterGapQuantileGP):
             torch.nn.Sequential(
                 unscaler,
                 PriorMean_H(batch_shape=torch.Size([*batch_shape, 1])),
+            ),
+            ConstantMean(batch_shape=torch.Size([*batch_shape, num_latents - 1])),
+            latent_dim=-1,
+        )
+        covar = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
+        )
+
+        super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
+
+
+class CgLmcMtgpqr_H_ConstantMean(CenterGapQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = CGBlkdiagLmcVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_quantiles=num_quantiles,
+            num_latents=num_latents,
+            num_lower_quantiles=num_lower_quantiles,
+            num_lower_latents=num_lower_latents,
+        )
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = CenterGapMean(
+            torch.nn.Sequential(
+                unscaler,
+                ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
             ),
             ConstantMean(batch_shape=torch.Size([*batch_shape, num_latents - 1])),
             latent_dim=-1,
@@ -177,7 +252,6 @@ class CgLmcMtgpqr_phi(CenterGapQuantileGP):
             MaternKernel(nu=2.5, ard_num_dims=D, batch_shape=full_batch_shape),
             batch_shape=full_batch_shape,
         )
-        super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
         lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
         upper = torch.tensor([1e4 for _ in range(D)])
@@ -245,6 +319,57 @@ class CgIndependentMtgpqr_H(CenterGapQuantileGP):
         super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
 
+class CgIndependentMtgpqr_H_ConstantMean(CenterGapQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        num_latents = num_quantiles
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = IndependentMultitaskVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_tasks=num_quantiles,
+        )
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = CenterGapMean(
+            torch.nn.Sequential(
+                unscaler,
+                ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
+            ),
+            ConstantMean(batch_shape=torch.Size([*batch_shape, num_latents - 1])),
+            latent_dim=-1,
+        )
+        covar = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
+        )
+
+        super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
+
+
 class CgIndependentMtgpqr_phi(CenterGapQuantileGP):
     def __init__(
         self,
@@ -294,7 +419,6 @@ class CgIndependentMtgpqr_phi(CenterGapQuantileGP):
             MaternKernel(nu=2.5, ard_num_dims=D, batch_shape=full_batch_shape),
             batch_shape=full_batch_shape,
         )
-        super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
         lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
         upper = torch.tensor([1e4 for _ in range(D)])
@@ -306,6 +430,312 @@ class CgIndependentMtgpqr_phi(CenterGapQuantileGP):
             covar.base_kernel.lengthscale = init_ls
 
         super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
+
+
+# Direct LMC MTGPQR
+
+
+class DirectLmcMtgpqr_H(DirectQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = LMCVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = torch.nn.Sequential(
+            unscaler,
+            PriorMean_H(offset=True, batch_shape=torch.Size([*batch_shape, 1])),
+        )
+        covar = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
+        )
+
+        super().__init__(variational_strategy, mean, covar, -1)
+
+
+class DirectLmcMtgpqr_H_ConstantMean(DirectQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = LMCVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = torch.nn.Sequential(
+            unscaler,
+            ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
+        )
+        covar = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
+        )
+
+        super().__init__(variational_strategy, mean, covar, -1)
+
+
+class DirectLmcMtgpqr_phi(DirectQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = LMCVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = torch.nn.Sequential(
+            unscaler,
+            ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
+        )
+        covar = ScaleKernel(
+            MaternKernel(nu=2.5, ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
+        )
+
+        lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
+        upper = torch.tensor([1e4 for _ in range(D)])
+        init_ls = torch.tensor([2, 2, 2] + [0.5 for _ in range(D - 3)])
+        covar.base_kernel.register_constraint(
+            "raw_lengthscale", gpytorch.constraints.Interval(lower, upper)
+        )
+        with torch.no_grad():
+            covar.base_kernel.lengthscale = init_ls
+
+        super().__init__(variational_strategy, mean, covar, -1)
+
+
+# Direct Independent MTGPQR
+
+
+class DirectIndependentMtgpqr_H(DirectQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        num_latents = num_quantiles
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = IndependentMultitaskVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_tasks=num_quantiles,
+        )
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = torch.nn.Sequential(
+            unscaler,
+            PriorMean_H(offset=True, batch_shape=torch.Size([*batch_shape, 1])),
+        )
+        covar = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
+        )
+
+        super().__init__(variational_strategy, mean, covar, -1)
+
+
+class DirectIndependentMtgpqr_H_ConstantMean(DirectQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        num_latents = num_quantiles
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = IndependentMultitaskVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_tasks=num_quantiles,
+        )
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = torch.nn.Sequential(
+            unscaler,
+            ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
+        )
+        covar = ScaleKernel(
+            RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
+        )
+
+        super().__init__(variational_strategy, mean, covar, -1)
+
+
+class DirectIndependentMtgpqr_phi(DirectQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        num_lower_latents,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        num_latents = num_quantiles
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = IndependentMultitaskVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_tasks=num_quantiles,
+        )
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        mean = torch.nn.Sequential(
+            unscaler,
+            ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
+        )
+        covar = ScaleKernel(
+            MaternKernel(nu=2.5, ard_num_dims=D, batch_shape=full_batch_shape),
+            batch_shape=full_batch_shape,
+        )
+
+        lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
+        upper = torch.tensor([1e4 for _ in range(D)])
+        init_ls = torch.tensor([2, 2, 2] + [0.5 for _ in range(D - 3)])
+        covar.base_kernel.register_constraint(
+            "raw_lengthscale", gpytorch.constraints.Interval(lower, upper)
+        )
+        with torch.no_grad():
+            covar.base_kernel.lengthscale = init_ls
+
+        super().__init__(variational_strategy, mean, covar, -1)
 
 
 def save_model(
@@ -343,10 +773,17 @@ def load_model(model_class, path, device=None):
         num_latents=checkpoint["num_latents"],
         num_lower_latents=checkpoint["num_lower_latents"],
     )
-    likelihood = MultitaskCenterGapQuantileGPLikelihood(
-        checkpoint["quantiles"],
-        checkpoint["num_lower_quantiles"],
-    )
+    if issubclass(model_class, CenterGapQuantileGP):
+        likelihood = MultitaskCenterGapQuantileGPLikelihood(
+            checkpoint["quantiles"],
+            checkpoint["num_lower_quantiles"],
+        )
+    elif issubclass(model_class, DirectQuantileGP):
+        likelihood = MultitaskQuantileGPLikelihood(
+            checkpoint["quantiles"],
+        )
+    else:
+        raise ValueError("Unsupported model class.")
     model.load_state_dict(checkpoint["model_state_dict"])
     likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
     if device is not None:

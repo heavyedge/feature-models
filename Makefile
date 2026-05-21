@@ -37,11 +37,11 @@ _temp/y.csv: _temp/Dataset.csv
 _temp/H.CgLmcMtgpqr.pt: scripts/train.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3127 -o $@
 
-_temp/phi.CgLmcMtgpqr.pt: scripts/train.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model CgLmcMtgpqr --num-epochs 5764 -o $@
+_temp/phi.CgIndependentMtgpqr.pt: scripts/train.py _temp/X.csv _temp/y.csv
+	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9579 -o $@
 
 model/H.pt: _temp/H.CgLmcMtgpqr.pt
 	cp $< $@
 
-model/phi.pt: _temp/phi.CgLmcMtgpqr.pt
+model/phi.pt: _temp/phi.CgIndependentMtgpqr.pt
 	cp $< $@
