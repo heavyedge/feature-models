@@ -1,6 +1,9 @@
-# HeavyEdge-Features quantile regression model
+# Edge shape feature model
 
-Repository to train and distribute quantile regression model of edge shape features.
+Repository to train and distribute models related to heavy edge shape features.
+
+- Gaussian process quantile regression models.
+- Quality window models (deterministic and probabilistic).
 
 ## Download feature data
 
@@ -20,7 +23,7 @@ You may want to run `make` in the CUDA environment.
 
 ## Developing
 
-### Re-building examples
+### Re-building notebooks
 
 Configure the local git filter (run once after cloning):
 
@@ -30,7 +33,7 @@ git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
 ```
 
-Then build the examples:
+Then build the notebooks:
 
 ```
 make notebooks
