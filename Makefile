@@ -27,7 +27,10 @@ notebooks/GPR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.b.pt model
 notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/QW.SVC.ipynb: _temp/X.csv model/QW.SVC.pkl _temp/window.npy FORCE
+notebooks/QW.SVC.ipynb: _temp/X.csv _temp/window.npy model/QW.SVC.pkl FORCE
+	jupyter nbconvert --to notebook --execute --inplace $@
+
+notebooks/QW.GPQR.ipynb: _temp/X.csv model/GPQR.H.pt model/GPQR.phi.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
