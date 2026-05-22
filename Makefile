@@ -4,6 +4,8 @@ NOTEBOOKS := $(wildcard notebooks/*)
 .PHONY: all notebooks clean FORCE
 
 all: \
+model/GPR.H.pt \
+model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
 model/QW.SVC.pkl
@@ -16,6 +18,9 @@ clean:
 # Notebooks
 
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+	jupyter nbconvert --to notebook --execute --inplace $@
+
+notebooks/GPQR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.phi.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
@@ -37,6 +42,12 @@ _temp/X.csv: _temp/Dataset.csv
 
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
+
+model/GPR.H.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
+	python3 $^ --target H -o $@
+
+model/GPR.phi.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
+	python3 $^ --target phi -o $@
 
 _temp/H.CgLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3167 -o $@

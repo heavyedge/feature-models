@@ -81,10 +81,7 @@ def cross_validate_gpr(
     x_train, y_train, x_test, y_test, quantiles, model, likelihood, n_epochs
 ):
     mll = ExactMarginalLogLikelihood(likelihood, model)
-    optimizer = torch.optim.Adam(
-        list(model.parameters()) + list(likelihood.parameters()),
-        lr=0.001,
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     test_losses_per_fold = []
     for _ in range(n_epochs):

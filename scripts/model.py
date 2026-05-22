@@ -1,6 +1,7 @@
 import gpytorch
 import torch
 from gpytorch.kernels import MaternKernel, RBFKernel, ScaleKernel
+from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.means import ConstantMean
 from gpytorch.models import ExactGP
 from gpytorch.variational import (
@@ -14,7 +15,7 @@ from gpytorch_qr.likelihoods import (
     MultitaskQuantileGPLikelihood,
 )
 from gpytorch_qr.means import CenterGapMean
-from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
+from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP, QuantileGP
 from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
 
 __all__ = [
@@ -73,12 +74,12 @@ class PriorMean_H(gpytorch.means.Mean):
         if offset:
             self.register_parameter(
                 "offset",
-                torch.nn.Parameter(torch.zeros(*batch_shape)),
+                torch.nn.Parameter(torch.zeros(batch_shape)),
             )
         else:
             self.register_buffer(
                 "offset",
-                torch.zeros(*batch_shape),
+                torch.zeros(batch_shape),
             )
 
     def forward(self, x):
@@ -110,12 +111,12 @@ class _PriorMean_H_GPR(gpytorch.means.Mean):
         if offset:
             self.register_parameter(
                 "offset",
-                torch.nn.Parameter(torch.zeros(*batch_shape)),
+                torch.nn.Parameter(torch.zeros(batch_shape)),
             )
         else:
             self.register_buffer(
                 "offset",
-                torch.zeros(*batch_shape),
+                torch.zeros(batch_shape),
             )
 
     def forward(self, x):
@@ -883,6 +884,8 @@ class DirectIndependentMtgpqr_phi(DirectQuantileGP):
 
 
 def save_model(
+    train_x,
+    train_y,
     model,
     likelihood,
     scaler,
@@ -895,6 +898,8 @@ def save_model(
 ):
     torch.save(
         {
+            "train_x": train_x,
+            "train_y": train_y,
             "model_state_dict": model.state_dict(),
             "likelihood_state_dict": likelihood.state_dict(),
             "scaler": scaler,
@@ -910,14 +915,9 @@ def save_model(
 
 def load_model(model_class, path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
-    model = model_class(
-        inducing_points=checkpoint["inducing_points"],
-        num_quantiles=len(checkpoint["quantiles"]),
-        num_lower_quantiles=checkpoint["num_lower_quantiles"],
-        num_latents=checkpoint["num_latents"],
-        num_lower_latents=checkpoint["num_lower_latents"],
-    )
-    if issubclass(model_class, CenterGapQuantileGP):
+    if issubclass(model_class, ExactGP):
+        likelihood = GaussianLikelihood()
+    elif issubclass(model_class, CenterGapQuantileGP):
         likelihood = MultitaskCenterGapQuantileGPLikelihood(
             checkpoint["quantiles"],
             checkpoint["num_lower_quantiles"],
@@ -928,6 +928,20 @@ def load_model(model_class, path, device=None):
         )
     else:
         raise ValueError("Unsupported model class.")
+    if issubclass(model_class, ExactGP):
+        model = model_class(
+            train_x=checkpoint["train_x"],
+            train_y=checkpoint["train_y"],
+            likelihood=likelihood,
+        )
+    if issubclass(model_class, QuantileGP):
+        model = model_class(
+            inducing_points=checkpoint["inducing_points"],
+            num_quantiles=len(checkpoint["quantiles"]),
+            num_lower_quantiles=checkpoint["num_lower_quantiles"],
+            num_latents=checkpoint["num_latents"],
+            num_lower_latents=checkpoint["num_lower_latents"],
+        )
     model.load_state_dict(checkpoint["model_state_dict"])
     likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
     if device is not None:

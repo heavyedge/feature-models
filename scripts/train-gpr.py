@@ -3,10 +3,10 @@ import logging
 import os
 import pathlib
 
-import gpytorch
 import pandas as pd
 import torch
-from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
+from gpytorch import ExactMarginalLogLikelihood
+from gpytorch.likelihoods import GaussianLikelihood
 from sklearn.preprocessing import MinMaxScaler
 
 import model as model_module
@@ -19,19 +19,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-QUANTILES = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
-CENTER_QUANTILE_INDEX = 2
-NUM_LOWER_QUANTILES = 2
-NUM_LATENTS = 3
-NUM_LOWER_LATENTS = 1
-
 torch.manual_seed(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
-parser.add_argument("--model", help="Model class prefix.")
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
@@ -50,63 +43,39 @@ else:
     device = torch.device(args.device)
 
 X = pd.read_csv(args.X).drop(columns="Slurry")
-y = torch.tensor(pd.read_csv(args.y)[args.target].values).float()
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 scaler = MinMaxScaler().fit(X.to_numpy())
-X_scale = torch.tensor(scaler.scale_).float()
-X_min = torch.tensor(scaler.min_).float()
+X_scale = torch.tensor(scaler.scale_).float().to(device)
+X_min = torch.tensor(scaler.min_).float().to(device)
 
-X_scaled = torch.tensor(scaler.transform(X.to_numpy())).float()
-model_cls_name = f"{args.model}_{args.target}"
+X_scaled = torch.tensor(scaler.transform(X.to_numpy())).float().to(device)
+model_cls_name = f"GPR_{args.target}"
 model_class = getattr(model_module, model_cls_name)
-inducing_points = X_scaled.clone()
-model = model_class(
-    inducing_points=inducing_points,
-    num_quantiles=len(QUANTILES),
-    num_lower_quantiles=NUM_LOWER_QUANTILES,
-    num_latents=NUM_LATENTS,
-    num_lower_latents=NUM_LOWER_LATENTS,
-    X_scale=X_scale,
-    X_min=X_min,
-).to(device)
-likelihood = MultitaskCenterGapQuantileGPLikelihood(
-    QUANTILES, CENTER_QUANTILE_INDEX
-).to(device)
 
-# Train
-train_x = X_scaled.to(device)
-train_y = y.to(device)
-
-model.train()
-likelihood.train()
-
-parameters = list(model.parameters()) + list(likelihood.parameters())
-optimizer = torch.optim.Adam(
-    parameters,
-    lr=0.001,
-)
-
-mll = gpytorch.mlls.VariationalELBO(likelihood, model, num_data=len(train_y))
+likelihood = GaussianLikelihood().to(device)
+model = model_class(X_scaled, y, likelihood, X_scale, X_min).to(device)
+mll = ExactMarginalLogLikelihood(likelihood, model)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 for i in range(NUM_EPOCHS):
-    output = model(train_x)
-    loss = -mll(output, train_y)
+    output = model(X_scaled)
+    loss = -mll(output, y)
     loss.backward()
     optimizer.step()
     optimizer.zero_grad()
 
     logger.info(f"{args.out}: Epoch {i+1}/{NUM_EPOCHS}, Loss: {loss.item():.4f}")
 
-# Save
 save_model(
-    train_x,
-    train_y,
+    X_scaled,
+    y,
     model,
     likelihood,
     scaler,
-    inducing_points,
-    QUANTILES,
-    NUM_LOWER_QUANTILES,
-    NUM_LATENTS,
-    NUM_LOWER_LATENTS,
+    None,
+    None,
+    None,
+    None,
+    None,
     args.out,
 )
