@@ -21,7 +21,7 @@ clean:
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/GPQR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.phi.pt FORCE
+notebooks/GPR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.b.pt model/GPR.phi.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
