@@ -22,6 +22,7 @@ __all__ = [
     "Unscaler",
     "PriorMean_H",
     "GPR_H",
+    "GPR_b",
     "GPR_phi",
     "CgLmcMtgpqr_H",
     "CgLmcMtgpqr_H_ConstantMean",
@@ -183,6 +184,106 @@ class GPR_H(ExactGP):
         std = pred.variance.sqrt()  # (*B, N)
         z = torch.distributions.Normal(0, 1).icdf(quantiles)  # (Q,)
         return mean[..., None] + std[..., None] * z  # (*B, N, Q)
+
+
+class _Kernel_b(gpytorch.kernels.Kernel):
+    """Blends two kernels around a changepoint in the first (Rgt) dimension.
+
+    k(x, x') = sigma(x) * sigma(x') * k1(x, x')
+    + (1-sigma(x)) * (1-sigma(x')) * k2(x, x')
+    where sigma(x) = sigmoid(sharpness * (Rgt(x) - changepoint))
+    """
+
+    is_stationary = False
+
+    def __init__(self, kernel1, kernel2, unscaler, **kwargs):
+        super().__init__(**kwargs)
+        self.kernel1 = kernel1
+        self.kernel2 = kernel2
+        self.unscaler = unscaler
+        self.register_parameter(
+            "raw_changepoint",
+            torch.nn.Parameter(torch.tensor(1.2)),
+        )
+
+    @property
+    def changepoint(self):
+        return self.raw_changepoint
+
+    def forward(self, x1, x2, diag=False, **params):
+        rgt1 = self.unscaler(x1)[..., 0]  # [..., N]
+        rgt2 = self.unscaler(x2)[..., 0]  # [..., M]
+
+        s1 = torch.sigmoid(10 * (rgt1 - self.changepoint))
+        s2 = torch.sigmoid(10 * (rgt2 - self.changepoint))
+
+        if diag:
+            w1 = s1 * s2  # [..., N]
+            w2 = (1 - s1) * (1 - s2)  # [..., N]
+            k1 = self.kernel1(x1, x2, diag=True)
+            k2 = self.kernel2(x1, x2, diag=True)
+            return w1 * k1 + w2 * k2
+
+        w1 = s1.unsqueeze(-1) * s2.unsqueeze(-2)  # [..., N, M]
+        w2 = (1 - s1).unsqueeze(-1) * (1 - s2).unsqueeze(-2)  # [..., N, M]
+
+        k1 = self.kernel1(x1, x2).to_dense()
+        k2 = self.kernel2(x1, x2).to_dense()
+
+        return w1 * k1 + w2 * k2
+
+
+class GPR_b(ExactGP):
+    def __init__(
+        self,
+        train_x,
+        train_y,
+        likelihood,
+        X_scale=None,
+        X_min=None,
+        batch_shape=torch.Size(),
+    ):
+        D = train_x.shape[-1]
+        super().__init__(train_x, train_y, likelihood)
+
+        if X_scale is None:
+            X_scale = torch.ones(D)
+        if X_min is None:
+            X_min = torch.zeros(D)
+        unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
+
+        self.mean_module = torch.nn.Sequential(
+            unscaler,
+            ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
+        )
+
+        lower = torch.tensor([0.01, 0.01, 0.01] + [0 for _ in range(D - 3)])
+        upper = torch.tensor([1e4, 1e4, 1e4] + [1e4 for _ in range(D - 3)])
+        init_ls = torch.tensor([0.5, 0.5, 0.5] + [0.5 for _ in range(D - 3)])
+        kernel1 = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
+            batch_shape=batch_shape,
+        )
+        kernel1.base_kernel.register_constraint(
+            "raw_lengthscale", gpytorch.constraints.Interval(lower, upper)
+        )
+        with torch.no_grad():
+            kernel1.base_kernel.lengthscale = init_ls
+        kernel2 = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
+            batch_shape=batch_shape,
+        )
+        kernel2.base_kernel.register_constraint(
+            "raw_lengthscale", gpytorch.constraints.Interval(lower, upper)
+        )
+        with torch.no_grad():
+            kernel2.base_kernel.lengthscale = init_ls
+        self.covar_module = _Kernel_b(kernel1, kernel2, unscaler)
+
+    def forward(self, x):
+        mean_x = self.mean_module(x.unsqueeze(-3)).squeeze(-2)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
 class GPR_phi(ExactGP):

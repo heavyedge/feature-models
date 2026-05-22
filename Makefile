@@ -5,6 +5,7 @@ NOTEBOOKS := $(wildcard notebooks/*)
 
 all: \
 model/GPR.H.pt \
+model/GPR.b.pt \
 model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
@@ -41,13 +42,10 @@ _temp/X.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<')[['Slurry', 'Gap_to_thickness_ratio', 'Capillary_number', 'Contact_angle']]; df['Cos_theta'] = np.cos(np.radians(df['Contact_angle'])); df.drop('Contact_angle', axis=1).to_csv('$@', index=False)"
 
 _temp/y.csv: _temp/Dataset.csv
-	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
+	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'b', 'phi']].to_csv('$@', index=False)"
 
-model/GPR.H.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H -o $@
-
-model/GPR.phi.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi -o $@
+model/GPR.%.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
+	python3 $^ --target $* -o $@
 
 _temp/H.CgLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3167 -o $@
