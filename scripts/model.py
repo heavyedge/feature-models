@@ -212,6 +212,14 @@ class GPR_phi(ExactGP):
             RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
             batch_shape=batch_shape,
         )
+        lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
+        upper = torch.tensor([1e4 for _ in range(D)])
+        init_ls = torch.tensor([2, 2, 2] + [0.5 for _ in range(D - 3)])
+        self.covar_module.base_kernel.register_constraint(
+            "raw_lengthscale", gpytorch.constraints.Interval(lower, upper)
+        )
+        with torch.no_grad():
+            self.covar_module.base_kernel.lengthscale = init_ls
 
     def forward(self, x):
         mean_x = self.mean_module(x.unsqueeze(-3)).squeeze(-2)
