@@ -67,6 +67,8 @@ for i in range(NUM_EPOCHS):
     logger.info(f"{args.out}: Epoch {i+1}/{NUM_EPOCHS}, Loss: {loss.item():.4f}")
 
 save_model(
+    X_scaled,
+    y,
     model,
     likelihood,
     scaler,

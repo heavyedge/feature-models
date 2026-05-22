@@ -98,6 +98,8 @@ for i in range(NUM_EPOCHS):
 
 # Save
 save_model(
+    train_x,
+    train_y,
     model,
     likelihood,
     scaler,
