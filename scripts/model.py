@@ -73,12 +73,12 @@ class PriorMean_H(gpytorch.means.Mean):
         if offset:
             self.register_parameter(
                 "offset",
-                torch.nn.Parameter(torch.zeros(*batch_shape)),
+                torch.nn.Parameter(torch.zeros(batch_shape)),
             )
         else:
             self.register_buffer(
                 "offset",
-                torch.zeros(*batch_shape),
+                torch.zeros(batch_shape),
             )
 
     def forward(self, x):
@@ -110,12 +110,12 @@ class _PriorMean_H_GPR(gpytorch.means.Mean):
         if offset:
             self.register_parameter(
                 "offset",
-                torch.nn.Parameter(torch.zeros(*batch_shape)),
+                torch.nn.Parameter(torch.zeros(batch_shape)),
             )
         else:
             self.register_buffer(
                 "offset",
-                torch.zeros(*batch_shape),
+                torch.zeros(batch_shape),
             )
 
     def forward(self, x):
