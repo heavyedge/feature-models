@@ -113,4 +113,4 @@ jobs:
 
         - name: build models
           run: |
-            HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make
+            HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make test-models

@@ -20,6 +20,8 @@ clean:
 
 test-models: all _temp/test-X.csv
 	python3 -c "import pandas as pd; from model.predict import gpr_H; gpr_H(pd.read_csv('_temp/test-X.csv').values)"
+	python3 -c "import pandas as pd; from model.predict import gpr_b; gpr_b(pd.read_csv('_temp/test-X.csv').values)"
+	python3 -c "import pandas as pd; from model.predict import gpr_phi; gpr_phi(pd.read_csv('_temp/test-X.csv').values)"
 
 # Notebooks
 
