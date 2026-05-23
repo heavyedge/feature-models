@@ -10,7 +10,8 @@ model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
 model/kernels.py \
-model/model.py
+model/model.py \
+model/predict.py
 
 notebooks: $(NOTEBOOKS)
 
