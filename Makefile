@@ -1,7 +1,7 @@
 NOTEBOOKS := $(wildcard notebooks/*)
 
 .ONESHELL:
-.PHONY: all notebooks clean FORCE
+.PHONY: all notebooks clean test-models FORCE
 
 all: \
 model/GPR.H.pt \
@@ -17,6 +17,9 @@ notebooks: $(NOTEBOOKS)
 
 clean:
 	rm -rf _temp _artifacts model/*.pt model/*.pkl model/*.py
+
+test-models: all _temp/test-X.csv
+	python3 -c "import pandas as pd; from model.predict import gpr_H; gpr_H(pd.read_csv('_temp/test-X.csv').values)"
 
 # Notebooks
 
@@ -45,6 +48,9 @@ _temp/Dataset.csv: scripts/filter-dataset.py _data/Dataset.csv
 
 _temp/X.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<')[['Slurry', 'Gap_to_thickness_ratio', 'Capillary_number', 'Contact_angle']]; df['Cos_theta'] = np.cos(np.radians(df['Contact_angle'])); df.drop('Contact_angle', axis=1).to_csv('$@', index=False)"
+
+_temp/test-X.csv: _temp/X.csv
+	python3 -c "import pandas as pd; pd.read_csv('$<').drop(columns='Slurry').iloc[:1].to_csv('$@', index=False)"
 
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'b', 'phi']].to_csv('$@', index=False)"
