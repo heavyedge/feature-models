@@ -46,3 +46,21 @@ make notebooks
 ```
 make test
 ```
+
+## Versioning policy
+
+The HeavyEdge-Features model follows semantic versioning.
+
+**Major version**
+
+- Updated if model API is changed.
+- Each major version has dedicated repository, e.g., `heavyedge-features-v1`, `heavyedge-features-v2`, and so on.
+
+**Minor version**
+
+- Updated if model is re-trained without API change.
+
+**Patch version**
+
+- Bug fix.
+- Metadata change.
