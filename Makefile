@@ -9,12 +9,14 @@ model/GPR.b.pt \
 model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
-model/QW.SVC.pkl
+model/QW.SVC.pkl \
+model/kernels.py \
+model/model.py
 
 notebooks: $(NOTEBOOKS)
 
 clean:
-	rm -rf _temp _artifacts model/*.pt model/*.pkl
+	rm -rf _temp _artifacts model/*.pt model/*.pkl model/*.py
 
 # Notebooks
 
@@ -73,3 +75,6 @@ _temp/window.npy: _temp/window.H.npy _temp/window.phi.npy
 
 model/QW.SVC.pkl: scripts/train-svc.py _temp/X.csv _temp/window.npy
 	python3 $^ --n-trials 100 -o $@
+
+model/%.py: scripts/%.py
+	cp $< $@
