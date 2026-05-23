@@ -86,7 +86,7 @@ jobs:
 
         - run: HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make ${{ matrix.notebook }}
 
-  model:
+  build-model:
 
       needs: lint
 
@@ -113,4 +113,7 @@ jobs:
 
         - name: build models
           run: |
-            HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make test-models
+            HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make
+
+        - name: test models in build environment
+          run: make test

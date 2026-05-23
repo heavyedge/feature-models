@@ -38,3 +38,9 @@ Then build the notebooks:
 ```
 make notebooks
 ```
+
+### Testing built models
+
+```
+make test
+```
