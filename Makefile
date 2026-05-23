@@ -9,7 +9,6 @@ model/GPR.b.pt \
 model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
-model/QW.SVC.pkl \
 model/kernels.py \
 model/model.py
 
@@ -22,6 +21,8 @@ test-models: all _temp/test-X.csv
 	python3 -c "import pandas as pd; from model.predict import gpr_H; gpr_H(pd.read_csv('_temp/test-X.csv').values)"
 	python3 -c "import pandas as pd; from model.predict import gpr_b; gpr_b(pd.read_csv('_temp/test-X.csv').values)"
 	python3 -c "import pandas as pd; from model.predict import gpr_phi; gpr_phi(pd.read_csv('_temp/test-X.csv').values)"
+	python3 -c "import pandas as pd; from model.predict import gpqr_H; gpqr_H(pd.read_csv('_temp/test-X.csv').values)"
+	python3 -c "import pandas as pd; from model.predict import gpqr_phi; gpqr_phi(pd.read_csv('_temp/test-X.csv').values)"
 
 # Notebooks
 
@@ -34,7 +35,7 @@ notebooks/GPR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.b.pt model
 notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/QW.SVC.ipynb: _temp/X.csv _temp/window.npy model/QW.SVC.pkl FORCE
+notebooks/QW.SVC.ipynb: _temp/X.csv _temp/window.npy _temp/QW.SVC.pkl FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/QW.GPQR.ipynb: _temp/X.csv model/GPQR.H.pt model/GPQR.phi.pt FORCE
@@ -81,7 +82,7 @@ _temp/window.phi.npy: _temp/y.csv
 _temp/window.npy: _temp/window.H.npy _temp/window.phi.npy
 	python3 -c "import numpy as np; qw = np.all([np.load(f) for f in '$^'.split(' ')], axis=0).flatten(); np.save('$@', qw)"
 
-model/QW.SVC.pkl: scripts/train-svc.py _temp/X.csv _temp/window.npy
+_temp/QW.SVC.pkl: scripts/train-svc.py _temp/X.csv _temp/window.npy
 	python3 $^ --n-trials 100 -o $@
 
 model/%.py: scripts/%.py
