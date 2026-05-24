@@ -92,7 +92,7 @@ def gpr_phi(device=None):
     return model, likelihood, scaler
 
 
-def gpqr_H(X, device=None):
+def gpqr_H(device=None):
     """Return GPQR model for H.
 
     Parameters
@@ -123,7 +123,7 @@ def gpqr_H(X, device=None):
     return quantiles, model, likelihood, scaler
 
 
-def gpqr_phi(X, device=None):
+def gpqr_phi(device=None):
     """Return GPQR model for phi.
 
     Parameters
