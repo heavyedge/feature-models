@@ -118,8 +118,6 @@ def gpqr_H(device=None):
     model, likelihood, scaler = load_model(CgLmcMtgpqr_H, model_path, device=device)
     model.to(device)
     model.eval()
-
-    X = torch.tensor(scaler.transform(X), dtype=torch.float32).to(device)
     return quantiles, model, likelihood, scaler
 
 
@@ -151,8 +149,4 @@ def gpqr_phi(device=None):
     )
     model.to(device)
     model.eval()
-
-    X = torch.tensor(scaler.transform(X), dtype=torch.float32).to(device)
-    with torch.no_grad():
-        phi = model(X)
-    return quantiles, phi, likelihood, scaler
+    return quantiles, model, likelihood, scaler
