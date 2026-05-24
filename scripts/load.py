@@ -20,101 +20,93 @@ __all__ = [
 ]
 
 
-def gpr_H(X, device=None):
-    """Predict H using the GPR model.
+def gpr_H(device=None):
+    """Return GPR model for H.
 
     Parameters
     ----------
-    X : array-like of shape (n_samples, n_features)
+    device : torch.device, optional
+        Device to run the model on. If None, uses CUDA if available, else CPU.
 
     Returns
     -------
-    H : MultivariateNormal
-        Posterior distribution of H.
-        Batch shape is () and event shape is (n_samples,).
+    model : gpytorch.models.ExactGP
+    likelihood : gpytorch.likelihoods.GaussianLikelihood
+    scaler : sklearn scaler
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_path = Path(__file__).parent / "GPR.H.pt"
-    model, _, scaler = load_model(GPR_H, model_path, device=device)
+    model, likelihood, scaler = load_model(GPR_H, model_path, device=device)
     model.to(device)
     model.eval()
-
-    X = torch.tensor(scaler.transform(X), dtype=torch.float32).to(device)
-    with torch.no_grad():
-        H = model(X)
-    return H
+    return model, likelihood, scaler
 
 
-def gpr_b(X, device=None):
-    """Predict b using the GPR model.
+def gpr_b(device=None):
+    """Return GPR model for b.
 
     Parameters
     ----------
-    X : array-like of shape (n_samples, n_features)
+    device : torch.device, optional
+        Device to run the model on. If None, uses CUDA if available, else CPU.
 
     Returns
     -------
-    b : MultivariateNormal
-        Posterior distribution of b.
-        Batch shape is () and event shape is (n_samples,).
+    model : gpytorch.models.ExactGP
+    likelihood : gpytorch.likelihoods.GaussianLikelihood
+    scaler : sklearn scaler
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_path = Path(__file__).parent / "GPR.b.pt"
-    model, _, scaler = load_model(GPR_b, model_path, device=device)
+    model, likelihood, scaler = load_model(GPR_b, model_path, device=device)
     model.to(device)
     model.eval()
-
-    X = torch.tensor(scaler.transform(X), dtype=torch.float32).to(device)
-    with torch.no_grad():
-        b = model(X)
-    return b
+    return model, likelihood, scaler
 
 
-def gpr_phi(X, device=None):
-    """Predict phi using the GPR model.
+def gpr_phi(device=None):
+    """Return GPR model for phi.
 
     Parameters
     ----------
-    X : array-like of shape (n_samples, n_features)
+    device : torch.device, optional
+        Device to run the model on. If None, uses CUDA if available, else CPU.
 
     Returns
     -------
-    phi : MultivariateNormal
-        Posterior distribution of phi.
-        Batch shape is () and event shape is (n_samples,).
+    model : gpytorch.models.ExactGP
+    likelihood : gpytorch.likelihoods.GaussianLikelihood
+    scaler : sklearn scaler
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_path = Path(__file__).parent / "GPR.phi.pt"
-    model, _, scaler = load_model(GPR_phi, model_path, device=device)
+    model, likelihood, scaler = load_model(GPR_phi, model_path, device=device)
     model.to(device)
     model.eval()
-
-    X = torch.tensor(scaler.transform(X), dtype=torch.float32).to(device)
-    with torch.no_grad():
-        phi = model(X)
-    return phi
+    return model, likelihood, scaler
 
 
 def gpqr_H(X, device=None):
-    """Predict H using the GPQR model.
+    """Return GPQR model for H.
 
     Parameters
     ----------
-    X : array-like of shape (n_samples, n_features)
+    device : torch.device, optional
+        Device to run the model on. If None, uses CUDA if available, else CPU.
 
     Returns
     -------
     quantiles : tensor of shape (Q,)
         Quantile levels.
-    H : MultitaskMultivariateNormal
-        Posterior distribution of H.
-        Batch shape is () and event shape is (n_samples, Q).
+    model : gpytorch_qr.models.QuantileGP
+    likelihood : gpytorch_qr.likelihoods.ALDLikelihood
+    scaler : sklearn scaler
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -123,30 +115,29 @@ def gpqr_H(X, device=None):
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     quantiles = checkpoint["quantiles"]
 
-    model, _, scaler = load_model(CgLmcMtgpqr_H, model_path, device=device)
+    model, likelihood, scaler = load_model(CgLmcMtgpqr_H, model_path, device=device)
     model.to(device)
     model.eval()
 
     X = torch.tensor(scaler.transform(X), dtype=torch.float32).to(device)
-    with torch.no_grad():
-        H = model(X)
-    return quantiles, H
+    return quantiles, model, likelihood, scaler
 
 
 def gpqr_phi(X, device=None):
-    """Predict phi using the GPQR model.
+    """Return GPQR model for phi.
 
     Parameters
     ----------
-    X : array-like of shape (n_samples, n_features)
+    device : torch.device, optional
+        Device to run the model on. If None, uses CUDA if available, else CPU.
 
     Returns
     -------
     quantiles : tensor of shape (Q,)
         Quantile levels.
-    phi : MultitaskMultivariateNormal
-        Posterior distribution of phi.
-        Batch shape is () and event shape is (n_samples, Q).
+    model : gpytorch_qr.models.QuantileGP
+    likelihood : gpytorch_qr.likelihoods.ALDLikelihood
+    scaler : sklearn scaler
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -155,11 +146,13 @@ def gpqr_phi(X, device=None):
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     quantiles = checkpoint["quantiles"]
 
-    model, _, scaler = load_model(CgIndependentMtgpqr_phi, model_path, device=device)
+    model, likelihood, scaler = load_model(
+        CgIndependentMtgpqr_phi, model_path, device=device
+    )
     model.to(device)
     model.eval()
 
     X = torch.tensor(scaler.transform(X), dtype=torch.float32).to(device)
     with torch.no_grad():
         phi = model(X)
-    return quantiles, phi
+    return quantiles, phi, likelihood, scaler
