@@ -9,21 +9,22 @@ model/GPR.b.pt \
 model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
-model/kernels.py \
+model/__init__.py \
+model/prior.py \
 model/model.py \
-model/predict.py
+model/load.py
 
 notebooks: $(NOTEBOOKS)
 
 clean:
 	rm -rf _temp _artifacts model/*.pt model/*.pkl model/*.py
 
-test: _temp/test-X.csv
-	python3 -c "import pandas as pd; from model.predict import gpr_H; gpr_H(pd.read_csv('_temp/test-X.csv').values)"
-	python3 -c "import pandas as pd; from model.predict import gpr_b; gpr_b(pd.read_csv('_temp/test-X.csv').values)"
-	python3 -c "import pandas as pd; from model.predict import gpr_phi; gpr_phi(pd.read_csv('_temp/test-X.csv').values)"
-	python3 -c "import pandas as pd; from model.predict import gpqr_H; gpqr_H(pd.read_csv('_temp/test-X.csv').values)"
-	python3 -c "import pandas as pd; from model.predict import gpqr_phi; gpqr_phi(pd.read_csv('_temp/test-X.csv').values)"
+test:
+	python3 -c "from model.load import gpr_H; gpr_H()"
+	python3 -c "from model.load import gpr_b; gpr_b()"
+	python3 -c "from model.load import gpr_phi; gpr_phi()"
+	python3 -c "from model.load import gpqr_H; gpqr_H()"
+	python3 -c "from model.load import gpqr_phi; gpqr_phi()"
 
 # Notebooks
 
@@ -52,10 +53,6 @@ _temp/Dataset.csv: scripts/filter-dataset.py _data/Dataset.csv
 
 _temp/X.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<')[['Slurry', 'Gap_to_thickness_ratio', 'Capillary_number', 'Contact_angle']]; df['Cos_theta'] = np.cos(np.radians(df['Contact_angle'])); df.drop('Contact_angle', axis=1).to_csv('$@', index=False)"
-
-_temp/test-X.csv:
-	mkdir -p $(@D)
-	python3 -c "import pandas as pd; df = pd.DataFrame([[2.0, 0.2, 0.3]], columns=['Gap_to_thickness_ratio', 'Capillary_number', 'Cos_theta']); df.to_csv('$@', index=False)"
 
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'b', 'phi']].to_csv('$@', index=False)"

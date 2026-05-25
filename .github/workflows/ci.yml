@@ -141,9 +141,7 @@ jobs:
             python-version: "3.12"
 
         - name: install package
-          run: |
-            pip install -r model/requirements.txt
-            pip install pandas
+          run: pip install -r model/requirements.txt
 
         - uses: actions/download-artifact@v4
           with:
