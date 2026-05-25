@@ -10,7 +10,7 @@ model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
 model/__init__.py \
-model/scaler.py \
+model/prior.py \
 model/model.py \
 model/load.py
 

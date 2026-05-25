@@ -19,9 +19,9 @@ from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP, QuantileGP
 from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
 
 try:
-    from .scaler import Unscaler
+    from .prior import PriorMean_H, Unscaler
 except ImportError:
-    from scaler import Unscaler
+    from prior import PriorMean_H, Unscaler
 
 __all__ = [
     "PriorMean_H",
@@ -43,40 +43,6 @@ __all__ = [
     "save_model",
     "load_model",
 ]
-
-
-class PriorMean_H(gpytorch.means.Mean):
-    """Modified version of model by Schmitt.
-
-    Input X must be [Rgt, Ca, surface_tension, ...].
-    """
-
-    def __init__(self, offset=False, batch_shape=torch.Size()):
-        super().__init__()
-        self.batch_shape = batch_shape
-        if offset:
-            self.register_parameter(
-                "offset",
-                torch.nn.Parameter(torch.zeros(batch_shape)),
-            )
-        else:
-            self.register_buffer(
-                "offset",
-                torch.zeros(batch_shape),
-            )
-
-    def forward(self, x):
-        Rgt = x[..., 0]
-        Ca = x[..., 1]
-        cos_theta = x[..., 2]
-
-        a, b, c = 0.22, -0.43, 0.77  # From GPR prior
-        lamda = a * Ca**b * cos_theta**c
-        E = 2 / (-lamda + torch.sqrt(lamda**2 + (4 / Rgt)))
-
-        model = Rgt / E
-        corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
-        return corrected_model + self.offset[..., None]  # (*B, N)
 
 
 # Gaussian proces regression
