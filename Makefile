@@ -9,7 +9,8 @@ model/GPR.b.pt \
 model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
-model/kernels.py \
+model/__init__.py \
+model/scaler.py \
 model/model.py \
 model/load.py
 
