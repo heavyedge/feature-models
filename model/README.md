@@ -13,4 +13,4 @@ pip install -r requirements.txt
 
 Usage:
 
-Import functions from `predict.py`.
+Import functions from `load.py` to load models in Python runtime.
