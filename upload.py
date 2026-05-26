@@ -6,7 +6,7 @@ from huggingface_hub import HfApi
 api = HfApi(token=os.getenv("HUGGINGFACE_TOKEN"))
 
 REPO = "jeesoo9595/heavyedge-features-v1"
-MODEL_VERSION = "v1.1.0"
+MODEL_VERSION = "v1.2.0"
 
 shutil.rmtree("model/__pycache__", ignore_errors=True)
 

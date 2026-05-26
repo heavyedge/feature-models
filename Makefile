@@ -18,7 +18,7 @@ model/predict.py
 notebooks: $(NOTEBOOKS)
 
 clean:
-	rm -rf _temp _artifacts model/*.pt model/*.pkl model/*.py
+	rm -rf _temp _artifacts model/*.pt model/*.py
 
 test: _temp/test-X.npy
 	python3 -c "from model.load import gpr_H; gpr_H()"
