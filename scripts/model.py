@@ -320,7 +320,9 @@ class DirectLmcMtgpqr_H(DirectQuantileGP):
 
         mean = torch.nn.Sequential(
             unscaler,
-            PriorMean_H(offset=True, batch_shape=torch.Size([*batch_shape, 1])),
+            PriorMean_H(
+                offset=True, batch_shape=torch.Size([*batch_shape, num_latents])
+            ),
         )
         covar = ScaleKernel(
             RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
@@ -367,7 +369,7 @@ class DirectLmcMtgpqr_phi(DirectQuantileGP):
 
         mean = torch.nn.Sequential(
             unscaler,
-            ConstantMean(batch_shape=torch.Size([*batch_shape, 1])),
+            ConstantMean(batch_shape=torch.Size([*batch_shape, num_latents])),
         )
         covar = ScaleKernel(
             MaternKernel(nu=2.5, ard_num_dims=D, batch_shape=full_batch_shape),

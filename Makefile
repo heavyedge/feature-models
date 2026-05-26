@@ -71,10 +71,10 @@ model/GPR.%.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target $* -o $@
 
 _temp/H.DirectLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model DirectLmcMtgpqr --num-epochs 3731 -o $@
+	python3 $^ --target H --model DirectLmcMtgpqr --num-epochs 3740 -o $@
 
 _temp/phi.DirectLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model DirectLmcMtgpqr --num-epochs 2866 -o $@
+	python3 $^ --target phi --model DirectLmcMtgpqr --num-epochs 2860 -o $@
 
 model/GPQR.H.pt: _temp/H.DirectLmcMtgpqr.pt
 	cp $< $@

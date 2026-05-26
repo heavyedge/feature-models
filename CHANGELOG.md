@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Direct GPQRs now uses correct likelihoods.
-  This change reveals that direct GPQRs are actually better than center-gap GPQRs.
+- Direct GPQRs now have correct offsets.
 
 ### Changed
 
