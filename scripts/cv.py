@@ -7,6 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 __all__ = [
     "split_data",
+    "split_extrapolate_data",
     "cross_validate",
     "cross_validate_gpr",
 ]
@@ -33,6 +34,27 @@ def split_data(X, y, n_folds, device, random_state=42):
     y_test_cv = torch.stack(y_test_list).float().to(device)
     x_scales = torch.stack(x_scales).float().to(device)
     x_mins = torch.stack(x_mins).float().to(device)
+
+    return x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins
+
+
+def split_extrapolate_data(X, y, ratio, device):
+    scaler = MinMaxScaler().fit(X)
+    X_scaled = scaler.transform(X)
+
+    center = np.full(X_scaled.shape[1], 0.5)
+    distances = np.linalg.norm(X_scaled - center, axis=1)
+
+    threshold = np.quantile(distances, ratio)
+    train_idx = np.where(distances <= threshold)[0]
+    test_idx = np.where(distances > threshold)[0]
+
+    x_train_cv = torch.tensor(X_scaled[train_idx]).float().unsqueeze(0).to(device)
+    y_train_cv = torch.tensor(y[train_idx]).float().unsqueeze(0).to(device)
+    x_test_cv = torch.tensor(X_scaled[test_idx]).float().unsqueeze(0).to(device)
+    y_test_cv = torch.tensor(y[test_idx]).float().unsqueeze(0).to(device)
+    x_scales = torch.tensor(scaler.scale_).float().unsqueeze(0).to(device)
+    x_mins = torch.tensor(scaler.min_).float().unsqueeze(0).to(device)
 
     return x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins
 
