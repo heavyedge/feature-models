@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## UNRELEASED
 
+### Fixed
+
+- Direct GPQRs now uses correct likelihoods.
+- Direct GPQRs now have correct offsets.
+
+### Changed
+
+- GPQR models now use direct GPQR.
+
 ### Deprecated
 
 - `predict.py` is re-added and deprecated.

@@ -70,16 +70,16 @@ _temp/y.csv: _temp/Dataset.csv
 model/GPR.%.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target $* -o $@
 
-_temp/H.CgLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3167 -o $@
+_temp/H.DirectLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
+	python3 $^ --target H --model DirectLmcMtgpqr --num-epochs 3740 -o $@
 
-_temp/phi.CgIndependentMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9543 -o $@
+_temp/phi.DirectLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
+	python3 $^ --target phi --model DirectLmcMtgpqr --num-epochs 2860 -o $@
 
-model/GPQR.H.pt: _temp/H.CgLmcMtgpqr.pt
+model/GPQR.H.pt: _temp/H.DirectLmcMtgpqr.pt
 	cp $< $@
 
-model/GPQR.phi.pt: _temp/phi.CgIndependentMtgpqr.pt
+model/GPQR.phi.pt: _temp/phi.DirectLmcMtgpqr.pt
 	cp $< $@
 
 _temp/window.H.npy: _temp/y.csv
