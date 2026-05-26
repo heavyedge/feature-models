@@ -6,7 +6,11 @@ import pathlib
 import gpytorch
 import pandas as pd
 import torch
-from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
+from gpytorch_qr.likelihoods import (
+    MultitaskCenterGapQuantileGPLikelihood,
+    MultitaskQuantileGPLikelihood,
+)
+from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
 from sklearn.preprocessing import MinMaxScaler
 
 import model as model_module
@@ -68,9 +72,15 @@ model = model_class(
     X_scale=X_scale,
     X_min=X_min,
 ).to(device)
-likelihood = MultitaskCenterGapQuantileGPLikelihood(
-    QUANTILES, CENTER_QUANTILE_INDEX
-).to(device)
+
+if issubclass(model_class, CenterGapQuantileGP):
+    likelihood = MultitaskCenterGapQuantileGPLikelihood(
+        QUANTILES, CENTER_QUANTILE_INDEX
+    ).to(device)
+elif issubclass(model_class, DirectQuantileGP):
+    likelihood = MultitaskQuantileGPLikelihood(QUANTILES).to(device)
+else:
+    raise ValueError(f"Unknown model class: {model_class}")
 
 # Train
 train_x = X_scaled.to(device)
