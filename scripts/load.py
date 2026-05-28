@@ -4,8 +4,8 @@ import torch
 
 from .model import (
     GPR_H,
+    CgIndependentMtgpqr_phi,
     DirectLmcMtgpqr_H,
-    DirectLmcMtgpqr_phi,
     GPR_b,
     GPR_phi,
     load_model,
@@ -145,7 +145,7 @@ def gpqr_phi(device=None):
     quantiles = checkpoint["quantiles"]
 
     model, likelihood, scaler = load_model(
-        DirectLmcMtgpqr_phi, model_path, device=device
+        CgIndependentMtgpqr_phi, model_path, device=device
     )
     model.to(device)
     model.eval()
