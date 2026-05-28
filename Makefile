@@ -38,6 +38,9 @@ _temp/test-X.npy:
 
 # Notebooks
 
+notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+	jupyter nbconvert --to notebook --execute --inplace $@
+
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
