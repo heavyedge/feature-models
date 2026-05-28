@@ -60,12 +60,20 @@ def split_extrapolate_data(X, y, ratio, device):
 
 
 def cross_validate(
-    x_train, y_train, x_test, y_test, quantiles, model, likelihood, n_epochs
+    x_train,
+    y_train,
+    x_test,
+    y_test,
+    quantiles,
+    model,
+    likelihood,
+    n_epochs,
+    learning_rate=0.001,
 ):
     mll = VariationalELBO(likelihood, model, num_data=y_train.shape[1])
     optimizer = torch.optim.Adam(
         list(model.parameters()) + list(likelihood.parameters()),
-        lr=0.001,
+        lr=learning_rate,
     )
 
     test_losses_per_fold = []
@@ -100,10 +108,18 @@ def cross_validate(
 
 
 def cross_validate_gpr(
-    x_train, y_train, x_test, y_test, quantiles, model, likelihood, n_epochs
+    x_train,
+    y_train,
+    x_test,
+    y_test,
+    quantiles,
+    model,
+    likelihood,
+    n_epochs,
+    learning_rate=0.001,
 ):
     mll = ExactMarginalLogLikelihood(likelihood, model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     test_losses_per_fold = []
     for _ in range(n_epochs):
