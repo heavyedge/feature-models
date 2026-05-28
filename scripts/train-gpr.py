@@ -26,6 +26,9 @@ parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
+parser.add_argument(
+    "--learning-rate", type=float, default=0.001, help="Learning rate for optimizer."
+)
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
@@ -55,7 +58,7 @@ model_class = getattr(model_module, model_cls_name)
 likelihood = GaussianLikelihood().to(device)
 model = model_class(X_scaled, y, likelihood, X_scale, X_min).to(device)
 mll = ExactMarginalLogLikelihood(likelihood, model)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
 for i in range(NUM_EPOCHS):
     output = model(X_scaled)

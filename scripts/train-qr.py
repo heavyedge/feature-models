@@ -37,6 +37,9 @@ parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", help="Model class prefix.")
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
+parser.add_argument(
+    "--learning-rate", type=float, default=0.001, help="Learning rate for optimizer."
+)
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
@@ -92,7 +95,7 @@ likelihood.train()
 parameters = list(model.parameters()) + list(likelihood.parameters())
 optimizer = torch.optim.Adam(
     parameters,
-    lr=0.001,
+    lr=args.learning_rate,
 )
 
 mll = gpytorch.mlls.VariationalELBO(likelihood, model, num_data=len(train_y))
