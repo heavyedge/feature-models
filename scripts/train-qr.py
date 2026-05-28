@@ -58,11 +58,11 @@ else:
 
 X = pd.read_csv(args.X).drop(columns="Slurry")
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float()
-scaler = MinMaxScaler().fit(X.to_numpy())
+scaler = MinMaxScaler()
+X_scaled = torch.tensor(scaler.fit_transform(X.to_numpy())).float()
 X_scale = torch.tensor(scaler.scale_).float()
 X_min = torch.tensor(scaler.min_).float()
 
-X_scaled = torch.tensor(scaler.transform(X.to_numpy())).float()
 model_cls_name = f"{args.model}_{args.target}"
 model_class = getattr(model_module, model_cls_name)
 inducing_points = X_scaled.clone()

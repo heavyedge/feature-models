@@ -46,23 +46,30 @@ else:
     device = torch.device(args.device)
 
 X = pd.read_csv(args.X).drop(columns="Slurry")
-y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
-scaler = MinMaxScaler().fit(X.to_numpy())
-X_scale = torch.tensor(scaler.scale_).float().to(device)
-X_min = torch.tensor(scaler.min_).float().to(device)
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float()
+scaler = MinMaxScaler()
+X_scaled = torch.tensor(scaler.fit_transform(X.to_numpy())).float()
+X_scale = torch.tensor(scaler.scale_).float()
+X_min = torch.tensor(scaler.min_).float()
 
-X_scaled = torch.tensor(scaler.transform(X.to_numpy())).float().to(device)
 model_cls_name = f"GPR_{args.target}"
 model_class = getattr(model_module, model_cls_name)
 
 likelihood = GaussianLikelihood().to(device)
 model = model_class(X_scaled, y, likelihood, X_scale, X_min).to(device)
+
+train_x = X_scaled.to(device)
+train_y = y.to(device)
+
+model.train()
+likelihood.train()
+
 mll = ExactMarginalLogLikelihood(likelihood, model)
 optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
 for i in range(NUM_EPOCHS):
-    output = model(X_scaled)
-    loss = -mll(output, y)
+    output = model(train_x)
+    loss = -mll(output, train_y)
     loss.backward()
     optimizer.step()
     optimizer.zero_grad()
@@ -70,8 +77,8 @@ for i in range(NUM_EPOCHS):
     logger.info(f"{args.out}: Epoch {i+1}/{NUM_EPOCHS}, Loss: {loss.item():.4f}")
 
 save_model(
-    X_scaled,
-    y,
+    train_x,
+    train_y,
     model,
     likelihood,
     scaler,
