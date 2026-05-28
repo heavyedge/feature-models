@@ -18,9 +18,9 @@ def split_data(X, y, n_folds, device, random_state=42):
     x_train_list, y_train_list, x_test_list, y_test_list = [], [], [], []
     x_scales, x_mins = [], []
     for train_idx, test_idx in kf.split(X):
-        scaler = MinMaxScaler().fit(X[train_idx])
+        scaler = MinMaxScaler()
 
-        x_train_list.append(torch.tensor(scaler.transform(X[train_idx])))
+        x_train_list.append(torch.tensor(scaler.fit_transform(X[train_idx])))
         y_train_list.append(torch.tensor(y[train_idx]))
         x_test_list.append(torch.tensor(scaler.transform(X[test_idx])))
         y_test_list.append(torch.tensor(y[test_idx]))
@@ -39,8 +39,8 @@ def split_data(X, y, n_folds, device, random_state=42):
 
 
 def split_extrapolate_data(X, y, ratio, device):
-    scaler = MinMaxScaler().fit(X)
-    X_scaled = scaler.transform(X)
+    scaler = MinMaxScaler()
+    X_scaled = scaler.fit_transform(X)
 
     center = np.full(X_scaled.shape[1], 0.5)
     distances = np.linalg.norm(X_scaled - center, axis=1)
