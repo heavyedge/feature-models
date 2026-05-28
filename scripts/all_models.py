@@ -1,25 +1,7 @@
-from .model import (
-    GPR_H,
-    DirectLmcMtgpqr_H,
-    DirectLmcMtgpqr_phi,
-    GPR_b,
-    GPR_phi,
-)
-from .other_model import (
-    CgIndependentMtgpqr_H,
-    CgIndependentMtgpqr_H_ConstantMean,
-    CgIndependentMtgpqr_phi,
-    CgLmcMtgpqr_H,
-    CgLmcMtgpqr_H_ConstantMean,
-    CgLmcMtgpqr_phi,
-    DirectIndependentMtgpqr_H,
-    DirectIndependentMtgpqr_H_ConstantMean,
-    DirectIndependentMtgpqr_phi,
-    DirectLmcMtgpqr_H_ConstantMean,
-    GPR_H_ConstantMean,
-)
+from .model import *  # NOQA
+from .other_model import *  # NOQA
 
-__all__ = [
+__all__ = [  # NOQA
     "GPR_H",
     "GPR_b",
     "GPR_phi",
