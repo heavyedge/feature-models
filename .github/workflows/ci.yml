@@ -78,7 +78,10 @@ jobs:
         - name: Download feature dataset
           run: |
             curl -LsSf https://hf.co/cli/install.sh | bash
+            hf auth login --token $HUGGINGFACE_TOKEN
             hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
+          env:
+            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
 
         - name: install package
           run: |
@@ -105,7 +108,10 @@ jobs:
         - name: Download feature dataset
           run: |
             curl -LsSf https://hf.co/cli/install.sh | bash
+            hf auth login --token $HUGGINGFACE_TOKEN
             hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
+          env:
+            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
 
         - name: install package
           run: |
