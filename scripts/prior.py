@@ -3,6 +3,7 @@ import torch
 
 __all__ = [
     "Unscaler",
+    "PriorMean_H",
 ]
 
 
