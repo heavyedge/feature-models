@@ -7,7 +7,6 @@ from gpytorch.models import ExactGP
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
     IndependentMultitaskVariationalStrategy,
-    LMCVariationalStrategy,
     UnwhitenedVariationalStrategy,
 )
 from gpytorch_qr.likelihoods import (
@@ -16,6 +15,7 @@ from gpytorch_qr.likelihoods import (
 )
 from gpytorch_qr.means import CenterGapMean
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP, QuantileGP
+from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
 
 try:
     from .prior import PriorMean_H, Unscaler
@@ -26,7 +26,7 @@ __all__ = [
     "GPR_H",
     "GPR_b",
     "GPR_phi",
-    "DirectLmcMtgpqr_H",
+    "CgLmcMtgpqr_H",
     "CgIndependentMtgpqr_phi",
     "save_model",
     "load_model",
@@ -285,7 +285,7 @@ class GPR_phi(ExactGP):
 # GPQR
 
 
-class DirectLmcMtgpqr_H(DirectQuantileGP):
+class CgLmcMtgpqr_H(CenterGapQuantileGP):
     def __init__(
         self,
         inducing_points,
@@ -303,15 +303,17 @@ class DirectLmcMtgpqr_H(DirectQuantileGP):
             N,
             batch_shape=full_batch_shape,
         )
-        variational_strategy = LMCVariationalStrategy(
+        variational_strategy = CGBlkdiagLmcVariationalStrategy(
             UnwhitenedVariationalStrategy(
                 self,
                 inducing_points,
                 variational_distribution,
                 learn_inducing_locations=False,
             ),
-            num_tasks=num_quantiles,
+            num_quantiles=num_quantiles,
             num_latents=num_latents,
+            num_lower_quantiles=num_lower_quantiles,
+            num_lower_latents=num_lower_latents,
         )
 
         if X_scale is None:
@@ -320,18 +322,20 @@ class DirectLmcMtgpqr_H(DirectQuantileGP):
             X_min = torch.zeros(D)
         unscaler = Unscaler(X_scale=X_scale, X_min=X_min)
 
-        mean = torch.nn.Sequential(
-            unscaler,
-            PriorMean_H(
-                offset=True, batch_shape=torch.Size([*batch_shape, num_latents])
+        mean = CenterGapMean(
+            torch.nn.Sequential(
+                unscaler,
+                PriorMean_H(batch_shape=torch.Size([*batch_shape, 1])),
             ),
+            ConstantMean(batch_shape=torch.Size([*batch_shape, num_latents - 1])),
+            latent_dim=-1,
         )
         covar = ScaleKernel(
             RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
             batch_shape=full_batch_shape,
         )
 
-        super().__init__(variational_strategy, mean, covar, -1)
+        super().__init__(variational_strategy, mean, covar, -1, num_lower_quantiles)
 
 
 class CgIndependentMtgpqr_phi(CenterGapQuantileGP):

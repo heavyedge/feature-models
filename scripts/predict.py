@@ -6,7 +6,7 @@ import torch
 from .model import (
     GPR_H,
     CgIndependentMtgpqr_phi,
-    DirectLmcMtgpqr_H,
+    CgLmcMtgpqr_H,
     GPR_b,
     GPR_phi,
     load_model,
@@ -130,7 +130,7 @@ def gpqr_H(X, device=None):
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     quantiles = checkpoint["quantiles"]
 
-    model, _, scaler = load_model(DirectLmcMtgpqr_H, model_path, device=device)
+    model, _, scaler = load_model(CgLmcMtgpqr_H, model_path, device=device)
     model.to(device)
     model.eval()
 
