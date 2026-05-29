@@ -10,7 +10,7 @@ __all__ = [
 def quantile_crossing(
     X_train,
     y_train,
-    X_pred,
+    X_preds,
     model,
     likelihood,
     n_epochs,
@@ -22,8 +22,10 @@ def quantile_crossing(
         lr=learning_rate,
     )
 
-    crossing_rate, mean_crossing, max_crossing = [], [], []
-    for _ in range(n_epochs):
+    crossing_rates = np.empty((len(X_preds), n_epochs))
+    mean_crossings = np.empty((len(X_preds), n_epochs))
+    max_crossings = np.empty((len(X_preds), n_epochs))
+    for j in range(n_epochs):
         model.train()
         likelihood.train()
         output = model(X_train)
@@ -35,16 +37,17 @@ def quantile_crossing(
         model.eval()
         likelihood.eval()
         with torch.no_grad():
-            output = model.mean_quantiles_delta(X_pred)
-            quantile_diff = output.diff(axis=-1)
-            crossing = quantile_diff < 0
+            for i, X_pred in enumerate(X_preds):
+                output = model.mean_quantiles_delta(X_pred)
+                quantile_diff = output.diff(axis=-1)
+                crossing = quantile_diff < 0
 
-            crossing_rate.append(
-                (crossing.count_nonzero() / quantile_diff.numel()).item()
-            )
-            mean_crossing.append(
-                (-quantile_diff[crossing].sum() / quantile_diff.numel()).item()
-            )
-            max_crossing.append((-quantile_diff).clip(0).max().item())
+                crossing_rates[i, j] = (
+                    crossing.count_nonzero() / quantile_diff.numel()
+                ).item()
+                mean_crossings[i, j] = (
+                    -quantile_diff[crossing].sum() / quantile_diff.numel()
+                ).item()
+                max_crossings[i, j] = (-quantile_diff).clip(0).max().item()
 
-    return np.array(crossing_rate), np.array(mean_crossing), np.array(max_crossing)
+    return crossing_rates, mean_crossings, max_crossings
