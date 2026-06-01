@@ -16,7 +16,7 @@ from gpytorch_qr.likelihoods import (
 )
 from gpytorch_qr.means import CenterGapMean
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP, QuantileGP
-from gpytorch_qr.variational import CGBlkdiagLmcVariationalStrategy
+from gpytorch_qr.variational import CGLmcVariationalStrategy
 
 try:
     from .prior import PriorMean_H, Unscaler
@@ -88,7 +88,7 @@ class CgLmcMtgpqr_H_ConstantMean(CenterGapQuantileGP):
             N,
             batch_shape=full_batch_shape,
         )
-        variational_strategy = CGBlkdiagLmcVariationalStrategy(
+        variational_strategy = CGLmcVariationalStrategy(
             UnwhitenedVariationalStrategy(
                 self,
                 inducing_points,
@@ -97,8 +97,6 @@ class CgLmcMtgpqr_H_ConstantMean(CenterGapQuantileGP):
             ),
             num_quantiles=num_quantiles,
             num_latents=num_latents,
-            num_lower_quantiles=num_lower_quantiles,
-            num_lower_latents=num_lower_latents,
         )
 
         if X_scale is None:
@@ -141,7 +139,7 @@ class CgLmcMtgpqr_phi(CenterGapQuantileGP):
             N,
             batch_shape=full_batch_shape,
         )
-        variational_strategy = CGBlkdiagLmcVariationalStrategy(
+        variational_strategy = CGLmcVariationalStrategy(
             UnwhitenedVariationalStrategy(
                 self,
                 inducing_points,
@@ -150,8 +148,6 @@ class CgLmcMtgpqr_phi(CenterGapQuantileGP):
             ),
             num_quantiles=num_quantiles,
             num_latents=num_latents,
-            num_lower_quantiles=num_lower_quantiles,
-            num_lower_latents=num_lower_latents,
         )
 
         if X_scale is None:

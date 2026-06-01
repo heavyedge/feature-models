@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 QUANTILES = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
 CENTER_QUANTILE_INDEX = 2
 NUM_LOWER_QUANTILES = 2
-NUM_LATENTS = 3
-NUM_LOWER_LATENTS = 1
+NUM_LATENTS = len(QUANTILES)
+NUM_LOWER_LATENTS = NUM_LATENTS // 2
 
 torch.manual_seed(0)
 

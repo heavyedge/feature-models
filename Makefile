@@ -77,7 +77,7 @@ model/GPR.%.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target $* -o $@
 
 _temp/H.CgLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 3167 -o $@
+	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 2706 -o $@
 
 _temp/phi.CgIndependentMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9543 -o $@
