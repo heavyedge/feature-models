@@ -11,7 +11,8 @@ model/GPQR.H.pt \
 model/GPQR.phi.pt \
 model/__init__.py \
 model/prior.py \
-model/model.py \
+model/gpr.py \
+model/gpqr.py \
 model/load.py
 
 notebooks: $(NOTEBOOKS)
@@ -19,16 +20,12 @@ notebooks: $(NOTEBOOKS)
 clean:
 	rm -rf _temp _artifacts model/*.pt model/*.py
 
-test: _temp/test-X.npy
-	python3 -c "from model.load import gpr_H; gpr_H()"
-	python3 -c "from model.load import gpr_b; gpr_b()"
-	python3 -c "from model.load import gpr_phi; gpr_phi()"
-	python3 -c "from model.load import gpqr_H; gpqr_H()"
-	python3 -c "from model.load import gpqr_phi; gpqr_phi()"
-
-_temp/test-X.npy:
-	mkdir -p $(@D)
-	python3 -c "import numpy as np; np.save('$@', np.array([[2.0, 0.2, 0.3]]))"
+test:
+	python3 -c "from model.load import load_gpr_H; load_gpr_H()"
+	python3 -c "from model.load import load_gpr_b; load_gpr_b()"
+	python3 -c "from model.load import load_gpr_phi; load_gpr_phi()"
+	python3 -c "from model.load import load_gpqr_H; load_gpqr_H()"
+	python3 -c "from model.load import load_gpqr_phi; load_gpqr_phi()"
 
 # Notebooks
 
@@ -64,19 +61,19 @@ _temp/X.csv: _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'b', 'phi']].to_csv('$@', index=False)"
 
-model/GPR.%.pt: scripts/train-gpr.py _temp/X.csv _temp/y.csv
+model/GPR.%.pt: scripts/train/gpr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target $* -o $@
 
-_temp/H.CgLmcMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
+_temp/GPQR.H.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 2706 -o $@
 
-_temp/phi.CgIndependentMtgpqr.pt: scripts/train-qr.py _temp/X.csv _temp/y.csv
+_temp/GPQR.phi.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9543 -o $@
 
-model/GPQR.H.pt: _temp/H.CgLmcMtgpqr.pt
+model/%.pt: _temp/%.pt
 	cp $< $@
 
-model/GPQR.phi.pt: _temp/phi.CgIndependentMtgpqr.pt
+model/%.py: scripts/model/%.py
 	cp $< $@
 
 _temp/window.H.npy: _temp/y.csv
@@ -87,6 +84,3 @@ _temp/window.phi.npy: _temp/y.csv
 
 _temp/window.npy: _temp/window.H.npy _temp/window.phi.npy
 	python3 -c "import numpy as np; qw = np.all([np.load(f) for f in '$^'.split(' ')], axis=0).flatten(); np.save('$@', qw)"
-
-model/%.py: scripts/%.py
-	cp $< $@

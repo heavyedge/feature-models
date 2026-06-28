@@ -1,7 +1,9 @@
 import argparse
+import importlib
 import logging
 import os
 import pathlib
+import sys
 
 import gpytorch
 import pandas as pd
@@ -11,10 +13,12 @@ from gpytorch_qr.likelihoods import (
     MultitaskQuantileGPLikelihood,
 )
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
+from save import save_model
 from sklearn.preprocessing import MinMaxScaler
 
-import model as model_module
-from model import save_model
+MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
+sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+model_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.gpqr")
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),

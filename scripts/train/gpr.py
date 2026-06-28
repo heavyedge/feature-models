@@ -1,16 +1,20 @@
 import argparse
+import importlib
 import logging
 import os
 import pathlib
+import sys
 
 import pandas as pd
 import torch
 from gpytorch import ExactMarginalLogLikelihood
 from gpytorch.likelihoods import GaussianLikelihood
+from save import save_model
 from sklearn.preprocessing import MinMaxScaler
 
-import model as model_module
-from model import save_model
+MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
+sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+model_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.gpr")
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
