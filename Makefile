@@ -12,8 +12,7 @@ model/GPQR.phi.pt \
 model/__init__.py \
 model/prior.py \
 model/model.py \
-model/load.py \
-model/predict.py
+model/load.py
 
 notebooks: $(NOTEBOOKS)
 
@@ -26,11 +25,11 @@ test: _temp/test-X.npy
 	python3 -c "from model.load import gpr_phi; gpr_phi()"
 	python3 -c "from model.load import gpqr_H; gpqr_H()"
 	python3 -c "from model.load import gpqr_phi; gpqr_phi()"
-	python3 -c "import numpy as np; from model.predict import gpr_H; gpr_H(np.load('$<'))"
-	python3 -c "import numpy as np; from model.predict import gpr_b; gpr_b(np.load('$<'))"
-	python3 -c "import numpy as np; from model.predict import gpr_phi; gpr_phi(np.load('$<'))"
-	python3 -c "import numpy as np; from model.predict import gpqr_H; gpqr_H(np.load('$<'))"
-	python3 -c "import numpy as np; from model.predict import gpqr_phi; gpqr_phi(np.load('$<'))"
+	python3 -c "import numpy as np; from model.load import gpr_H; gpr_H(np.load('$<'))"
+	python3 -c "import numpy as np; from model.load import gpr_b; gpr_b(np.load('$<'))"
+	python3 -c "import numpy as np; from model.load import gpr_phi; gpr_phi(np.load('$<'))"
+	python3 -c "import numpy as np; from model.load import gpqr_H; gpqr_H(np.load('$<'))"
+	python3 -c "import numpy as np; from model.load import gpqr_phi; gpqr_phi(np.load('$<'))"
 
 _temp/test-X.npy:
 	mkdir -p $(@D)
