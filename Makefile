@@ -20,11 +20,11 @@ clean:
 	rm -rf _temp _artifacts model/*.pt model/*.py
 
 test: _temp/test-X.npy
-	python3 -c "import numpy as np; from model.load import gpr_H; gpr_H()[0](np.load('$<'))"
-	python3 -c "import numpy as np; from model.load import gpr_b; gpr_b()[0](np.load('$<'))"
-	python3 -c "import numpy as np; from model.load import gpr_phi; gpr_phi()[0](np.load('$<'))"
-	python3 -c "import numpy as np; from model.load import gpqr_H; gpqr_H()[0](np.load('$<'))"
-	python3 -c "import numpy as np; from model.load import gpqr_phi; gpqr_phi()[0](np.load('$<'))"
+	python3 -c "import torch; import numpy as np; from model.load import gpr_H; gpr_H()[0](torch.tensor(np.load('$<')))"
+	python3 -c "import torch; import numpy as np; from model.load import gpr_b; gpr_b()[0](torch.tensor(np.load('$<')))"
+	python3 -c "import torch; import numpy as np; from model.load import gpr_phi; gpr_phi()[0](torch.tensor(np.load('$<')))"
+	python3 -c "import torch; import numpy as np; from model.load import gpqr_H; gpqr_H()[0](torch.tensor(np.load('$<')))"
+	python3 -c "import torch; import numpy as np; from model.load import gpqr_phi; gpqr_phi()[0](torch.tensor(np.load('$<')))"
 
 _temp/test-X.npy:
 	mkdir -p $(@D)
