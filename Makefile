@@ -44,7 +44,7 @@ notebooks/GPR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.b.pt model
 notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/QW.GPQR.ipynb: _temp/X.csv model/GPQR.H.pt model/GPQR.phi.pt FORCE
+notebooks/Window.ipynb: _temp/X.csv _temp/X-pred.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
@@ -85,11 +85,11 @@ _temp/X.npy: _temp/X.csv
 _temp/X-pred.npy: _temp/X-pred.csv
 	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<', index_col=[0,1,2]); shape = [df.index.get_level_values(i).nunique() for i in range(df.index.nlevels)]; np.save('$@', df.to_numpy().reshape(*shape, -1))"
 
-_temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy $(abspath model/GPQR.%.pt)
-	python3 $^ --target $* -o $@
+_temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy model/GPQR.%.pt
+	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
 
-_temp/%.quantiles.X-pred.npz: scripts/predict/gpqr.py _temp/X-pred.npy $(abspath model/GPQR.%.pt)
-	python3 $^ --target $* -o $@
+_temp/%.quantiles.X-pred.npz: scripts/predict/gpqr.py _temp/X-pred.npy model/GPQR.%.pt
+	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
 
 _temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles.X.npz _temp/H.quantiles.X-pred.npz
 	python3 $^ --target H --threshold 1.1 -o $@
