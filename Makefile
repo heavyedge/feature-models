@@ -82,7 +82,13 @@ _temp/X-pred.csv: scripts/data/write-Xpred.py _temp/X.csv
 _temp/X.npy: _temp/X.csv
 	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
 
+_temp/X-pred.npy: _temp/X-pred.csv
+	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<', index_col=[0,1,2]); shape = [df.index.get_level_values(i).nunique() for i in range(df.index.nlevels)]; np.save('$@', df.to_numpy().reshape(*shape, -1))"
+
 _temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy $(abspath model/GPQR.%.pt)
+	python3 $^ --target $* -o $@
+
+_temp/%.quantiles.X-pred.npz: scripts/predict/gpqr.py _temp/X-pred.npy $(abspath model/GPQR.%.pt)
 	python3 $^ --target $* -o $@
 
 _temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X-pred.csv
