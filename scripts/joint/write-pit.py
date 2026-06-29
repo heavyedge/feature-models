@@ -12,12 +12,6 @@ import numpy as np
 import pandas as pd
 from pit import quantile_interpolation, quantile_pit
 
-THRESHOLDS = {
-    "H": 1.1,
-    "phi": 1.0,
-    "b": 12.0,
-}
-
 parser = argparse.ArgumentParser()
 parser.add_argument("Y", type=pathlib.Path, help="Training data csv file")
 parser.add_argument(
@@ -30,7 +24,8 @@ parser.add_argument(
     type=pathlib.Path,
     help="npz file of quantile predictions on the prediction grid",
 )
-parser.add_argument("--target", required=True, choices=THRESHOLDS.keys())
+parser.add_argument("--target", required=True, choices=["H", "phi"])
+parser.add_argument("--threshold", type=float, help="Threshold for PIT computation")
 parser.add_argument(
     "-o", "--out", type=pathlib.Path, required=True, help="Output npz file."
 )
@@ -50,7 +45,7 @@ u_train = quantile_pit(
 )
 
 pred_quantiles = pred["quantiles"]
-threshold = THRESHOLDS[args.target]
+threshold = args.threshold
 u_pred = quantile_interpolation(
     pred_quantiles.reshape(-1, pred_quantiles.shape[-1]),
     pred["quantile_levels"],

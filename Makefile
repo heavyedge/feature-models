@@ -91,8 +91,11 @@ _temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy $(abspath model/GPQ
 _temp/%.quantiles.X-pred.npz: scripts/predict/gpqr.py _temp/X-pred.npy $(abspath model/GPQR.%.pt)
 	python3 $^ --target $* -o $@
 
-_temp/%.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/%.quantiles.X.npz _temp/%.quantiles.X-pred.npz
-	python3 $^ --target $* -o $@
+_temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles.X.npz _temp/H.quantiles.X-pred.npz
+	python3 $^ --target H --threshold 1.1 -o $@
+
+_temp/phi.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/phi.quantiles.X.npz _temp/phi.quantiles.X-pred.npz
+	python3 $^ --target phi --threshold 1.0 -o $@
 
 _temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X-pred.csv
 	python3 $^ -o $@
