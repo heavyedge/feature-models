@@ -76,10 +76,16 @@ model/%.pt: _temp/%.pt
 model/%.py: scripts/model/%.py
 	cp $< $@
 
-_temp/X.pred.csv: scripts/data/write-Xpred.py _temp/X.csv
+_temp/X-pred.csv: scripts/data/write-Xpred.py _temp/X.csv
 	python3 $^ -o $@
 
-_temp/X.delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X.pred.csv
+_temp/X.npy: _temp/X.csv
+	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
+
+_temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy $(abspath model/GPQR.%.pt)
+	python3 $^ --target $* -o $@
+
+_temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X-pred.csv
 	python3 $^ -o $@
 
 _temp/window.H.npy: _temp/y.csv

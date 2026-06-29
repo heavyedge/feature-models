@@ -66,11 +66,12 @@ def _load_model(model_class, path, device=None):
     return model, likelihood, scaler
 
 
-def load_gpr_H(device=None):
+def load_gpr_H(path=None, device=None):
     """Return GPR model for H.
 
     Parameters
     ----------
+    path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
 
@@ -83,18 +84,20 @@ def load_gpr_H(device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model_path = Path(__file__).parent / "GPR.H.pt"
-    model, likelihood, scaler = _load_model(GPR_H, model_path, device=device)
+    if path is None:
+        path = Path(__file__).parent / "GPR.H.pt"
+    model, likelihood, scaler = _load_model(GPR_H, path, device=device)
     model.to(device)
     model.eval()
     return model, likelihood, scaler
 
 
-def load_gpr_b(device=None):
+def load_gpr_b(path=None, device=None):
     """Return GPR model for b.
 
     Parameters
     ----------
+    path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
 
@@ -107,18 +110,20 @@ def load_gpr_b(device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model_path = Path(__file__).parent / "GPR.b.pt"
-    model, likelihood, scaler = _load_model(GPR_b, model_path, device=device)
+    if path is None:
+        path = Path(__file__).parent / "GPR.b.pt"
+    model, likelihood, scaler = _load_model(GPR_b, path, device=device)
     model.to(device)
     model.eval()
     return model, likelihood, scaler
 
 
-def load_gpr_phi(device=None):
+def load_gpr_phi(path=None, device=None):
     """Return GPR model for phi.
 
     Parameters
     ----------
+    path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
 
@@ -131,18 +136,20 @@ def load_gpr_phi(device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model_path = Path(__file__).parent / "GPR.phi.pt"
-    model, likelihood, scaler = _load_model(GPR_phi, model_path, device=device)
+    if path is None:
+        path = Path(__file__).parent / "GPR.phi.pt"
+    model, likelihood, scaler = _load_model(GPR_phi, path, device=device)
     model.to(device)
     model.eval()
     return model, likelihood, scaler
 
 
-def load_gpqr_H(device=None):
+def load_gpqr_H(path=None, device=None):
     """Return GPQR model for H.
 
     Parameters
     ----------
+    path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
 
@@ -157,21 +164,23 @@ def load_gpqr_H(device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model_path = Path(__file__).parent / "GPQR.H.pt"
-    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    if path is None:
+        path = Path(__file__).parent / "GPQR.H.pt"
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
     quantiles = checkpoint["quantiles"]
 
-    model, likelihood, scaler = _load_model(CgLmcMtgpqr_H, model_path, device=device)
+    model, likelihood, scaler = _load_model(CgLmcMtgpqr_H, path, device=device)
     model.to(device)
     model.eval()
     return quantiles, model, likelihood, scaler
 
 
-def load_gpqr_phi(device=None):
+def load_gpqr_phi(path=None, device=None):
     """Return GPQR model for phi.
 
     Parameters
     ----------
+    path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
 
@@ -186,12 +195,13 @@ def load_gpqr_phi(device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model_path = Path(__file__).parent / "GPQR.phi.pt"
-    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    if path is None:
+        path = Path(__file__).parent / "GPQR.phi.pt"
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
     quantiles = checkpoint["quantiles"]
 
     model, likelihood, scaler = _load_model(
-        CgIndependentMtgpqr_phi, model_path, device=device
+        CgIndependentMtgpqr_phi, path, device=device
     )
     model.to(device)
     model.eval()
