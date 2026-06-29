@@ -128,6 +128,11 @@ jobs:
           run: |
             pip install -r requirements.txt
 
+        - uses: actions/download-artifact@v4
+          with:
+            name: trained-models
+            path: model
+
         - run: HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make ${{ matrix.notebook }}
 
   test-model:
