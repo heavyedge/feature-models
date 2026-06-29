@@ -97,6 +97,9 @@ _temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles
 _temp/phi.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/phi.quantiles.X.npz _temp/phi.quantiles.X-pred.npz
 	python3 $^ --target phi --threshold 1.0 -o $@
 
+_temp/joint_probability.X-pred.npz: scripts/joint/write-joint.py _temp/X.csv _temp/X-pred.csv _temp/H.pit.X-pred.npz _temp/phi.pit.X-pred.npz
+	python3 $^ -o $@
+
 _temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X-pred.csv
 	python3 $^ -o $@
 
