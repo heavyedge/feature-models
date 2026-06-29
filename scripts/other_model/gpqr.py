@@ -18,13 +18,9 @@ from gpytorch_qr.means import CenterGapMean
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP, QuantileGP
 from gpytorch_qr.variational import CGLmcVariationalStrategy
 
-try:
-    from .prior import PriorMean_H, Unscaler
-except ImportError:
-    from prior import PriorMean_H, Unscaler
+from ..model.prior import PriorMean_H, Unscaler
 
 __all__ = [
-    "GPR_H_ConstantMean",
     "CgLmcMtgpqr_H_ConstantMean",
     "CgLmcMtgpqr_phi",
     "CgIndependentMtgpqr_H",
@@ -36,38 +32,6 @@ __all__ = [
     "DirectIndependentMtgpqr_H_ConstantMean",
     "DirectIndependentMtgpqr_phi",
 ]
-
-
-class GPR_H_ConstantMean(ExactGP):
-    def __init__(
-        self,
-        train_x,
-        train_y,
-        likelihood,
-        X_scale=None,
-        X_min=None,
-        batch_shape=torch.Size(),
-    ):
-        D = train_x.shape[-1]
-        super().__init__(train_x, train_y, likelihood)
-
-        self.mean_module = ConstantMean(batch_shape=batch_shape)
-        self.covar_module = ScaleKernel(
-            RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
-            batch_shape=batch_shape,
-        )
-
-    def forward(self, x):
-        mean_x = self.mean_module(x)
-        covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
-
-    def quantiles(self, x, quantiles):
-        pred = self.likelihood(self(x))
-        mean = pred.mean  # (*B, N)
-        std = pred.variance.sqrt()  # (*B, N)
-        z = torch.distributions.Normal(0, 1).icdf(quantiles)  # (Q,)
-        return mean[..., None] + std[..., None] * z  # (*B, N, Q)
 
 
 class CgLmcMtgpqr_H_ConstantMean(CenterGapQuantileGP):

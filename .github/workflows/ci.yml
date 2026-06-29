@@ -34,9 +34,50 @@ jobs:
         run: |
           isort --check .
 
-  find-notebooks:
+  train-model:
 
       needs: lint
+
+      runs-on: ubuntu-latest
+
+      steps:
+
+        - name: get repo
+          uses: actions/checkout@v3
+
+        - name: set up Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: "3.12"
+
+        - name: Download feature dataset
+          run: |
+            curl -LsSf https://hf.co/cli/install.sh | bash
+            hf auth login --token $HUGGINGFACE_TOKEN
+            hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
+          env:
+            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+
+        - name: install package
+          run: |
+            pip install -r requirements.txt
+
+        - name: build models
+          run: |
+            HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make
+
+        - name: test models in build environment
+          run: make test
+
+        - uses: actions/upload-artifact@v4
+          with:
+            name: trained-models
+            path: model/*
+            retention-days: 1
+
+  find-notebooks:
+
+      needs: train-model
 
       runs-on: ubuntu-latest
 
@@ -87,48 +128,12 @@ jobs:
           run: |
             pip install -r requirements.txt
 
-        - run: HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make ${{ matrix.notebook }}
-
-  train-model:
-
-      needs: lint
-
-      runs-on: ubuntu-latest
-
-      steps:
-
-        - name: get repo
-          uses: actions/checkout@v3
-
-        - name: set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: "3.12"
-
-        - name: Download feature dataset
-          run: |
-            curl -LsSf https://hf.co/cli/install.sh | bash
-            hf auth login --token $HUGGINGFACE_TOKEN
-            hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
-          env:
-            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-
-        - name: install package
-          run: |
-            pip install -r requirements.txt
-
-        - name: build models
-          run: |
-            HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make
-
-        - name: test models in build environment
-          run: make test
-
-        - uses: actions/upload-artifact@v4
+        - uses: actions/download-artifact@v4
           with:
             name: trained-models
-            path: model/*
-            retention-days: 1
+            path: model
+
+        - run: HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make ${{ matrix.notebook }}
 
   test-model:
 

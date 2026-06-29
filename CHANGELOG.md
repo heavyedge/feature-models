@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - SVC window example is removed.
+- `predict.py` is removed.
 
 ## [1.5.0] - 2026-06-01
 
