@@ -44,7 +44,7 @@ notebooks/GPR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.b.pt model
 notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/QW.GPQR.ipynb: _temp/X.csv model/GPQR.H.pt model/GPQR.phi.pt FORCE
+notebooks/Window.ipynb: _temp/X.csv _temp/X-pred.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
@@ -55,8 +55,8 @@ _temp/Dataset.csv: scripts/data/filter-dataset.py _data/Dataset.csv
 	mkdir -p $(@D)
 	python3 $^ -o $@
 
-_temp/X.csv: _temp/Dataset.csv
-	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<')[['Slurry', 'Gap_to_thickness_ratio', 'Capillary_number', 'Contact_angle']]; df['Cos_theta'] = np.cos(np.radians(df['Contact_angle'])); df.drop('Contact_angle', axis=1).to_csv('$@', index=False)"
+_temp/X.csv: scripts/data/write-X.py _temp/Dataset.csv
+	python3 $^ -o $@
 
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'b', 'phi']].to_csv('$@', index=False)"
@@ -75,6 +75,33 @@ model/%.pt: _temp/%.pt
 
 model/%.py: scripts/model/%.py
 	cp $< $@
+
+_temp/X-pred.csv: scripts/data/write-Xpred.py _temp/X.csv
+	python3 $^ -o $@
+
+_temp/X.npy: _temp/X.csv
+	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
+
+_temp/X-pred.npy: _temp/X-pred.csv
+	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<', index_col=[0,1,2]); shape = [df.index.get_level_values(i).nunique() for i in range(df.index.nlevels)]; np.save('$@', df.to_numpy().reshape(*shape, -1))"
+
+_temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy model/GPQR.%.pt
+	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
+
+_temp/%.quantiles.X-pred.npz: scripts/predict/gpqr.py _temp/X-pred.npy model/GPQR.%.pt
+	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
+
+_temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles.X.npz _temp/H.quantiles.X-pred.npz
+	python3 $^ --target H --threshold 1.1 -o $@
+
+_temp/phi.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/phi.quantiles.X.npz _temp/phi.quantiles.X-pred.npz
+	python3 $^ --target phi --threshold 1.0 -o $@
+
+_temp/joint_probability.X-pred.npz: scripts/joint/write-joint.py _temp/X.csv _temp/X-pred.csv _temp/H.pit.X-pred.npz _temp/phi.pit.X-pred.npz
+	python3 $^ -o $@
+
+_temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X-pred.csv
+	python3 $^ -o $@
 
 _temp/window.H.npy: _temp/y.csv
 	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<')['H'].apply(lambda x: x <= 1.1).to_numpy())"
