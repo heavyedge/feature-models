@@ -117,6 +117,9 @@ _temp/quantiles_cv.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-quan
 
 # Model
 
+_temp/best-config.mean.%.model: scripts/train/write-best.py _temp/mean_cv.GPR_%.csv
+	python3 $^ --target model -o $@
+
 _temp/best-config.mean.%.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%.csv
 	python3 $^ --target epoch -o $@
 
