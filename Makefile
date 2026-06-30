@@ -9,7 +9,6 @@ model/GPR.b.pt \
 model/GPR.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
-model/__init__.py \
 model/prior.py \
 model/gpr.py \
 model/gpqr.py \
