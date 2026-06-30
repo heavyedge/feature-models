@@ -117,14 +117,11 @@ _temp/quantiles_cv.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-quan
 
 # Model
 
-_temp/best-config.mean.%.model: scripts/train/write-best.py _temp/mean_cv.GPR_%.csv
-	python3 $^ --target model -o $@
-
 _temp/best-config.mean.%.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%.csv
 	python3 $^ --target epoch -o $@
 
-model/mean.%.pt: scripts/train/mean.py _temp/X.csv _temp/y.csv _temp/best-config.mean.%.model _temp/best-config.mean.%.epoch
-	python3 $(wordlist 1,3,$^) --target $* --model $(shell cat $(word 4,$^)) --num-epochs $(shell cat $(word 5,$^)) -o $@
+model/mean.%.pt: scripts/train/mean.py _temp/X.csv _temp/y.csv _temp/best-config.mean.%.epoch
+	python3 $(wordlist 1,3,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(word 4,$^)) -o $@
 
 _temp/GPQR.H.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 2706 -o $@
