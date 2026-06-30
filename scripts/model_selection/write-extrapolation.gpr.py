@@ -6,7 +6,7 @@ import sys
 
 import pandas as pd
 import torch
-from cv import cross_validate_gpr, split_extrapolate_data
+from cv import quantiles_cv_gpr, split_extrapolate_data
 from gpytorch.likelihoods import GaussianLikelihood
 
 logging.basicConfig(
@@ -81,7 +81,7 @@ model = model_cls(
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
-ev = cross_validate_gpr(
+ev = quantiles_cv_gpr(
     x_train_ev,
     y_train_ev,
     x_test_ev,

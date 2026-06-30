@@ -8,8 +8,8 @@ from sklearn.preprocessing import MinMaxScaler
 __all__ = [
     "split_data",
     "split_extrapolate_data",
-    "cross_validate",
-    "cross_validate_gpr",
+    "quantiles_cv_gpqr",
+    "quantiles_cv_gpr",
 ]
 
 
@@ -59,7 +59,7 @@ def split_extrapolate_data(X, y, ratio, device):
     return x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins
 
 
-def cross_validate(
+def quantiles_cv_gpqr(
     x_train,
     y_train,
     x_test,
@@ -110,7 +110,7 @@ def cross_validate(
     return np.array(test_losses_per_fold)
 
 
-def cross_validate_gpr(
+def quantiles_cv_gpr(
     x_train,
     y_train,
     x_test,

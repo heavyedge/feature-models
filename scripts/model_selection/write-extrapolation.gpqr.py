@@ -6,7 +6,7 @@ import sys
 
 import pandas as pd
 import torch
-from cv import cross_validate, split_extrapolate_data
+from cv import quantiles_cv_gpqr, split_extrapolate_data
 from gpytorch_qr.likelihoods import MultitaskCenterGapQuantileGPLikelihood
 
 logging.basicConfig(
@@ -108,7 +108,7 @@ likelihood = MultitaskCenterGapQuantileGPLikelihood(
     learn_scales=True,
 ).to(device)
 
-ev = cross_validate(
+ev = quantiles_cv_gpqr(
     x_train_ev,
     y_train_ev,
     x_test_ev,
