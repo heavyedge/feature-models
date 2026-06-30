@@ -80,10 +80,10 @@ _temp/X-test2.csv: scripts/data/write-Xtest.py _temp/X.csv
 # Model selection
 
 _temp/crossing.DirectLmcMtgpqr_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/X-test1.csv _temp/X-test2.csv
-	python3 $^ --model DirectLmcMtgpqr --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --model DirectLmcMtgpqr_$* --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/crossing.DirectIndependentMtgpqr_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/X-test1.csv _temp/X-test2.csv
-	python3 $^ --model DirectIndependentMtgpqr --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --model DirectIndependentMtgpqr_$* --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 # Model
 

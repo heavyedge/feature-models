@@ -81,8 +81,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 model_module = importlib.import_module(MODEL_MODULE_PATH.name)
-MODEL_NAME = "_".join([args.model, args.target])
-model_cls = getattr(model_module, MODEL_NAME)
+model_cls = getattr(model_module, args.model)
 
 scaler = MinMaxScaler()
 X = scaler.fit_transform(pd.read_csv(args.X).drop(columns="Slurry").values)
