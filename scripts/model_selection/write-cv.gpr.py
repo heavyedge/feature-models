@@ -6,7 +6,7 @@ import sys
 
 import pandas as pd
 import torch
-from cv import cross_validate_gpr, split_extrapolate_data
+from cv import cross_validate_gpr, split_data
 from gpytorch.likelihoods import GaussianLikelihood
 
 logging.basicConfig(
@@ -30,10 +30,10 @@ parser.add_argument(
 parser.add_argument("--model", required=True)
 parser.add_argument("--target", required=True)
 parser.add_argument(
-    "--split-ratio",
-    type=float,
+    "--num-folds",
+    type=int,
     required=True,
-    help="Ratio for splitting the data into training and testing sets.",
+    help="Number of folds for cross-validation.",
 )
 parser.add_argument(
     "--quantiles",
@@ -62,8 +62,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 X = pd.read_csv(args.X).drop(columns="Slurry").values
 y = pd.read_csv(args.y)[args.target].values
 
-x_train_ev, y_train_ev, x_test_ev, y_test_ev, x_scales_ev, x_mins_ev = (
-    split_extrapolate_data(X, y, args.split_ratio, device)
+x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins = split_data(
+    X, y, args.num_folds, device
 )
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
@@ -71,21 +71,23 @@ sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 model_cls = getattr(model_module, args.model)
 
-likelihood = GaussianLikelihood(batch_shape=torch.Size([1])).to(device)
+likelihood = GaussianLikelihood(batch_shape=torch.Size([args.num_folds])).to(device)
 model = model_cls(
-    x_train_ev.clone().detach(),
-    y_train_ev.clone().detach(),
+    x_train_cv.clone().detach(),
+    y_train_cv.clone().detach(),
     likelihood,
-    batch_shape=torch.Size([1]),
+    X_scale=x_scales,
+    X_min=x_mins,
+    batch_shape=torch.Size([args.num_folds]),
 ).to(device)
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
-ev = cross_validate_gpr(
-    x_train_ev,
-    y_train_ev,
-    x_test_ev,
-    y_test_ev,
+cv = cross_validate_gpr(
+    x_train_cv,
+    y_train_cv,
+    x_test_cv,
+    y_test_cv,
     quantiles,
     model,
     likelihood,
@@ -93,4 +95,4 @@ ev = cross_validate_gpr(
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
 
-pd.DataFrame(ev).to_csv(args.out, index=False)
+pd.DataFrame(cv).to_csv(args.out, index=False)

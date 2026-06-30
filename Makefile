@@ -33,10 +33,10 @@ test:
 notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv _temp/crossing.DirectLmcMtgpqr_%.csv _temp/crossing.DirectIndependentMtgpqr_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.GPR_%.csv _temp/extrapolation.GPR_%_ConstantMean.csv FORCE
+notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.GPR_%.csv _temp/extrapolation.GPR_%_ConstantMean.csv _temp/extrapolation.CgLmcMtgpqr_%.csv _temp/extrapolation.CgLmcMtgpqr_%_ConstantMean.csv _temp/extrapolation.CgIndependentMtgpqr_%.csv _temp/extrapolation.CgIndependentMtgpqr_%_ConstantMean.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.csv _temp/cv.CgLmcMtgpqr_%.csv _temp/cv.CgIndependentMtgpqr_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/GPR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.b.pt model/GPR.phi.pt FORCE
@@ -86,10 +86,31 @@ _temp/crossing.DirectIndependentMtgpqr_%.csv: scripts/model_selection/write-cros
 	python3 $^ --model DirectIndependentMtgpqr_$* --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/extrapolation.GPR_%.csv: scripts/model_selection/write-extrapolation.gpr.py _temp/X.csv _temp/y.csv
-	python3 $^ --model GPR_$* --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) --split-ratio=0.8 -o $@
+	python3 $^ --model GPR_$* --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/extrapolation.GPR_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.gpr.py _temp/X.csv _temp/y.csv
-	python3 $^ --model GPR_$* --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) --split-ratio=0.8 -o $@
+	python3 $^ --model GPR_$*_ConstantMean --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.CgLmcMtgpqr_%.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgLmcMtgpqr_$* --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.CgLmcMtgpqr_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgLmcMtgpqr_$*_ConstantMean --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgIndependentMtgpqr_$* --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.CgIndependentMtgpqr_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgIndependentMtgpqr_$*_ConstantMean --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/cv.GPR_%.csv: scripts/model_selection/write-cv.gpr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model GPR_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/cv.CgLmcMtgpqr_%.csv: scripts/model_selection/write-cv.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgLmcMtgpqr_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/cv.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-cv.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgIndependentMtgpqr_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 # Model
 

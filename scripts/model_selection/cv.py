@@ -69,6 +69,7 @@ def cross_validate(
     likelihood,
     n_epochs,
     learning_rate=0.001,
+    logger=lambda msg: None,
 ):
     mll = VariationalELBO(likelihood, model, num_data=y_train.shape[1])
     optimizer = torch.optim.Adam(
@@ -77,7 +78,7 @@ def cross_validate(
     )
 
     test_losses_per_fold = []
-    for _ in range(n_epochs):
+    for i in range(n_epochs):
         model.train()
         likelihood.train()
         output = model(x_train)
@@ -103,6 +104,8 @@ def cross_validate(
                     pinball_losses.append(test_loss)
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses_per_fold.append(epoch_fold_losses)
+
+        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
 
     return np.array(test_losses_per_fold)
 
@@ -150,6 +153,6 @@ def cross_validate_gpr(
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses_per_fold.append(epoch_fold_losses)
 
-        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.item():.4f}")
+        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
 
     return np.array(test_losses_per_fold)
