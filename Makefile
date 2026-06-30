@@ -61,6 +61,25 @@ _temp/X.csv: scripts/data/write-X.py _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'b', 'phi']].to_csv('$@', index=False)"
 
+_temp/X-pred.csv: scripts/data/write-Xpred.py _temp/X.csv
+	python3 $^ -o $@
+
+_temp/X.npy: _temp/X.csv
+	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
+
+_temp/X-pred.npy: _temp/X-pred.csv
+	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<', index_col=[0,1,2]); shape = [df.index.get_level_values(i).nunique() for i in range(df.index.nlevels)]; np.save('$@', df.to_numpy().reshape(*shape, -1))"
+
+_temp/X-test1.csv: scripts/data/write-Xtest.py _temp/X.csv
+	python3 $^ --start=0 --stop=1 --num=10 -o $@
+
+_temp/X-test2.csv: scripts/data/write-Xtest.py _temp/X.csv
+	python3 $^ --start=-2 --stop=2 --num=10 -o $@
+
+# Model selection
+
+# Model
+
 model/GPR.%.pt: scripts/train/gpr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target $* -o $@
 
@@ -76,14 +95,7 @@ model/%.pt: _temp/%.pt
 model/%.py: scripts/model/%.py
 	cp $< $@
 
-_temp/X-pred.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ -o $@
-
-_temp/X.npy: _temp/X.csv
-	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
-
-_temp/X-pred.npy: _temp/X-pred.csv
-	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<', index_col=[0,1,2]); shape = [df.index.get_level_values(i).nunique() for i in range(df.index.nlevels)]; np.save('$@', df.to_numpy().reshape(*shape, -1))"
+# Window prediction
 
 _temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy model/GPQR.%.pt
 	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
@@ -102,12 +114,3 @@ _temp/joint_probability.X-pred.npz: scripts/joint/write-joint.py _temp/X.csv _te
 
 _temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X-pred.csv
 	python3 $^ -o $@
-
-_temp/window.H.npy: _temp/y.csv
-	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<')['H'].apply(lambda x: x <= 1.1).to_numpy())"
-
-_temp/window.phi.npy: _temp/y.csv
-	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<')['phi'].apply(lambda x: x <= 1.0).to_numpy())"
-
-_temp/window.npy: _temp/window.H.npy _temp/window.phi.npy
-	python3 -c "import numpy as np; qw = np.all([np.load(f) for f in '$^'.split(' ')], axis=0).flatten(); np.save('$@', qw)"
