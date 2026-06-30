@@ -78,7 +78,7 @@ def quantiles_cv_gpqr(
         lr=learning_rate,
     )
 
-    test_losses_per_fold = []
+    test_losses = []
     for i in range(n_epochs):
         model.train()
         likelihood.train()
@@ -92,27 +92,16 @@ def quantiles_cv_gpqr(
         model.eval()
         likelihood.eval()
         with torch.no_grad():
-            output = model.mean_quantiles_delta(x_test)  # (K, N, Q)
-            epoch_fold_losses = []
-            for y_test_fold, output_fold in zip(y_test, output):
-                pinball_losses = []
-                for j, q in enumerate(quantiles):
-                    test_loss = mean_pinball_loss(
-                        y_test_fold.cpu().numpy(),
-                        output_fold[:, j].cpu().numpy(),
-                        alpha=q.item(),
-                    )
-                    pinball_losses.append(test_loss)
-                epoch_fold_losses.append(np.mean(pinball_losses))
-            test_losses_per_fold.append(epoch_fold_losses)
+            test_loss = -mll(model(x_test), y_test)
+            test_losses.append(test_loss.detach().cpu().numpy())
 
         logger(
             f"Epoch {i+1}/{n_epochs}, "
             f"Train Loss: {train_loss.mean().item():.4f}, "
-            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+            f"Mean test loss: {test_loss.mean().item():.4f}"
         )
 
-    return np.array(test_losses_per_fold)
+    return np.array(test_losses)
 
 
 def mean_cv_gpr(
