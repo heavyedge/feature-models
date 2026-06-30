@@ -20,9 +20,9 @@ from .gpr import (
 )
 
 __all__ = [
-    "load_gpr_H",
-    "load_gpr_b",
-    "load_gpr_phi",
+    "load_mean_H",
+    "load_mean_b",
+    "load_mean_phi",
     "load_gpqr_H",
     "load_gpqr_phi",
 ]
@@ -66,7 +66,7 @@ def _load_model(model_class, path, device=None):
     return model, likelihood, scaler
 
 
-def load_gpr_H(path=None, device=None):
+def load_mean_H(path=None, device=None):
     """Return GPR model for H.
 
     Parameters
@@ -85,14 +85,14 @@ def load_gpr_H(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "GPR.H.pt"
+        path = Path(__file__).parent / "mean.H.pt"
     model, likelihood, scaler = _load_model(GPR_H, path, device=device)
     model.to(device)
     model.eval()
     return model, likelihood, scaler
 
 
-def load_gpr_b(path=None, device=None):
+def load_mean_b(path=None, device=None):
     """Return GPR model for b.
 
     Parameters
@@ -111,14 +111,14 @@ def load_gpr_b(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "GPR.b.pt"
+        path = Path(__file__).parent / "mean.b.pt"
     model, likelihood, scaler = _load_model(GPR_b, path, device=device)
     model.to(device)
     model.eval()
     return model, likelihood, scaler
 
 
-def load_gpr_phi(path=None, device=None):
+def load_mean_phi(path=None, device=None):
     """Return GPR model for phi.
 
     Parameters
@@ -137,7 +137,7 @@ def load_gpr_phi(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "GPR.phi.pt"
+        path = Path(__file__).parent / "mean.phi.pt"
     model, likelihood, scaler = _load_model(GPR_phi, path, device=device)
     model.to(device)
     model.eval()

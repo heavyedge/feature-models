@@ -6,9 +6,9 @@ HEAVYEDGE_N_EPOCHS ?= 10000
 .PHONY: all notebooks clean test FORCE
 
 all: \
-model/GPR.H.pt \
-model/GPR.b.pt \
-model/GPR.phi.pt \
+model/mean.H.pt \
+model/mean.b.pt \
+model/mean.phi.pt \
 model/GPQR.H.pt \
 model/GPQR.phi.pt \
 model/prior.py \
@@ -22,9 +22,9 @@ clean:
 	rm -rf _temp _artifacts model/*.pt model/*.py
 
 test:
-	python3 -c "from model.load import load_gpr_H; load_gpr_H()"
-	python3 -c "from model.load import load_gpr_b; load_gpr_b()"
-	python3 -c "from model.load import load_gpr_phi; load_gpr_phi()"
+	python3 -c "from model.load import load_mean_H; load_mean_H()"
+	python3 -c "from model.load import load_mean_b; load_mean_b()"
+	python3 -c "from model.load import load_mean_phi; load_mean_phi()"
 	python3 -c "from model.load import load_gpqr_H; load_gpqr_H()"
 	python3 -c "from model.load import load_gpqr_phi; load_gpqr_phi()"
 
@@ -39,7 +39,7 @@ notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.GPR
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/quantiles_cv.GPR_%.csv _temp/quantiles_cv.CgLmcMtgpqr_%.csv _temp/quantiles_cv.CgIndependentMtgpqr_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/GPR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.b.pt model/GPR.phi.pt FORCE
+notebooks/Mean.ipynb: _temp/X.csv _temp/y.csv model/mean.H.pt model/mean.b.pt model/mean.phi.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
@@ -123,7 +123,7 @@ _temp/best-config.mean.%.model: scripts/train/write-best.py _temp/mean_cv.GPR_%.
 _temp/best-config.mean.%.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%.csv
 	python3 $^ --target epoch -o $@
 
-model/GPR.%.pt: scripts/train/gpr.py _temp/X.csv _temp/y.csv _temp/best-config.mean.%.model _temp/best-config.mean.%.epoch
+model/mean.%.pt: scripts/train/mean.py _temp/X.csv _temp/y.csv _temp/best-config.mean.%.model _temp/best-config.mean.%.epoch
 	python3 $(wordlist 1,3,$^) --target $* --model $(shell cat $(word 4,$^)) --num-epochs $(shell cat $(word 5,$^)) -o $@
 
 _temp/GPQR.H.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv

@@ -106,7 +106,11 @@ def quantiles_cv_gpqr(
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses_per_fold.append(epoch_fold_losses)
 
-        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+        )
 
     return np.array(test_losses_per_fold)
 
@@ -125,7 +129,7 @@ def mean_cv_gpr(
     mll = ExactMarginalLogLikelihood(likelihood, model)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    test_losses_per_fold = []
+    test_losses = []
     for i in range(n_epochs):
         model.train()
         likelihood.train()
@@ -139,16 +143,16 @@ def mean_cv_gpr(
         model.eval()
         likelihood.eval()
         with torch.no_grad():
-            output = model(x_test).mean
-            epoch_fold_losses = []
-            for y_test_fold, output_fold in zip(y_test, output):
-                test_loss = torch.mean((y_test_fold - output_fold) ** 2).item()
-                epoch_fold_losses.append(test_loss)
-            test_losses_per_fold.append(epoch_fold_losses)
+            test_loss = -mll(model(x_test), y_test)
+            test_losses.append(test_loss.item())
 
-        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test loss: {test_loss.mean().item():.4f}"
+        )
 
-    return np.array(test_losses_per_fold)
+    return np.array(test_losses)
 
 
 def quantiles_cv_gpr(
@@ -194,6 +198,10 @@ def quantiles_cv_gpr(
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses_per_fold.append(epoch_fold_losses)
 
-        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+        )
 
     return np.array(test_losses_per_fold)
