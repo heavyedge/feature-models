@@ -15,6 +15,7 @@ def quantile_crossing(
     likelihood,
     n_epochs,
     learning_rate=0.001,
+    logger=lambda msg: None,
 ):
     mll = VariationalELBO(likelihood, model, num_data=len(y_train))
     optimizer = torch.optim.Adam(
@@ -49,5 +50,7 @@ def quantile_crossing(
                     -quantile_diff[crossing].sum() / quantile_diff.numel()
                 ).item()
                 max_crossings[i, j] = (-quantile_diff).clip(0).max().item()
+
+        logger(f"Epoch {j+1}/{n_epochs}, Loss: {loss.item():.4f}")
 
     return crossing_rates, mean_crossings, max_crossings

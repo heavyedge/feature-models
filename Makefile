@@ -1,5 +1,7 @@
 NOTEBOOKS := $(wildcard notebooks/*)
+HEAVYEDGE_N_EPOCHS ?= 10000
 
+.SECONDARY:
 .ONESHELL:
 .PHONY: all notebooks clean test FORCE
 
@@ -28,7 +30,7 @@ test:
 
 # Notebooks
 
-notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv _temp/crossing.DirectLmcMtgpqr_%.csv _temp/crossing.DirectIndependentMtgpqr_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv FORCE
@@ -76,6 +78,12 @@ _temp/X-test2.csv: scripts/data/write-Xtest.py _temp/X.csv
 	python3 $^ --start=-2 --stop=2 --num=10 -o $@
 
 # Model selection
+
+_temp/crossing.DirectLmcMtgpqr_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/X-test1.csv _temp/X-test2.csv
+	python3 $^ --model DirectLmcMtgpqr --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/crossing.DirectIndependentMtgpqr_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/X-test1.csv _temp/X-test2.csv
+	python3 $^ --model DirectIndependentMtgpqr --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 # Model
 
