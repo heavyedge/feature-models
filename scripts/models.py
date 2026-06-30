@@ -1,7 +1,7 @@
 from .model.gpqr import *  # NOQA
+from .model.gpqr_other import *  # NOQA
 from .model.gpr import *  # NOQA
-from .other_model.gpqr import *  # NOQA
-from .other_model.gpr import *  # NOQA
+from .model.gpr_other import *  # NOQA
 
 __all__ = [  # NOQA
     "GPR_H",
