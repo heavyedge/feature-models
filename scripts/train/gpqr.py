@@ -18,7 +18,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.gpqr")
+model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
