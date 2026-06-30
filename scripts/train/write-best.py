@@ -1,0 +1,37 @@
+import argparse
+import pathlib
+
+import pandas as pd
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "cv",
+    type=pathlib.Path,
+    nargs="+",
+    help="Cross-validation CSV files.",
+)
+parser.add_argument(
+    "--target",
+    required=True,
+    choices=["model", "epoch"],
+    help="Target config.",
+)
+parser.add_argument(
+    "-o",
+    "--out",
+    type=pathlib.Path,
+    help="Output file for the best configuration.",
+)
+args = parser.parse_args()
+
+cv = [pd.read_csv(f).mean(axis=1) for f in args.cv]
+
+best_model_idx = cv.index(max(cv))
+
+best_epoch = cv[best_model_idx].argmax() + 1
+
+if args.target == "model":
+    raise NotImplementedError
+elif args.target == "epoch":
+    with open(args.out, "w") as f:
+        f.write(str(best_epoch))
