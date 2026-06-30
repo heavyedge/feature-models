@@ -127,8 +127,8 @@ class _Kernel_b(gpytorch.kernels.Kernel):
         return self.raw_changepoint
 
     def forward(self, x1, x2, diag=False, **params):
-        rgt1 = self.unscaler(x1)[..., 0]  # [..., N]
-        rgt2 = self.unscaler(x2)[..., 0]  # [..., M]
+        rgt1 = self.unscaler(x1.unsqueeze(-3)).squeeze(-3)[..., 0]  # [..., N]
+        rgt2 = self.unscaler(x2.unsqueeze(-3)).squeeze(-3)[..., 0]  # [..., M]
 
         s1 = torch.sigmoid(10 * (rgt1 - self.changepoint))
         s2 = torch.sigmoid(10 * (rgt2 - self.changepoint))
