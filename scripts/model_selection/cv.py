@@ -117,12 +117,13 @@ def cross_validate_gpr(
     likelihood,
     n_epochs,
     learning_rate=0.001,
+    logger=lambda msg: None,
 ):
     mll = ExactMarginalLogLikelihood(likelihood, model)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     test_losses_per_fold = []
-    for _ in range(n_epochs):
+    for i in range(n_epochs):
         model.train()
         likelihood.train()
         output = model(x_train)
@@ -148,5 +149,7 @@ def cross_validate_gpr(
                     pinball_losses.append(test_loss)
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses_per_fold.append(epoch_fold_losses)
+
+        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.item():.4f}")
 
     return np.array(test_losses_per_fold)
