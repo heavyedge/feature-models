@@ -144,7 +144,7 @@ def mean_cv_gpr(
         likelihood.eval()
         with torch.no_grad():
             test_loss = -mll(model(x_test), y_test)
-            test_losses.append(test_loss.item())
+            test_losses.append(test_loss.detach().cpu().numpy())
 
         logger(
             f"Epoch {i+1}/{n_epochs}, "
