@@ -9,6 +9,7 @@ __all__ = [
     "split_data",
     "split_extrapolate_data",
     "quantiles_cv_gpqr",
+    "mean_cv_gpr",
     "quantiles_cv_gpr",
 ]
 
@@ -103,6 +104,46 @@ def quantiles_cv_gpqr(
                     )
                     pinball_losses.append(test_loss)
                 epoch_fold_losses.append(np.mean(pinball_losses))
+            test_losses_per_fold.append(epoch_fold_losses)
+
+        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
+
+    return np.array(test_losses_per_fold)
+
+
+def mean_cv_gpr(
+    x_train,
+    y_train,
+    x_test,
+    y_test,
+    model,
+    likelihood,
+    n_epochs,
+    learning_rate=0.001,
+    logger=lambda msg: None,
+):
+    mll = ExactMarginalLogLikelihood(likelihood, model)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    test_losses_per_fold = []
+    for i in range(n_epochs):
+        model.train()
+        likelihood.train()
+        output = model(x_train)
+
+        train_loss = -mll(output, y_train)
+        train_loss.sum().backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        model.eval()
+        likelihood.eval()
+        with torch.no_grad():
+            output = model(x_test).mean
+            epoch_fold_losses = []
+            for y_test_fold, output_fold in zip(y_test, output):
+                test_loss = torch.mean((y_test_fold - output_fold) ** 2).item()
+                epoch_fold_losses.append(test_loss)
             test_losses_per_fold.append(epoch_fold_losses)
 
         logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")

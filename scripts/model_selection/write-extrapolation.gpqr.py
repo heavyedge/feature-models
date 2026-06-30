@@ -70,7 +70,7 @@ parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output csv file of quantile crossing.",
+    help="Output csv file of extrapolation CV.",
 )
 args = parser.parse_args()
 
