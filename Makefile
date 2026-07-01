@@ -9,8 +9,8 @@ all: \
 model/mean.H.pt \
 model/mean.b.pt \
 model/mean.phi.pt \
-model/GPQR.H.pt \
-model/GPQR.phi.pt \
+model/quantiles.H.pt \
+model/quantiles.phi.pt \
 model/prior.py \
 model/gpr.py \
 model/gpqr.py \
