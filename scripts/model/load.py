@@ -20,11 +20,11 @@ from .gpr import (
 )
 
 __all__ = [
-    "load_mean_H",
-    "load_mean_b",
-    "load_mean_phi",
-    "load_quantiles_H",
-    "load_quantiles_phi",
+    "load_H_mean",
+    "load_b_mean",
+    "load_phi_mean",
+    "load_H_quantiles",
+    "load_phi_quantiles",
 ]
 
 
@@ -66,7 +66,7 @@ def _load_model(model_class, path, device=None):
     return model, likelihood, scaler
 
 
-def load_mean_H(path=None, device=None):
+def load_H_mean(path=None, device=None):
     """Return GPR model for H.
 
     Parameters
@@ -85,14 +85,14 @@ def load_mean_H(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "mean.H.pt"
+        path = Path(__file__).parent / "H.mean.pt"
     model, likelihood, scaler = _load_model(GPR_H, path, device=device)
     model.to(device)
     model.eval()
     return model, likelihood, scaler
 
 
-def load_mean_b(path=None, device=None):
+def load_b_mean(path=None, device=None):
     """Return GPR model for b.
 
     Parameters
@@ -111,14 +111,14 @@ def load_mean_b(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "mean.b.pt"
+        path = Path(__file__).parent / "b.mean.pt"
     model, likelihood, scaler = _load_model(GPR_b, path, device=device)
     model.to(device)
     model.eval()
     return model, likelihood, scaler
 
 
-def load_mean_phi(path=None, device=None):
+def load_phi_mean(path=None, device=None):
     """Return GPR model for phi.
 
     Parameters
@@ -137,14 +137,14 @@ def load_mean_phi(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "mean.phi.pt"
+        path = Path(__file__).parent / "phi.mean.pt"
     model, likelihood, scaler = _load_model(GPR_phi, path, device=device)
     model.to(device)
     model.eval()
     return model, likelihood, scaler
 
 
-def load_quantiles_H(path=None, device=None):
+def load_H_quantiles(path=None, device=None):
     """Return GPQR model for H.
 
     Parameters
@@ -165,7 +165,7 @@ def load_quantiles_H(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "quantiles.H.pt"
+        path = Path(__file__).parent / "H.quantiles.pt"
     checkpoint = torch.load(path, map_location=device, weights_only=False)
     quantiles = checkpoint["quantiles"]
 
@@ -175,7 +175,7 @@ def load_quantiles_H(path=None, device=None):
     return quantiles, model, likelihood, scaler
 
 
-def load_quantiles_phi(path=None, device=None):
+def load_phi_quantiles(path=None, device=None):
     """Return GPQR model for phi.
 
     Parameters
@@ -196,7 +196,7 @@ def load_quantiles_phi(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "quantiles.phi.pt"
+        path = Path(__file__).parent / "phi.quantiles.pt"
     checkpoint = torch.load(path, map_location=device, weights_only=False)
     quantiles = checkpoint["quantiles"]
 

@@ -28,8 +28,8 @@ args = parser.parse_args()
 models = [f.stem.split(".")[1] for f in args.cv]
 cvs = [pd.read_csv(f).mean(axis=1) for f in args.cv]
 
-best_model_idx = np.argmax([cv.max() for cv in cvs])
-best_epoch = cvs[best_model_idx].argmax() + 1
+best_model_idx = np.argmin([cv.min() for cv in cvs])
+best_epoch = cvs[best_model_idx].idxmin() + 1
 
 if args.target == "model":
     with open(args.out, "w") as f:
