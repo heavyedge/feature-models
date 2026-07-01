@@ -14,11 +14,8 @@ from .gpqr import (
     CgLmcMtgpqr_H,
 )
 from .gpr import (
-    GPR_H,
     GPR_H_2,
-    GPR_b,
     GPR_b_2,
-    GPR_phi,
     GPR_phi_2,
 )
 from .prior import (
@@ -32,9 +29,6 @@ from .scale import (
 )
 
 __all__ = [
-    "load_H_mean",
-    "load_b_mean",
-    "load_phi_mean",
     "load_H_mean2",
     "load_b_mean2",
     "load_phi_mean2",
@@ -78,84 +72,6 @@ def _load_model(model_class, path, device=None):
         model.to(device)
         likelihood.to(device)
     scaler = checkpoint["scaler"]
-    return model, likelihood, scaler
-
-
-def load_H_mean(path=None, device=None):
-    """Return GPR model for H.
-
-    Parameters
-    ----------
-    path : str or Path, optional
-    device : torch.device, optional
-        Device to run the model on. If None, uses CUDA if available, else CPU.
-
-    Returns
-    -------
-    model : gpytorch.models.ExactGP
-    likelihood : gpytorch.likelihoods.GaussianLikelihood
-    scaler : sklearn scaler
-    """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if path is None:
-        path = Path(__file__).parent / "H.mean.pt"
-    model, likelihood, scaler = _load_model(GPR_H, path, device=device)
-    model.to(device)
-    model.eval()
-    return model, likelihood, scaler
-
-
-def load_b_mean(path=None, device=None):
-    """Return GPR model for b.
-
-    Parameters
-    ----------
-    path : str or Path, optional
-    device : torch.device, optional
-        Device to run the model on. If None, uses CUDA if available, else CPU.
-
-    Returns
-    -------
-    model : gpytorch.models.ExactGP
-    likelihood : gpytorch.likelihoods.GaussianLikelihood
-    scaler : sklearn scaler
-    """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if path is None:
-        path = Path(__file__).parent / "b.mean.pt"
-    model, likelihood, scaler = _load_model(GPR_b, path, device=device)
-    model.to(device)
-    model.eval()
-    return model, likelihood, scaler
-
-
-def load_phi_mean(path=None, device=None):
-    """Return GPR model for phi.
-
-    Parameters
-    ----------
-    path : str or Path, optional
-    device : torch.device, optional
-        Device to run the model on. If None, uses CUDA if available, else CPU.
-
-    Returns
-    -------
-    model : gpytorch.models.ExactGP
-    likelihood : gpytorch.likelihoods.GaussianLikelihood
-    scaler : sklearn scaler
-    """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if path is None:
-        path = Path(__file__).parent / "phi.mean.pt"
-    model, likelihood, scaler = _load_model(GPR_phi, path, device=device)
-    model.to(device)
-    model.eval()
     return model, likelihood, scaler
 
 

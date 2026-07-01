@@ -26,6 +26,10 @@ class MinMaxScaler(torch.nn.Module):
         X_scale = self.X_max - self.X_min
         return (x - self.X_min.unsqueeze(-2)) / X_scale.unsqueeze(-2)
 
+    def inverse_transform(self, x):
+        X_scale = self.X_max - self.X_min
+        return x * X_scale.unsqueeze(-2) + self.X_min.unsqueeze(-2)
+
 
 class StandardScaler(torch.nn.Module):
     """Standard scaling.
@@ -45,3 +49,6 @@ class StandardScaler(torch.nn.Module):
             self.register_buffer("X_mean", x.mean(dim=-2))
             self.register_buffer("X_scale", x.std(dim=-2))
         return (x - self.X_mean.unsqueeze(-2)) / self.X_scale.unsqueeze(-2)
+
+    def inverse_transform(self, x):
+        return x * self.X_scale.unsqueeze(-2) + self.X_mean.unsqueeze(-2)
