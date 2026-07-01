@@ -12,7 +12,9 @@ __all__ = [
     "mean_cv_gpr",
     "quantiles_cv_gpr",
     "split_data2",
+    "split_extrapolate_data2",
     "mean_cv_gpr2",
+    "quantiles_cv_gpr2",
 ]
 
 
@@ -227,6 +229,26 @@ def split_data2(X, y, n_folds, device, random_state=42):
     return (x_train, y_train, x_test, y_test)
 
 
+def split_extrapolate_data2(X, y, ratio, device):
+    scaler = MinMaxScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    center = np.full(X_scaled.shape[1], 0.5)
+    distances = np.linalg.norm(X_scaled - center, axis=1)
+
+    threshold = np.quantile(distances, ratio)
+    train_idx = np.where(distances <= threshold)[0]
+    test_idx = np.where(distances > threshold)[0]
+
+    # Add singleton batch dimension
+    x_train = torch.tensor(X_scaled[train_idx]).float().to(device).unsqueeze(0)
+    y_train = torch.tensor(y[train_idx]).float().to(device).unsqueeze(0)
+    x_test = torch.tensor(X_scaled[test_idx]).float().to(device).unsqueeze(0)
+    y_test = torch.tensor(y[test_idx]).float().to(device).unsqueeze(0)
+
+    return x_train, y_train, x_test, y_test
+
+
 def mean_cv_gpr2(
     x_train,  # (*B, N_train, D)
     y_train,  # (*B, N_train, 1)
@@ -297,6 +319,92 @@ def mean_cv_gpr2(
             f"Epoch {i+1}/{n_epochs}, "
             f"Train Loss: {train_loss.mean().item():.4f}, "
             f"Mean test loss: {test_loss.mean().item():.4f}"
+        )
+
+    return np.array(test_losses)
+
+
+def quantiles_cv_gpr2(
+    x_train,  # (*B, N_train, D)
+    y_train,  # (*B, N_train, 1)
+    x_test,  # (*B, N_test, D)
+    y_test,  # (*B, N_test, 1)
+    x_scaler,
+    y_scaler,
+    mean,
+    model,
+    likelihood,
+    quantiles,
+    n_epochs,
+    learning_rate=0.001,
+    logger=lambda msg: None,
+):
+    mll = ExactMarginalLogLikelihood(likelihood, model)
+    optimizer = torch.optim.Adam(
+        list(x_scaler.parameters())
+        + list(y_scaler.parameters())
+        + list(mean.parameters())
+        + list(model.parameters()),
+        lr=learning_rate,
+    )
+
+    test_losses = []
+    for i in range(n_epochs):
+        x_scaler.train()
+        y_scaler.train()
+        mean.train()
+        model.train()
+        likelihood.train()
+        optimizer.zero_grad()
+
+        train_x_scaled = x_scaler(x_train)
+        train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+        model.set_train_data(
+            inputs=train_x_scaled.detach(),
+            targets=train_res.detach(),
+            strict=False,
+        )
+        train_output = model(train_x_scaled)
+        train_loss = -mll(train_output, train_res)
+        train_loss.sum().backward()
+        optimizer.step()
+
+        with torch.no_grad():
+            x_scaler.train()
+            y_scaler.train()
+            train_x_scaled = x_scaler(x_train)
+            train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+            model.set_train_data(
+                inputs=train_x_scaled,
+                targets=train_res,
+                strict=False,
+            )
+
+        mean.eval()
+        x_scaler.eval()
+        y_scaler.eval()
+        model.eval()
+        likelihood.eval()
+        with torch.no_grad():
+            test_output = model.quantiles(x_scaler(x_test), quantiles)
+            test_res = y_scaler(y_test - mean(x_test)).squeeze(-1)
+            epoch_fold_losses = []
+            for test_res_fold, output_fold in zip(test_res, test_output):
+                pinball_losses = []
+                for j, q in enumerate(quantiles):
+                    test_loss = mean_pinball_loss(
+                        test_res_fold.cpu().numpy(),
+                        output_fold[:, j].cpu().numpy(),
+                        alpha=q.item(),
+                    )
+                    pinball_losses.append(test_loss)
+                epoch_fold_losses.append(np.mean(pinball_losses))
+            test_losses.append(epoch_fold_losses)
+
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
         )
 
     return np.array(test_losses)
