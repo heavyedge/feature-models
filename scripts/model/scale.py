@@ -1,11 +1,11 @@
 import torch
 
 __all__ = [
-    "Scaler",
+    "MinMaxScaler",
 ]
 
 
-class Scaler(torch.nn.Module):
+class MinMaxScaler(torch.nn.Module):
     """Min-max-scaling.
 
     Parameters

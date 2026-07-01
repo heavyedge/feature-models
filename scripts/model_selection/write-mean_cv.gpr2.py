@@ -71,7 +71,7 @@ else:
     mean_class = ZeroMean
 mean = mean_class(batch_shape=torch.Size([args.num_folds])).to(device)
 
-scaler = model_module.Scaler(x_scales, x_mins).to(device)
+scaler = model_module.MinMaxScaler(x_scales, x_mins).to(device)
 X_scaled = scaler(x_train_cv)
 
 model_class = getattr(model_module, args.model)

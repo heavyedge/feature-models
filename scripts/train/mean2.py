@@ -56,7 +56,7 @@ mean = mean_class().to(device)
 _scaler = MinMaxScaler().fit(X.cpu().numpy())
 X_scale = torch.tensor(_scaler.scale_).float()
 X_min = torch.tensor(_scaler.min_).float()
-scaler = model_module.Scaler(X_scale, X_min).to(device)
+scaler = model_module.MinMaxScaler(X_scale, X_min).to(device)
 X_scaled = scaler(X)
 
 model_class = getattr(model_module, args.model)
