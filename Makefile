@@ -26,7 +26,7 @@ test:
 	python3 -c "from model.load import load_H_quantiles; load_H_quantiles()"
 	python3 -c "from model.load import load_phi_quantiles; load_phi_quantiles()"
 
-all:
+all: models notebooks
 
 clean:
 	rm -rf _temp _artifacts model/*.pt model/*.py
