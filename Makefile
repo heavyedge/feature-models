@@ -1,15 +1,16 @@
 NOTEBOOKS := $(wildcard notebooks/*)
+HEAVYEDGE_N_EPOCHS ?= 10000
 
+.SECONDARY:
 .ONESHELL:
 .PHONY: all notebooks clean test FORCE
 
 all: \
-model/GPR.H.pt \
-model/GPR.b.pt \
-model/GPR.phi.pt \
-model/GPQR.H.pt \
-model/GPQR.phi.pt \
-model/__init__.py \
+model/H.mean.pt \
+model/b.mean.pt \
+model/phi.mean.pt \
+model/H.quantiles.pt \
+model/phi.quantiles.pt \
 model/prior.py \
 model/gpr.py \
 model/gpqr.py \
@@ -21,27 +22,27 @@ clean:
 	rm -rf _temp _artifacts model/*.pt model/*.py
 
 test:
-	python3 -c "from model.load import load_gpr_H; load_gpr_H()"
-	python3 -c "from model.load import load_gpr_b; load_gpr_b()"
-	python3 -c "from model.load import load_gpr_phi; load_gpr_phi()"
-	python3 -c "from model.load import load_gpqr_H; load_gpqr_H()"
-	python3 -c "from model.load import load_gpqr_phi; load_gpqr_phi()"
+	python3 -c "from model.load import load_H_mean; load_H_mean()"
+	python3 -c "from model.load import load_b_mean; load_b_mean()"
+	python3 -c "from model.load import load_phi_mean; load_phi_mean()"
+	python3 -c "from model.load import load_H_quantiles; load_H_quantiles()"
+	python3 -c "from model.load import load_phi_quantiles; load_phi_quantiles()"
 
 # Notebooks
 
-notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv _temp/crossing.DirectLmcMtgpqr_%.csv _temp/crossing.DirectIndependentMtgpqr_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.GPR_%.csv _temp/extrapolation.GPR_%_ConstantMean.csv _temp/extrapolation.CgLmcMtgpqr_%.csv _temp/extrapolation.CgLmcMtgpqr_%_ConstantMean.csv _temp/extrapolation.CgIndependentMtgpqr_%.csv _temp/extrapolation.CgIndependentMtgpqr_%_ConstantMean.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv FORCE
+notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/quantiles_cv.GPR_%.csv _temp/quantiles_cv.CgLmcMtgpqr_%.csv _temp/quantiles_cv.CgIndependentMtgpqr_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/GPR.ipynb: _temp/X.csv _temp/y.csv model/GPR.H.pt model/GPR.b.pt model/GPR.phi.pt FORCE
+notebooks/Mean.ipynb: _temp/X.csv _temp/y.csv model/H.mean.pt model/b.mean.pt model/phi.mean.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
+notebooks/Quantiles.%.ipynb: _temp/X.csv _temp/y.csv model/%.quantiles.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/Window.ipynb: _temp/X.csv _temp/X-pred.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
@@ -61,21 +62,6 @@ _temp/X.csv: scripts/data/write-X.py _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'b', 'phi']].to_csv('$@', index=False)"
 
-model/GPR.%.pt: scripts/train/gpr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target $* -o $@
-
-_temp/GPQR.H.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 2706 -o $@
-
-_temp/GPQR.phi.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9543 -o $@
-
-model/%.pt: _temp/%.pt
-	cp $< $@
-
-model/%.py: scripts/model/%.py
-	cp $< $@
-
 _temp/X-pred.csv: scripts/data/write-Xpred.py _temp/X.csv
 	python3 $^ -o $@
 
@@ -85,10 +71,76 @@ _temp/X.npy: _temp/X.csv
 _temp/X-pred.npy: _temp/X-pred.csv
 	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<', index_col=[0,1,2]); shape = [df.index.get_level_values(i).nunique() for i in range(df.index.nlevels)]; np.save('$@', df.to_numpy().reshape(*shape, -1))"
 
-_temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy model/GPQR.%.pt
+_temp/X-test1.csv: scripts/data/write-Xtest.py _temp/X.csv
+	python3 $^ --start=0 --stop=1 --num=10 -o $@
+
+_temp/X-test2.csv: scripts/data/write-Xtest.py _temp/X.csv
+	python3 $^ --start=-2 --stop=2 --num=10 -o $@
+
+# Model selection
+
+_temp/crossing.DirectLmcMtgpqr_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/X-test1.csv _temp/X-test2.csv
+	python3 $^ --model DirectLmcMtgpqr_$* --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/crossing.DirectIndependentMtgpqr_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/X-test1.csv _temp/X-test2.csv
+	python3 $^ --model DirectIndependentMtgpqr_$* --target $* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.GPR_%.csv: scripts/model_selection/write-extrapolation.gpr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model GPR_$* --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.GPR_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.gpr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model GPR_$*_ConstantMean --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.CgLmcMtgpqr_%.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgLmcMtgpqr_$* --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.CgLmcMtgpqr_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgLmcMtgpqr_$*_ConstantMean --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgIndependentMtgpqr_$* --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/extrapolation.CgIndependentMtgpqr_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgIndependentMtgpqr_$*_ConstantMean --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/mean_cv.GPR_%.csv: scripts/model_selection/write-mean_cv.gpr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model GPR_$* --target $* --num-folds=5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/quantiles_cv.GPR_%.csv: scripts/model_selection/write-quantiles_cv.gpr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model GPR_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/quantiles_cv.CgLmcMtgpqr_%.csv: scripts/model_selection/write-quantiles_cv.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgLmcMtgpqr_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+_temp/quantiles_cv.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-quantiles_cv.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --model CgIndependentMtgpqr_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
+# Model
+
+_temp/best-config.%.mean.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%.csv
+	python3 $^ --target epoch -o $@
+
+model/%.mean.pt: scripts/train/mean.py _temp/X.csv _temp/y.csv _temp/best-config.%.mean.epoch
+	python3 $(wordlist 1,3,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(word 4,$^)) -o $@
+
+_temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/quantiles_cv.GPR_%.csv _temp/quantiles_cv.CgLmcMtgpqr_%.csv _temp/quantiles_cv.CgIndependentMtgpqr_%.csv
+	python3 $^ --target epoch -o $@
+
+model/H.quantiles.pt: scripts/train/quantiles.py _temp/X.csv _temp/y.csv _temp/best-config.H.quantiles.epoch
+	python3 $(wordlist 1,3,$^) --target H --model CgLmcMtgpqr_H --num-epochs $(shell cat $(word 4,$^)) -o $@
+
+model/phi.quantiles.pt: scripts/train/quantiles.py _temp/X.csv _temp/y.csv _temp/best-config.phi.quantiles.epoch
+	python3 $(wordlist 1,3,$^) --target phi --model CgIndependentMtgpqr_phi --num-epochs $(shell cat $(word 4,$^)) -o $@
+
+model/%.py: scripts/model/%.py
+	cp $< $@
+
+# Window prediction
+
+_temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy model/%.quantiles.pt
 	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
 
-_temp/%.quantiles.X-pred.npz: scripts/predict/gpqr.py _temp/X-pred.npy model/GPQR.%.pt
+_temp/%.quantiles.X-pred.npz: scripts/predict/gpqr.py _temp/X-pred.npy model/%.quantiles.pt
 	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
 
 _temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles.X.npz _temp/H.quantiles.X-pred.npz
@@ -102,12 +154,3 @@ _temp/joint_probability.X-pred.npz: scripts/joint/write-joint.py _temp/X.csv _te
 
 _temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X-pred.csv
 	python3 $^ -o $@
-
-_temp/window.H.npy: _temp/y.csv
-	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<')['H'].apply(lambda x: x <= 1.1).to_numpy())"
-
-_temp/window.phi.npy: _temp/y.csv
-	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<')['phi'].apply(lambda x: x <= 1.0).to_numpy())"
-
-_temp/window.npy: _temp/window.H.npy _temp/window.phi.npy
-	python3 -c "import numpy as np; qw = np.all([np.load(f) for f in '$^'.split(' ')], axis=0).flatten(); np.save('$@', qw)"

@@ -18,7 +18,7 @@ from gpytorch_qr.means import CenterGapMean
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP, QuantileGP
 from gpytorch_qr.variational import CGLmcVariationalStrategy
 
-from ..model.prior import PriorMean_H, Unscaler
+from .prior import PriorMean_H, Unscaler
 
 __all__ = [
     "CgLmcMtgpqr_H_ConstantMean",

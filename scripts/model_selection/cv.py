@@ -8,8 +8,9 @@ from sklearn.preprocessing import MinMaxScaler
 __all__ = [
     "split_data",
     "split_extrapolate_data",
-    "cross_validate",
-    "cross_validate_gpr",
+    "quantiles_cv_gpqr",
+    "mean_cv_gpr",
+    "quantiles_cv_gpr",
 ]
 
 
@@ -59,7 +60,7 @@ def split_extrapolate_data(X, y, ratio, device):
     return x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins
 
 
-def cross_validate(
+def quantiles_cv_gpqr(
     x_train,
     y_train,
     x_test,
@@ -69,6 +70,7 @@ def cross_validate(
     likelihood,
     n_epochs,
     learning_rate=0.001,
+    logger=lambda msg: None,
 ):
     mll = VariationalELBO(likelihood, model, num_data=y_train.shape[1])
     optimizer = torch.optim.Adam(
@@ -77,7 +79,7 @@ def cross_validate(
     )
 
     test_losses_per_fold = []
-    for _ in range(n_epochs):
+    for i in range(n_epochs):
         model.train()
         likelihood.train()
         output = model(x_train)
@@ -104,10 +106,56 @@ def cross_validate(
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses_per_fold.append(epoch_fold_losses)
 
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+        )
+
     return np.array(test_losses_per_fold)
 
 
-def cross_validate_gpr(
+def mean_cv_gpr(
+    x_train,
+    y_train,
+    x_test,
+    y_test,
+    model,
+    likelihood,
+    n_epochs,
+    learning_rate=0.001,
+    logger=lambda msg: None,
+):
+    mll = ExactMarginalLogLikelihood(likelihood, model)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    test_losses = []
+    for i in range(n_epochs):
+        model.train()
+        likelihood.train()
+        output = model(x_train)
+
+        train_loss = -mll(output, y_train)
+        train_loss.sum().backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        model.eval()
+        likelihood.eval()
+        with torch.no_grad():
+            test_loss = -mll(model(x_test), y_test)
+            test_losses.append(test_loss.detach().cpu().numpy())
+
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test loss: {test_loss.mean().item():.4f}"
+        )
+
+    return np.array(test_losses)
+
+
+def quantiles_cv_gpr(
     x_train,
     y_train,
     x_test,
@@ -117,12 +165,13 @@ def cross_validate_gpr(
     likelihood,
     n_epochs,
     learning_rate=0.001,
+    logger=lambda msg: None,
 ):
     mll = ExactMarginalLogLikelihood(likelihood, model)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     test_losses_per_fold = []
-    for _ in range(n_epochs):
+    for i in range(n_epochs):
         model.train()
         likelihood.train()
         output = model(x_train)
@@ -148,5 +197,11 @@ def cross_validate_gpr(
                     pinball_losses.append(test_loss)
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses_per_fold.append(epoch_fold_losses)
+
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+        )
 
     return np.array(test_losses_per_fold)
