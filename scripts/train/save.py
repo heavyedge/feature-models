@@ -2,6 +2,7 @@ import torch
 
 __all__ = [
     "save_model",
+    "save_gpr2",
 ]
 
 
@@ -30,6 +31,28 @@ def save_model(
             "num_lower_quantiles": num_lower_quantiles,
             "num_latents": num_latents,
             "num_lower_latents": num_lower_latents,
+        },
+        path,
+    )
+
+
+def save_gpr2(
+    train_x,
+    train_y,
+    mean,
+    scaler,
+    model,
+    likelihood,
+    path,
+):
+    torch.save(
+        {
+            "train_x": train_x,
+            "train_y": train_y,
+            "mean_state_dict": mean.state_dict(),
+            "scaler_state_dict": scaler.state_dict(),
+            "model_state_dict": model.state_dict(),
+            "likelihood_state_dict": likelihood.state_dict(),
         },
         path,
     )

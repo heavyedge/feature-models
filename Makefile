@@ -140,6 +140,9 @@ model/phi.quantiles.pt: scripts/train/quantiles.py _temp/X.csv _temp/y.csv _temp
 model/%.py: scripts/model/%.py
 	cp $< $@
 
+_temp/H.mean2.pt: scripts/train/mean2.py _temp/X.csv _temp/y.csv
+	python3 $(wordlist 1,3,$^) --target H --model GPR_H_2 --prior-mean PriorMean_H_2 --num-epochs 10 -o $@
+
 # Window prediction
 
 _temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy model/%.quantiles.pt
