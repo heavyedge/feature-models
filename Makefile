@@ -123,6 +123,9 @@ _temp/best-config.mean.%.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%.
 model/mean.%.pt: scripts/train/mean.py _temp/X.csv _temp/y.csv _temp/best-config.mean.%.epoch
 	python3 $(wordlist 1,3,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(word 4,$^)) -o $@
 
+_temp/best-config.quantiles.%.epoch: scripts/train/write-best.py _temp/quantiles_cv.GPR_%.csv _temp/quantiles_cv.CgLmcMtgpqr_%.csv _temp/quantiles_cv.CgIndependentMtgpqr_%.csv
+	python3 $^ --target epoch -o $@
+
 _temp/GPQR.H.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv
 	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 2706 -o $@
 
