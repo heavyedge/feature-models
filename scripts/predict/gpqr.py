@@ -36,9 +36,9 @@ sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
 
 if args.target == "H":
-    loader = load_module.load_gpqr_H
+    loader = load_module.load_H_quantiles
 elif args.target == "phi":
-    loader = load_module.load_gpqr_phi
+    loader = load_module.load_phi_quantiles
 else:
     raise ValueError(f"Unknown target: {args.target}")
 
