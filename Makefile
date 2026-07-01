@@ -3,9 +3,9 @@ HEAVYEDGE_N_EPOCHS ?= 10000
 
 .SECONDARY:
 .ONESHELL:
-.PHONY: all notebooks clean test FORCE
+.PHONY: models notebooks test all clean FORCE
 
-all: \
+models: \
 model/H.mean.pt \
 model/b.mean.pt \
 model/phi.mean.pt \
@@ -18,15 +18,17 @@ model/load.py
 
 notebooks: $(NOTEBOOKS)
 
-clean:
-	rm -rf _temp _artifacts model/*.pt model/*.py
-
 test:
 	python3 -c "from model.load import load_H_mean; load_H_mean()"
 	python3 -c "from model.load import load_b_mean; load_b_mean()"
 	python3 -c "from model.load import load_phi_mean; load_phi_mean()"
 	python3 -c "from model.load import load_H_quantiles; load_H_quantiles()"
 	python3 -c "from model.load import load_phi_quantiles; load_phi_quantiles()"
+
+all:
+
+clean:
+	rm -rf _temp _artifacts model/*.pt model/*.py
 
 # Notebooks
 

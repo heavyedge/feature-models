@@ -17,7 +17,7 @@ RUN --mount=type=secret,id=hf_token,required=false \
     && hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
 
 
-FROM python:slim AS builder
+FROM python:slim AS build-models
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /workspace
 
@@ -32,10 +32,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 ARG HEAVYEDGE_N_EPOCHS
-RUN env ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make all notebooks
-
-
-FROM scratch AS output
-WORKDIR /
-
-COPY --from=builder /workspace/model /workspace/notebooks ./
+RUN env ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make models

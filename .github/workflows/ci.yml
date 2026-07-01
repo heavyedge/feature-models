@@ -64,7 +64,7 @@ jobs:
 
         - name: build models
           run: |
-            HEAVYEDGE_N_EPOCHS=1 make
+            HEAVYEDGE_N_EPOCHS=1 make models
 
         - name: test models in build environment
           run: make test
@@ -133,7 +133,7 @@ jobs:
             name: trained-models
             path: model
 
-        - run: HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make ${{ matrix.notebook }}
+        - run: HEAVYEDGE_N_EPOCHS=1 make ${{ matrix.notebook }}
 
   test-model:
 
@@ -173,13 +173,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build models in Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
-          target: output
-          outputs: type=local,dest=./
+          target: build-models
           build-args: |
             HEAVYEDGE_N_EPOCHS=1
           secrets: |
