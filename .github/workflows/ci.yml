@@ -64,7 +64,7 @@ jobs:
 
         - name: build models
           run: |
-            HEAVYEDGE_N_EPOCHS=1 HEAVYEDGE_N_TRIALS=1 HEAVYEDGE_N_POINTS=3 make
+            HEAVYEDGE_N_EPOCHS=1 make
 
         - name: test models in build environment
           run: make test
@@ -162,7 +162,7 @@ jobs:
         - name: test models in inference environment
           run: make test
 
-  build-image:
+  docker-build:
 
     runs-on: ubuntu-latest
 
@@ -178,5 +178,9 @@ jobs:
         with:
           context: .
           push: false
+          target: output
+          outputs: type=local,dest=./
+          build-args: |
+            HEAVYEDGE_N_EPOCHS=1
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
