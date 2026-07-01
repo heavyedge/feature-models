@@ -6,6 +6,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
+ENV PATH="/root/.local/bin:$PATH"
+
 RUN curl -LsSf https://hf.co/cli/install.sh | bash
 
 RUN --mount=type=secret,id=hf_token,required=false \
