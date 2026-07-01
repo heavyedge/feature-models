@@ -188,7 +188,7 @@ def mean_cv_gpr(
         optimizer.zero_grad()
 
         train_x_scaled = x_scaler(x_train)
-        train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+        train_res = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
         model.set_train_data(
             inputs=train_x_scaled.detach(),
             targets=train_res.detach(),
@@ -203,7 +203,7 @@ def mean_cv_gpr(
             x_scaler.train()
             y_scaler.train()
             train_x_scaled = x_scaler(x_train)
-            train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+            train_res = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
             model.set_train_data(
                 inputs=train_x_scaled,
                 targets=train_res,
@@ -217,7 +217,7 @@ def mean_cv_gpr(
         likelihood.eval()
         with torch.no_grad():
             test_output = model(x_scaler(x_test))
-            test_res = y_scaler(y_test - mean(x_test)).squeeze(-1)
+            test_res = y_scaler((y_test - mean(x_test)).unsqueeze(-1)).squeeze(-1)
             test_loss = -mll(test_output, test_res)
             test_losses.append(test_loss.detach().cpu().numpy())
 
@@ -264,7 +264,7 @@ def quantiles_cv_gpr(
         optimizer.zero_grad()
 
         train_x_scaled = x_scaler(x_train)
-        train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+        train_res = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
         model.set_train_data(
             inputs=train_x_scaled.detach(),
             targets=train_res.detach(),
@@ -279,7 +279,7 @@ def quantiles_cv_gpr(
             x_scaler.train()
             y_scaler.train()
             train_x_scaled = x_scaler(x_train)
-            train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+            train_res = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
             model.set_train_data(
                 inputs=train_x_scaled,
                 targets=train_res,
@@ -293,7 +293,7 @@ def quantiles_cv_gpr(
         likelihood.eval()
         with torch.no_grad():
             test_output = model.quantiles(x_scaler(x_test), quantiles)
-            test_res = y_scaler(y_test - mean(x_test)).squeeze(-1)
+            test_res = y_scaler((y_test - mean(x_test)).unsqueeze(-1)).squeeze(-1)
             epoch_fold_losses = []
             for test_res_fold, output_fold in zip(test_res, test_output):
                 pinball_losses = []

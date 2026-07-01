@@ -81,13 +81,13 @@ if args.prior_mean is not None:
     mean_class = getattr(model_module, args.prior_mean)
 else:
     mean_class = ZeroMean
-mean = mean_class().to(device)
+mean = mean_class(batch_shape=torch.Size([1])).to(device)
 
 model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood(batch_shape=torch.Size([1])).to(device)
 with torch.no_grad():
     y_scaler.train()
-    y_scaled = y_scaler(y_train - mean(x_train)).squeeze(-1)
+    y_scaled = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
 model = model_class(
     x_scaled,
     y_scaled,

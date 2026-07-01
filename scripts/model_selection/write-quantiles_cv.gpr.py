@@ -91,7 +91,7 @@ model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood(batch_shape=torch.Size([args.num_folds])).to(device)
 with torch.no_grad():
     y_scaler.train()
-    y_scaled = y_scaler(y_train - mean(x_train)).squeeze(-1)
+    y_scaled = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
 model = model_class(
     x_scaled,
     y_scaled,

@@ -122,7 +122,7 @@ class PriorMean_H2(torch.nn.Module):
 
         model = Rgt / E
         corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
-        return corrected_model.unsqueeze(-1)  # (*B, N, 1)
+        return corrected_model  # (*B, N)
 
 
 class PriorMean_b2(torch.nn.Module):
@@ -132,7 +132,7 @@ class PriorMean_b2(torch.nn.Module):
 
     def forward(self, x):
         N = x.shape[-2]
-        return torch.zeros(*self.batch_shape, N, 1, device=x.device)
+        return torch.zeros(*self.batch_shape, N, device=x.device)
 
 
 class PriorMean_phi2(torch.nn.Module):
@@ -142,4 +142,4 @@ class PriorMean_phi2(torch.nn.Module):
 
     def forward(self, x):
         N = x.shape[-2]
-        return torch.zeros(*self.batch_shape, N, 1, device=x.device)
+        return torch.zeros(*self.batch_shape, N, device=x.device)

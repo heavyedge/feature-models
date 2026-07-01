@@ -62,7 +62,7 @@ model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood().to(device)
 with torch.no_grad():
     y_scaler.train()
-    y_scaled = y_scaler(y - mean(X)).squeeze(-1)
+    y_scaled = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
 model = model_class(X_scaled, y_scaled, likelihood).to(device)
 
 model.train()
@@ -86,7 +86,7 @@ for i in range(args.num_epochs):
     optimizer.zero_grad()
 
     X_scaled = X_scaler(X)
-    res = y_scaler(y - mean(X)).squeeze(-1)
+    res = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
     model.set_train_data(
         inputs=X_scaled.detach(),
         targets=res.detach(),
@@ -101,7 +101,7 @@ for i in range(args.num_epochs):
         X_scaler.train()
         y_scaler.train()
         X_scaled = X_scaler(X)
-        res = y_scaler(y - mean(X)).squeeze(-1)
+        res = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
         model.set_train_data(
             inputs=X_scaled,
             targets=res,
