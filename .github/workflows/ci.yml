@@ -178,8 +178,21 @@ jobs:
         with:
           context: .
           push: false
-          target: build-models
+          target: models
           build-args: |
             HEAVYEDGE_N_EPOCHS=1
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          outputs: type=local,dest=./
+
+      - name: Build notebooks in Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          target: notebooks
+          build-args: |
+            HEAVYEDGE_N_EPOCHS=1
+          secrets: |
+            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          outputs: type=local,dest=./

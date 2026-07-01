@@ -33,3 +33,34 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 ARG HEAVYEDGE_N_EPOCHS
 RUN env ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make models
+
+
+FROM python:slim AS build-notebooks
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+WORKDIR /workspace
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends make \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=downloader /dataset/_data ./_data
+COPY --from=build-models /workspace/model ./model
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+ARG HEAVYEDGE_N_EPOCHS
+RUN env ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make notebooks
+
+
+FROM scratch as models
+WORKDIR /
+
+COPY --from=build-models /workspace/model ./
+
+
+FROM scratch as notebooks
+WORKDIR /
+
+COPY --from=build-notebooks /workspace/notebooks ./
