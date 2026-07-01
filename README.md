@@ -47,6 +47,18 @@ git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
 ```
 
+### Building models using Docker
+
+```
+docker build --target models --output type=local,dest=./ .
+```
+
+### Building notebooks using Docker
+
+```
+docker build --target notebooks --output type=local,dest=./ .
+```
+
 ## Versioning policy
 
 The HeavyEdge-Features model follows semantic versioning.
