@@ -31,14 +31,14 @@ def split_data(X, y, n_folds, device, random_state=42):
         x_scales.append(torch.tensor(scaler.scale_))
         x_mins.append(torch.tensor(scaler.min_))
 
-    x_train_cv = torch.stack(x_train_list).float().to(device)
-    y_train_cv = torch.stack(y_train_list).float().to(device)
-    x_test_cv = torch.stack(x_test_list).float().to(device)
-    y_test_cv = torch.stack(y_test_list).float().to(device)
+    x_train = torch.stack(x_train_list).float().to(device)
+    y_train = torch.stack(y_train_list).float().to(device)
+    x_test = torch.stack(x_test_list).float().to(device)
+    y_test = torch.stack(y_test_list).float().to(device)
     x_scales = torch.stack(x_scales).float().to(device)
     x_mins = torch.stack(x_mins).float().to(device)
 
-    return x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins
+    return x_train, y_train, x_test, y_test, x_scales, x_mins
 
 
 def split_extrapolate_data(X, y, ratio, device):
@@ -52,14 +52,14 @@ def split_extrapolate_data(X, y, ratio, device):
     train_idx = np.where(distances <= threshold)[0]
     test_idx = np.where(distances > threshold)[0]
 
-    x_train_cv = torch.tensor(X_scaled[train_idx]).float().unsqueeze(0).to(device)
-    y_train_cv = torch.tensor(y[train_idx]).float().unsqueeze(0).to(device)
-    x_test_cv = torch.tensor(X_scaled[test_idx]).float().unsqueeze(0).to(device)
-    y_test_cv = torch.tensor(y[test_idx]).float().unsqueeze(0).to(device)
+    x_train = torch.tensor(X_scaled[train_idx]).float().unsqueeze(0).to(device)
+    y_train = torch.tensor(y[train_idx]).float().unsqueeze(0).to(device)
+    x_test = torch.tensor(X_scaled[test_idx]).float().unsqueeze(0).to(device)
+    y_test = torch.tensor(y[test_idx]).float().unsqueeze(0).to(device)
     x_scales = torch.tensor(scaler.scale_).float().unsqueeze(0).to(device)
     x_mins = torch.tensor(scaler.min_).float().unsqueeze(0).to(device)
 
-    return x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins
+    return x_train, y_train, x_test, y_test, x_scales, x_mins
 
 
 def quantiles_cv_gpqr(
@@ -212,35 +212,29 @@ def quantiles_cv_gpr(
 def split_data2(X, y, n_folds, device, random_state=42):
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=random_state)
     x_train_list, y_train_list, x_test_list, y_test_list = [], [], [], []
-    x_scales, x_mins = [], []
     for train_idx, test_idx in kf.split(X):
-        scaler = MinMaxScaler().fit(X[train_idx])  # Fit scaler only on training data
 
         x_train_list.append(torch.tensor(X[train_idx]))
         y_train_list.append(torch.tensor(y[train_idx]))
         x_test_list.append(torch.tensor(X[test_idx]))
         y_test_list.append(torch.tensor(y[test_idx]))
 
-        x_scales.append(torch.tensor(scaler.scale_))
-        x_mins.append(torch.tensor(scaler.min_))
+    x_train = torch.stack(x_train_list).float().to(device)
+    y_train = torch.stack(y_train_list).float().to(device)
+    x_test = torch.stack(x_test_list).float().to(device)
+    y_test = torch.stack(y_test_list).float().to(device)
 
-    x_train_cv = torch.stack(x_train_list).float().to(device)
-    y_train_cv = torch.stack(y_train_list).float().to(device)
-    x_test_cv = torch.stack(x_test_list).float().to(device)
-    y_test_cv = torch.stack(y_test_list).float().to(device)
-    x_scales = torch.stack(x_scales).float().to(device)
-    x_mins = torch.stack(x_mins).float().to(device)
-
-    return x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins
+    return (x_train, y_train, x_test, y_test)
 
 
 def mean_cv_gpr2(
-    x_train,
-    y_train,
-    x_test,
-    y_test,
+    x_train,  # (*B, N_train, D)
+    y_train,  # (*B, N_train, 1)
+    x_test,  # (*B, N_test, D)
+    y_test,  # (*B, N_test, 1)
+    x_scaler,
+    y_scaler,
     mean,
-    scaler,
     model,
     likelihood,
     n_epochs,
@@ -252,25 +246,28 @@ def mean_cv_gpr2(
 
     test_losses = []
     for i in range(n_epochs):
+        x_scaler.train()
+        y_scaler.train()
         mean.train()
-        scaler.train()
         model.train()
         likelihood.train()
         optimizer.zero_grad()
 
-        res = y_train - mean(x_train)
-        output = model(scaler(x_train))
-        train_loss = -mll(output, res)
+        train_output = model(x_scaler(x_train))
+        train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+        train_loss = -mll(train_output, train_res)
         train_loss.sum().backward()
         optimizer.step()
 
         mean.eval()
-        scaler.eval()
+        x_scaler.eval()
+        y_scaler.eval()
         model.eval()
         likelihood.eval()
         with torch.no_grad():
-            res_test = y_test - mean(x_test)
-            test_loss = -mll(model(scaler(x_test)), res_test)
+            test_output = model(x_scaler(x_test))
+            test_res = y_scaler(y_test - mean(x_test)).squeeze(-1)
+            test_loss = -mll(test_output, test_res)
             test_losses.append(test_loss.detach().cpu().numpy())
 
         logger(

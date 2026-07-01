@@ -1,8 +1,6 @@
 import torch
 
-__all__ = [
-    "MinMaxScaler",
-]
+__all__ = ["MinMaxScaler", "StandardScaler"]
 
 
 class MinMaxScaler(torch.nn.Module):
@@ -10,20 +8,37 @@ class MinMaxScaler(torch.nn.Module):
 
     Parameters
     ----------
-    X_scale, X_min: torch.Tensor in shape (*B, D)
-        Values from sklearn.preprocessing.MinMaxScaler.
+    batch_shape : torch.Size
+        Shape of the batch dimension.
     """
 
-    def __init__(self, X_scale, X_min):
+    def __init__(self, batch_shape=torch.Size()):
         super().__init__()
-        self.register_buffer("X_scale", X_scale)
-        self.register_buffer("X_min", X_min)
+        self.batch_shape = batch_shape
 
     def forward(self, x):
-        # x: (*B, N, D)
-        # X_scale, X_min: (*B, D)
-        # BELOW IS CORRECT FOR MinMaxScaler (different from StandardScaler)
-        X_min = self.X_min.unsqueeze(-2)
-        X_scale = self.X_scale.unsqueeze(-2)
-        x_scaled = x * X_scale + X_min
-        return x_scaled.view_as(x)
+        if self.training:
+            self.X_min = x.min(dim=-2).values
+            self.X_max = x.max(dim=-2).values
+            self.X_scale = self.X_max - self.X_min
+        return (x - self.X_min.unsqueeze(-2)) / self.X_scale.unsqueeze(-2)
+
+
+class StandardScaler(torch.nn.Module):
+    """Standard scaling.
+
+    Parameters
+    ----------
+    batch_shape : torch.Size
+        Shape of the batch dimension.
+    """
+
+    def __init__(self, batch_shape=torch.Size()):
+        super().__init__()
+        self.batch_shape = batch_shape
+
+    def forward(self, x):
+        if self.training:
+            self.X_mean = x.mean(dim=-2)
+            self.X_scale = x.std(dim=-2)
+        return (x - self.X_mean.unsqueeze(-2)) / self.X_scale.unsqueeze(-2)

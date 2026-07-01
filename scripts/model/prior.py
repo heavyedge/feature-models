@@ -120,4 +120,4 @@ class PriorMean_H_2(torch.nn.Module):
 
         model = Rgt / E
         corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
-        return corrected_model  # (*B, N)
+        return corrected_model.unsqueeze(-1)  # (*B, N, 1)
