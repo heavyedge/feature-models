@@ -50,13 +50,13 @@ git config filter.nbstripout.required true
 ### Building models using Docker
 
 ```
-docker build --target models --output type=local,dest=./ .
+docker build --target models --output type=local,dest=./model .
 ```
 
 ### Building notebooks using Docker
 
 ```
-docker build --target notebooks --output type=local,dest=./ .
+docker build --target notebooks --output type=local,dest=./notebooks .
 ```
 
 ## Versioning policy
