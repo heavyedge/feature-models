@@ -42,8 +42,8 @@ def save_gpr2(
     X_scaler,
     y_scaler,
     mean,
-    model,
     likelihood,
+    model,
     path,
 ):
     torch.save(

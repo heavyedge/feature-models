@@ -9,6 +9,9 @@ models: \
 model/H.mean.pt \
 model/b.mean.pt \
 model/phi.mean.pt \
+model/H.mean2.pt \
+model/b.mean2.pt \
+model/phi.mean2.pt \
 model/H.quantiles.pt \
 model/phi.quantiles.pt \
 model/prior.py \
@@ -22,6 +25,9 @@ test:
 	python3 -c "from model.load import load_H_mean; load_H_mean()"
 	python3 -c "from model.load import load_b_mean; load_b_mean()"
 	python3 -c "from model.load import load_phi_mean; load_phi_mean()"
+	python3 -c "from model.load import load_H_mean2; load_H_mean2()"
+	python3 -c "from model.load import load_b_mean2; load_b_mean2()"
+	python3 -c "from model.load import load_phi_mean2; load_phi_mean2()"
 	python3 -c "from model.load import load_H_quantiles; load_H_quantiles()"
 	python3 -c "from model.load import load_phi_quantiles; load_phi_quantiles()"
 
@@ -141,7 +147,7 @@ _temp/best-config.%.mean2.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%
 model/%.mean.pt: scripts/train/mean.py _temp/X.csv _temp/y.csv _temp/best-config.%.mean.epoch
 	python3 $(wordlist 1,3,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(word 4,$^)) -o $@
 
-_temp/%.mean2.pt: scripts/train/mean2.py _temp/X.csv _temp/y.csv _temp/best-config.%.mean2.epoch
+model/%.mean2.pt: scripts/train/mean2.py _temp/X.csv _temp/y.csv _temp/best-config.%.mean2.epoch
 	python3 $(wordlist 1,3,$^) --target $* --model GPR_$*_2 --prior-mean PriorMean_$*_2 --num-epochs $(shell cat $(word 4,$^)) -o $@
 
 _temp/best-config.H.quantiles.epoch: scripts/train/write-best.py _temp/quantiles_cv.CgLmcMtgpqr_H.csv
