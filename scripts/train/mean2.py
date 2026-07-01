@@ -47,6 +47,12 @@ else:
 X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
+if args.prior_mean is not None:
+    mean_class = getattr(model_module, args.prior_mean)
+else:
+    mean_class = ZeroMean
+mean = mean_class().to(device)
+
 _scaler = MinMaxScaler().fit(X.cpu().numpy())
 X_scale = torch.tensor(_scaler.scale_).float()
 X_min = torch.tensor(_scaler.min_).float()
@@ -54,14 +60,6 @@ scaler = model_module.Scaler(X_scale, X_min).to(device)
 X_scaled = scaler(X)
 
 model_class = getattr(model_module, args.model)
-
-if args.prior_mean is not None:
-    mean_class = getattr(model_module, args.prior_mean)
-else:
-    mean_class = ZeroMean
-mean = mean_class().to(device)
-
-
 likelihood = GaussianLikelihood().to(device)
 model = model_class(X_scaled, y, likelihood).to(device)
 

@@ -11,6 +11,8 @@ __all__ = [
     "quantiles_cv_gpqr",
     "mean_cv_gpr",
     "quantiles_cv_gpr",
+    "split_data2",
+    "mean_cv_gpr2",
 ]
 
 
@@ -205,3 +207,76 @@ def quantiles_cv_gpr(
         )
 
     return np.array(test_losses_per_fold)
+
+
+def split_data2(X, y, n_folds, device, random_state=42):
+    kf = KFold(n_splits=n_folds, shuffle=True, random_state=random_state)
+    x_train_list, y_train_list, x_test_list, y_test_list = [], [], [], []
+    x_scales, x_mins = [], []
+    for train_idx, test_idx in kf.split(X):
+        scaler = MinMaxScaler().fit(X[train_idx])  # Fit scaler only on training data
+
+        x_train_list.append(torch.tensor(X[train_idx]))
+        y_train_list.append(torch.tensor(y[train_idx]))
+        x_test_list.append(torch.tensor(X[test_idx]))
+        y_test_list.append(torch.tensor(y[test_idx]))
+
+        x_scales.append(torch.tensor(scaler.scale_))
+        x_mins.append(torch.tensor(scaler.min_))
+
+    x_train_cv = torch.stack(x_train_list).float().to(device)
+    y_train_cv = torch.stack(y_train_list).float().to(device)
+    x_test_cv = torch.stack(x_test_list).float().to(device)
+    y_test_cv = torch.stack(y_test_list).float().to(device)
+    x_scales = torch.stack(x_scales).float().to(device)
+    x_mins = torch.stack(x_mins).float().to(device)
+
+    return x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins
+
+
+def mean_cv_gpr2(
+    x_train,
+    y_train,
+    x_test,
+    y_test,
+    mean,
+    scaler,
+    model,
+    likelihood,
+    n_epochs,
+    learning_rate=0.001,
+    logger=lambda msg: None,
+):
+    mll = ExactMarginalLogLikelihood(likelihood, model)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    test_losses = []
+    for i in range(n_epochs):
+        mean.train()
+        scaler.train()
+        model.train()
+        likelihood.train()
+        optimizer.zero_grad()
+
+        res = y_train - mean(x_train)
+        output = model(scaler(x_train))
+        train_loss = -mll(output, res)
+        train_loss.sum().backward()
+        optimizer.step()
+
+        mean.eval()
+        scaler.eval()
+        model.eval()
+        likelihood.eval()
+        with torch.no_grad():
+            res_test = y_test - mean(x_test)
+            test_loss = -mll(model(scaler(x_test)), res_test)
+            test_losses.append(test_loss.detach().cpu().numpy())
+
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test loss: {test_loss.mean().item():.4f}"
+        )
+
+    return np.array(test_losses)

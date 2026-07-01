@@ -117,6 +117,9 @@ _temp/quantiles_cv.CgLmcMtgpqr_%.csv: scripts/model_selection/write-quantiles_cv
 _temp/quantiles_cv.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-quantiles_cv.gpqr.py _temp/X.csv _temp/y.csv
 	python3 $^ --model CgIndependentMtgpqr_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
+_temp/mean_cv.GPR_%_2.csv: scripts/model_selection/write-mean_cv.gpr2.py _temp/X.csv _temp/y.csv
+	python3 $^ --model GPR_$*_2 --target $* --prior-mean PriorMean_$*_2 --num-folds=5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
 # Model
 
 _temp/best-config.%.mean.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%.csv
@@ -141,7 +144,7 @@ model/%.py: scripts/model/%.py
 	cp $< $@
 
 _temp/H.mean2.pt: scripts/train/mean2.py _temp/X.csv _temp/y.csv
-	python3 $(wordlist 1,3,$^) --target H --model GPR_H_2 --prior-mean PriorMean_H_2 --num-epochs 10 -o $@
+	python3 $(wordlist 1,3,$^) --target H --model GPR_H_2 --prior-mean PriorMean_H_2 --num-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 # Window prediction
 

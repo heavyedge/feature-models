@@ -80,10 +80,11 @@ class Scaler(torch.nn.Module):
         self.register_buffer("X_min", X_min)
 
     def forward(self, x):
-        # x: (*B, 1, N, D)
+        # x: (*B, N, D)
+        # X_scale, X_min: (*B, D)
         # BELOW IS CORRECT FOR MinMaxScaler (different from StandardScaler)
-        X_min = self.X_min[..., None, None, :]
-        X_scale = self.X_scale[..., None, None, :]
+        X_min = self.X_min.unsqueeze(-2)
+        X_scale = self.X_scale.unsqueeze(-2)
         x_scaled = x * X_scale + X_min
         return x_scaled.view_as(x)
 
@@ -106,17 +107,17 @@ class PriorMean_H_2(torch.nn.Module):
         )
 
     def forward(self, x):
-        Rgt = x[..., 0]
-        Ca = x[..., 1]
-        cos_theta = x[..., 2]
+        Rgt = x[..., 0]  # (*B, N)
+        Ca = x[..., 1]  # (*B, N)
+        cos_theta = x[..., 2]  # (*B, N)
 
-        a = self.params["a"]
-        b = self.params["b"]
-        c = self.params["c"]
+        a = self.params["a"].unsqueeze(-1)  # (*B, 1)
+        b = self.params["b"].unsqueeze(-1)  # (*B, 1)
+        c = self.params["c"].unsqueeze(-1)  # (*B, 1)
 
         lamda = a * Ca**b * cos_theta**c
         E = 2 / (-lamda + torch.sqrt(lamda**2 + (4 / Rgt)))
 
         model = Rgt / E
         corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
-        return corrected_model[...]  # (*B, N)
+        return corrected_model  # (*B, N)
