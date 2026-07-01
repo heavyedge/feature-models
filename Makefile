@@ -12,6 +12,7 @@ model/phi.mean2.pt \
 model/H.quantiles.pt \
 model/phi.quantiles.pt \
 model/prior.py \
+model/scale.py \
 model/gpr.py \
 model/gpqr.py \
 model/load.py
