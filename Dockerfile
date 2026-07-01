@@ -21,6 +21,10 @@ FROM python:slim AS builder
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /workspace
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends make \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=downloader /dataset/_data ./_data
 
 COPY requirements.txt .
