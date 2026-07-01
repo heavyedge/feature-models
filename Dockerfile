@@ -54,13 +54,13 @@ ARG HEAVYEDGE_N_EPOCHS
 RUN env ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make notebooks
 
 
-FROM scratch as models
+FROM scratch AS models
 WORKDIR /
 
 COPY --from=build-models /workspace/model ./
 
 
-FROM scratch as notebooks
+FROM scratch AS notebooks
 WORKDIR /
 
 COPY --from=build-notebooks /workspace/notebooks ./
