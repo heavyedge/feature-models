@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 ARG HEAVYEDGE_N_EPOCHS
-RUN ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make all notebooks
+RUN env ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make all notebooks
 
 
 FROM scratch AS output
