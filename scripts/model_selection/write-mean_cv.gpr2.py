@@ -82,8 +82,14 @@ mean = mean_class(batch_shape=torch.Size([args.num_folds])).to(device)
 
 model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood(batch_shape=torch.Size([args.num_folds])).to(device)
+with torch.no_grad():
+    y_scaler.train()
+    y_scaled = y_scaler(y_train - mean(x_train)).squeeze(-1)
 model = model_class(
-    x_scaled, y_train.squeeze(-1), likelihood, batch_shape=torch.Size([args.num_folds])
+    x_scaled,
+    y_scaled,
+    likelihood,
+    batch_shape=torch.Size([args.num_folds]),
 ).to(device)
 
 cv = mean_cv_gpr2(

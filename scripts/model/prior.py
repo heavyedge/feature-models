@@ -100,9 +100,9 @@ class PriorMean_H_2(torch.nn.Module):
         self.batch_shape = batch_shape
         self.params = torch.nn.ParameterDict(
             {
-                "a": torch.nn.Parameter(torch.tensor(1.0).expand(batch_shape)),
-                "b": torch.nn.Parameter(torch.tensor(0.0).expand(batch_shape)),
-                "c": torch.nn.Parameter(torch.tensor(0.0).expand(batch_shape)),
+                "a": torch.nn.Parameter(torch.full(batch_shape, 1.0)),
+                "b": torch.nn.Parameter(torch.full(batch_shape, 0.0)),
+                "c": torch.nn.Parameter(torch.full(batch_shape, 0.0)),
             }
         )
 

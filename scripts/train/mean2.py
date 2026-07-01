@@ -60,13 +60,22 @@ mean = mean_class().to(device)
 
 model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood().to(device)
-model = model_class(X_scaled, y.squeeze(-1), likelihood).to(device)
+with torch.no_grad():
+    y_scaler.train()
+    y_scaled = y_scaler(y - mean(X)).squeeze(-1)
+model = model_class(X_scaled, y_scaled, likelihood).to(device)
 
 model.train()
 likelihood.train()
 
 mll = ExactMarginalLogLikelihood(likelihood, model)
-optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+optimizer = torch.optim.Adam(
+    list(X_scaler.parameters())
+    + list(y_scaler.parameters())
+    + list(mean.parameters())
+    + list(model.parameters()),
+    lr=args.learning_rate,
+)
 
 for i in range(args.num_epochs):
     X_scaler.train()
@@ -76,11 +85,28 @@ for i in range(args.num_epochs):
     likelihood.train()
     optimizer.zero_grad()
 
-    output = model(X_scaled)
+    X_scaled = X_scaler(X)
     res = y_scaler(y - mean(X)).squeeze(-1)
+    model.set_train_data(
+        inputs=X_scaled.detach(),
+        targets=res.detach(),
+        strict=False,
+    )
+    output = model(X_scaled)
     loss = -mll(output, res)
     loss.sum().backward()
     optimizer.step()
+
+    with torch.no_grad():
+        X_scaler.train()
+        y_scaler.train()
+        X_scaled = X_scaler(X)
+        res = y_scaler(y - mean(X)).squeeze(-1)
+        model.set_train_data(
+            inputs=X_scaled,
+            targets=res,
+            strict=False,
+        )
 
     logger.info(f"{args.out}: Epoch {i+1}/{args.num_epochs}, Loss: {loss.item():.4f}")
 

@@ -242,7 +242,13 @@ def mean_cv_gpr2(
     logger=lambda msg: None,
 ):
     mll = ExactMarginalLogLikelihood(likelihood, model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(
+        list(x_scaler.parameters())
+        + list(y_scaler.parameters())
+        + list(mean.parameters())
+        + list(model.parameters()),
+        lr=learning_rate,
+    )
 
     test_losses = []
     for i in range(n_epochs):
@@ -253,11 +259,28 @@ def mean_cv_gpr2(
         likelihood.train()
         optimizer.zero_grad()
 
-        train_output = model(x_scaler(x_train))
+        train_x_scaled = x_scaler(x_train)
         train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+        model.set_train_data(
+            inputs=train_x_scaled.detach(),
+            targets=train_res.detach(),
+            strict=False,
+        )
+        train_output = model(train_x_scaled)
         train_loss = -mll(train_output, train_res)
         train_loss.sum().backward()
         optimizer.step()
+
+        with torch.no_grad():
+            x_scaler.train()
+            y_scaler.train()
+            train_x_scaled = x_scaler(x_train)
+            train_res = y_scaler(y_train - mean(x_train)).squeeze(-1)
+            model.set_train_data(
+                inputs=train_x_scaled,
+                targets=train_res,
+                strict=False,
+            )
 
         mean.eval()
         x_scaler.eval()
