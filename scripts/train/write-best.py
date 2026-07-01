@@ -1,6 +1,7 @@
 import argparse
 import pathlib
 
+import numpy as np
 import pandas as pd
 
 parser = argparse.ArgumentParser()
@@ -25,11 +26,10 @@ parser.add_argument(
 args = parser.parse_args()
 
 models = [f.stem.split(".")[1] for f in args.cv]
-cv = [pd.read_csv(f).mean(axis=1) for f in args.cv]
+cvs = [pd.read_csv(f).mean(axis=1) for f in args.cv]
 
-best_model_idx = cv.index(max(cv))
-
-best_epoch = cv[best_model_idx].argmax() + 1
+best_model_idx = np.argmax([cv.max() for cv in cvs])
+best_epoch = cvs[best_model_idx].argmax() + 1
 
 if args.target == "model":
     with open(args.out, "w") as f:
