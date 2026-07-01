@@ -25,8 +25,8 @@ test:
 	python3 -c "from model.load import load_mean_H; load_mean_H()"
 	python3 -c "from model.load import load_mean_b; load_mean_b()"
 	python3 -c "from model.load import load_mean_phi; load_mean_phi()"
-	python3 -c "from model.load import load_gpqr_H; load_gpqr_H()"
-	python3 -c "from model.load import load_gpqr_phi; load_gpqr_phi()"
+	python3 -c "from model.load import load_quantiles_H; load_quantiles_H()"
+	python3 -c "from model.load import load_quantiles_phi; load_quantiles_phi()"
 
 # Notebooks
 
@@ -42,7 +42,7 @@ notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/quantiles_cv.GPR_%.csv _temp
 notebooks/Mean.ipynb: _temp/X.csv _temp/y.csv model/mean.H.pt model/mean.b.pt model/mean.phi.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/GPQR.%.ipynb: _temp/X.csv _temp/y.csv model/GPQR.%.pt FORCE
+notebooks/Quantiles.%.ipynb: _temp/X.csv _temp/y.csv model/quantiles.%.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/Window.ipynb: _temp/X.csv _temp/X-pred.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
@@ -126,14 +126,11 @@ model/mean.%.pt: scripts/train/mean.py _temp/X.csv _temp/y.csv _temp/best-config
 _temp/best-config.quantiles.%.epoch: scripts/train/write-best.py _temp/quantiles_cv.GPR_%.csv _temp/quantiles_cv.CgLmcMtgpqr_%.csv _temp/quantiles_cv.CgIndependentMtgpqr_%.csv
 	python3 $^ --target epoch -o $@
 
-_temp/GPQR.H.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target H --model CgLmcMtgpqr --num-epochs 2706 -o $@
+model/quantiles.H.pt: scripts/train/quantiles.py _temp/X.csv _temp/y.csv _temp/best-config.mean.H.epoch
+	python3 $(wordlist 1,3,$^) --target H --model CgLmcMtgpqr_H --num-epochs $(shell cat $(word 4,$^)) -o $@
 
-_temp/GPQR.phi.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target phi --model CgIndependentMtgpqr --num-epochs 9543 -o $@
-
-model/%.pt: _temp/%.pt
-	cp $< $@
+model/quantiles.phi.pt: scripts/train/quantiles.py _temp/X.csv _temp/y.csv _temp/best-config.mean.phi.epoch
+	python3 $(wordlist 1,3,$^) --target phi --model CgIndependentMtgpqr_phi --num-epochs $(shell cat $(word 4,$^)) -o $@
 
 model/%.py: scripts/model/%.py
 	cp $< $@
