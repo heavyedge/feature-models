@@ -5,13 +5,13 @@ from gpytorch.means import ConstantMean
 from gpytorch.models import ExactGP
 
 __all__ = [
-    "GPR_H_2",
-    "GPR_b_2",
-    "GPR_phi_2",
+    "GPR_H",
+    "GPR_b",
+    "GPR_phi",
 ]
 
 
-class GPR_H_2(ExactGP):
+class GPR_H(ExactGP):
     def __init__(
         self,
         train_x,
@@ -52,7 +52,7 @@ class GPR_H_2(ExactGP):
         return mean[..., None] + std[..., None] * z  # (*B, N, Q)
 
 
-class GPR_b_2(ExactGP):
+class GPR_b(ExactGP):
     def __init__(
         self,
         train_x,
@@ -103,7 +103,7 @@ class GPR_b_2(ExactGP):
         return mean[..., None] + std[..., None] * z  # (*B, N, Q)
 
 
-class GPR_phi_2(ExactGP):
+class GPR_phi(ExactGP):
     def __init__(
         self,
         train_x,

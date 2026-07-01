@@ -5,9 +5,9 @@ __all__ = [
     "Unscaler",
     "PriorMean_H",
     "Scaler",
-    "PriorMean_H_2",
-    "PriorMean_b_2",
-    "PriorMean_phi_2",
+    "PriorMean_H2",
+    "PriorMean_b2",
+    "PriorMean_phi2",
 ]
 
 
@@ -91,7 +91,7 @@ class Scaler(torch.nn.Module):
         return x_scaled.view_as(x)
 
 
-class PriorMean_H_2(torch.nn.Module):
+class PriorMean_H2(torch.nn.Module):
     """Modified version of model by Schmitt.
 
     Input X must be [Rgt, Ca, cos_theta, ...].
@@ -125,7 +125,7 @@ class PriorMean_H_2(torch.nn.Module):
         return corrected_model.unsqueeze(-1)  # (*B, N, 1)
 
 
-class PriorMean_b_2(torch.nn.Module):
+class PriorMean_b2(torch.nn.Module):
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
         self.batch_shape = batch_shape
@@ -135,7 +135,7 @@ class PriorMean_b_2(torch.nn.Module):
         return torch.zeros(*self.batch_shape, N, 1, device=x.device)
 
 
-class PriorMean_phi_2(torch.nn.Module):
+class PriorMean_phi2(torch.nn.Module):
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
         self.batch_shape = batch_shape

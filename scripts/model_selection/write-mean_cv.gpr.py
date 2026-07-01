@@ -6,8 +6,13 @@ import sys
 
 import pandas as pd
 import torch
-from cv import mean_cv_gpr, split_data
+from cv import mean_cv_gpr, split_data2
 from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.means import ZeroMean
+
+MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
+sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -27,8 +32,9 @@ parser.add_argument(
     type=pathlib.Path,
     help="Response csv file.",
 )
-parser.add_argument("--model", required=True)
 parser.add_argument("--target", required=True)
+parser.add_argument("--model", required=True)
+parser.add_argument("--prior-mean", type=str, help="Prior mean class name.")
 parser.add_argument(
     "--num-folds",
     type=int,
@@ -52,33 +58,48 @@ args = parser.parse_args()
 torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-X = pd.read_csv(args.X).drop(columns="Slurry").values
-y = pd.read_csv(args.y)[args.target].values
+X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)[..., None]
 
-x_train_cv, y_train_cv, x_test_cv, y_test_cv, x_scales, x_mins = split_data(
-    X, y, args.num_folds, device
+x_train, y_train, x_test, y_test = split_data2(
+    X.cpu().numpy(), y.cpu().numpy(), args.num_folds, device
+)
+x_scaler = model_module.MinMaxScaler(batch_shape=torch.Size([args.num_folds])).to(
+    device
+)
+y_scaler = model_module.StandardScaler(batch_shape=torch.Size([args.num_folds])).to(
+    device
 )
 
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(MODEL_MODULE_PATH.name)
-model_cls = getattr(model_module, args.model)
+x_scaler.train()
+x_scaled = x_scaler(x_train)
 
+if args.prior_mean is not None:
+    mean_class = getattr(model_module, args.prior_mean)
+else:
+    mean_class = ZeroMean
+mean = mean_class(batch_shape=torch.Size([args.num_folds])).to(device)
+
+model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood(batch_shape=torch.Size([args.num_folds])).to(device)
-model = model_cls(
-    x_train_cv.clone().detach(),
-    y_train_cv.clone().detach(),
+with torch.no_grad():
+    y_scaler.train()
+    y_scaled = y_scaler(y_train - mean(x_train)).squeeze(-1)
+model = model_class(
+    x_scaled,
+    y_scaled,
     likelihood,
-    X_scale=x_scales,
-    X_min=x_mins,
     batch_shape=torch.Size([args.num_folds]),
 ).to(device)
 
 cv = mean_cv_gpr(
-    x_train_cv,
-    y_train_cv,
-    x_test_cv,
-    y_test_cv,
+    x_train,
+    y_train,
+    x_test,
+    y_test,
+    x_scaler,
+    y_scaler,
+    mean,
     model,
     likelihood,
     n_epochs=args.n_epochs,

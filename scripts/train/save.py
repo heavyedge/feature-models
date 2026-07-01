@@ -2,7 +2,7 @@ import torch
 
 __all__ = [
     "save_model",
-    "save_gpr2",
+    "save_gpr",
 ]
 
 
@@ -36,7 +36,7 @@ def save_model(
     )
 
 
-def save_gpr2(
+def save_gpr(
     train_x,
     train_y,
     X_scaler,

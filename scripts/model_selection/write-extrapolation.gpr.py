@@ -6,8 +6,13 @@ import sys
 
 import pandas as pd
 import torch
-from cv import quantiles_cv_gpr, split_extrapolate_data
+from cv import quantiles_cv_gpr, split_extrapolate_data2
 from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.means import ZeroMean
+
+MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
+sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -27,8 +32,9 @@ parser.add_argument(
     type=pathlib.Path,
     help="Response csv file.",
 )
-parser.add_argument("--model", required=True)
 parser.add_argument("--target", required=True)
+parser.add_argument("--model", required=True)
+parser.add_argument("--prior-mean", type=str, help="Prior mean class name.")
 parser.add_argument(
     "--split-ratio",
     type=float,
@@ -59,36 +65,48 @@ args = parser.parse_args()
 torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-X = pd.read_csv(args.X).drop(columns="Slurry").values
-y = pd.read_csv(args.y)[args.target].values
+X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)[..., None]
 
-x_train_ev, y_train_ev, x_test_ev, y_test_ev, x_scales_ev, x_mins_ev = (
-    split_extrapolate_data(X, y, args.split_ratio, device)
+x_train, y_train, x_test, y_test = split_extrapolate_data2(
+    X.cpu().numpy(), y.cpu().numpy(), args.split_ratio, device
 )
+x_scaler = model_module.MinMaxScaler().to(device)
+y_scaler = model_module.StandardScaler().to(device)
 
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(MODEL_MODULE_PATH.name)
-model_cls = getattr(model_module, args.model)
+x_scaler.train()
+x_scaled = x_scaler(x_train)
 
+if args.prior_mean is not None:
+    mean_class = getattr(model_module, args.prior_mean)
+else:
+    mean_class = ZeroMean
+mean = mean_class().to(device)
+
+model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood(batch_shape=torch.Size([1])).to(device)
-model = model_cls(
-    x_train_ev.clone().detach(),
-    y_train_ev.clone().detach(),
+with torch.no_grad():
+    y_scaler.train()
+    y_scaled = y_scaler(y_train - mean(x_train)).squeeze(-1)
+model = model_class(
+    x_scaled,
+    y_scaled,
     likelihood,
     batch_shape=torch.Size([1]),
 ).to(device)
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
-
 ev = quantiles_cv_gpr(
-    x_train_ev,
-    y_train_ev,
-    x_test_ev,
-    y_test_ev,
-    quantiles,
+    x_train,
+    y_train,
+    x_test,
+    y_test,
+    x_scaler,
+    y_scaler,
+    mean,
     model,
     likelihood,
+    quantiles,
     n_epochs=args.n_epochs,
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )

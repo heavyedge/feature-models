@@ -14,14 +14,14 @@ from .gpqr import (
     CgLmcMtgpqr_H,
 )
 from .gpr import (
-    GPR_H_2,
-    GPR_b_2,
-    GPR_phi_2,
+    GPR_H,
+    GPR_b,
+    GPR_phi,
 )
 from .prior import (
-    PriorMean_b_2,
-    PriorMean_H_2,
-    PriorMean_phi_2,
+    PriorMean_b2,
+    PriorMean_H2,
+    PriorMean_phi2,
 )
 from .scale import (
     MinMaxScaler,
@@ -29,9 +29,9 @@ from .scale import (
 )
 
 __all__ = [
-    "load_H_mean2",
-    "load_b_mean2",
-    "load_phi_mean2",
+    "load_H_mean",
+    "load_b_mean",
+    "load_phi_mean",
     "load_H_quantiles",
     "load_phi_quantiles",
 ]
@@ -75,9 +75,7 @@ def _load_model(model_class, path, device=None):
     return model, likelihood, scaler
 
 
-def _load_gpr2(
-    xscaler_class, yscaler_class, mean_class, model_class, path, device=None
-):
+def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
     X = checkpoint["train_x"]
     y = checkpoint["train_y"]
@@ -114,7 +112,7 @@ def _load_gpr2(
     return X_scaler, y_scaler, mean, likelihood, model
 
 
-def load_H_mean2(path=None, device=None):
+def load_H_mean(path=None, device=None):
     """Return GPR models for H.
 
     Parameters
@@ -127,7 +125,7 @@ def load_H_mean2(path=None, device=None):
     -------
     X_scaler : model_module.MinMaxScaler
     y_scaler : model_module.StandardScaler
-    mean : model_module.PriorMean_H_2
+    mean : model_module.PriorMean_H2
     likelihood : gpytorch.likelihoods.GaussianLikelihood
     model : gpytorch.models.ExactGP
     """
@@ -135,13 +133,13 @@ def load_H_mean2(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "H.mean2.pt"
-    return _load_gpr2(
-        MinMaxScaler, StandardScaler, PriorMean_H_2, GPR_H_2, path, device=device
+        path = Path(__file__).parent / "H.mean.pt"
+    return _load_gpr(
+        MinMaxScaler, StandardScaler, PriorMean_H2, GPR_H, path, device=device
     )
 
 
-def load_b_mean2(path=None, device=None):
+def load_b_mean(path=None, device=None):
     """Return GPR models for b.
 
     Parameters
@@ -154,7 +152,7 @@ def load_b_mean2(path=None, device=None):
     -------
     X_scaler : model_module.MinMaxScaler
     y_scaler : model_module.StandardScaler
-    mean : model_module.PriorMean_b_2
+    mean : model_module.PriorMean_b2
     likelihood : gpytorch.likelihoods.GaussianLikelihood
     model : gpytorch.models.ExactGP
     """
@@ -162,13 +160,13 @@ def load_b_mean2(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "b.mean2.pt"
-    return _load_gpr2(
-        MinMaxScaler, StandardScaler, PriorMean_b_2, GPR_b_2, path, device=device
+        path = Path(__file__).parent / "b.mean.pt"
+    return _load_gpr(
+        MinMaxScaler, StandardScaler, PriorMean_b2, GPR_b, path, device=device
     )
 
 
-def load_phi_mean2(path=None, device=None):
+def load_phi_mean(path=None, device=None):
     """Return GPR models for phi.
 
     Parameters
@@ -181,7 +179,7 @@ def load_phi_mean2(path=None, device=None):
     -------
     X_scaler : model_module.MinMaxScaler
     y_scaler : model_module.StandardScaler
-    mean : model_module.PriorMean_phi_2
+    mean : model_module.PriorMean_phi2
     likelihood : gpytorch.likelihoods.GaussianLikelihood
     model : gpytorch.models.ExactGP
     """
@@ -189,9 +187,9 @@ def load_phi_mean2(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "phi.mean2.pt"
-    return _load_gpr2(
-        MinMaxScaler, StandardScaler, PriorMean_phi_2, GPR_phi_2, path, device=device
+        path = Path(__file__).parent / "phi.mean.pt"
+    return _load_gpr(
+        MinMaxScaler, StandardScaler, PriorMean_phi2, GPR_phi, path, device=device
     )
 
 

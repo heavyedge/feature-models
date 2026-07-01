@@ -9,12 +9,10 @@ __all__ = [
     "split_data",
     "split_extrapolate_data",
     "quantiles_cv_gpqr",
-    "mean_cv_gpr",
-    "quantiles_cv_gpr",
     "split_data2",
     "split_extrapolate_data2",
-    "mean_cv_gpr2",
-    "quantiles_cv_gpr2",
+    "mean_cv_gpr",
+    "quantiles_cv_gpr",
 ]
 
 
@@ -119,98 +117,6 @@ def quantiles_cv_gpqr(
     return np.array(test_losses_per_fold)
 
 
-def mean_cv_gpr(
-    x_train,
-    y_train,
-    x_test,
-    y_test,
-    model,
-    likelihood,
-    n_epochs,
-    learning_rate=0.001,
-    logger=lambda msg: None,
-):
-    mll = ExactMarginalLogLikelihood(likelihood, model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-    test_losses = []
-    for i in range(n_epochs):
-        model.train()
-        likelihood.train()
-        output = model(x_train)
-
-        train_loss = -mll(output, y_train)
-        train_loss.sum().backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
-        model.eval()
-        likelihood.eval()
-        with torch.no_grad():
-            test_loss = -mll(model(x_test), y_test)
-            test_losses.append(test_loss.detach().cpu().numpy())
-
-        logger(
-            f"Epoch {i+1}/{n_epochs}, "
-            f"Train Loss: {train_loss.mean().item():.4f}, "
-            f"Mean test loss: {test_loss.mean().item():.4f}"
-        )
-
-    return np.array(test_losses)
-
-
-def quantiles_cv_gpr(
-    x_train,
-    y_train,
-    x_test,
-    y_test,
-    quantiles,
-    model,
-    likelihood,
-    n_epochs,
-    learning_rate=0.001,
-    logger=lambda msg: None,
-):
-    mll = ExactMarginalLogLikelihood(likelihood, model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-    test_losses_per_fold = []
-    for i in range(n_epochs):
-        model.train()
-        likelihood.train()
-        output = model(x_train)
-
-        train_loss = -mll(output, y_train)
-        train_loss.sum().backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
-        model.eval()
-        likelihood.eval()
-        with torch.no_grad():
-            output = model.quantiles(x_test, quantiles)  # (K, N, Q)
-            epoch_fold_losses = []
-            for y_test_fold, output_fold in zip(y_test, output):
-                pinball_losses = []
-                for j, q in enumerate(quantiles):
-                    test_loss = mean_pinball_loss(
-                        y_test_fold.cpu().numpy(),
-                        output_fold[:, j].cpu().numpy(),
-                        alpha=q.item(),
-                    )
-                    pinball_losses.append(test_loss)
-                epoch_fold_losses.append(np.mean(pinball_losses))
-            test_losses_per_fold.append(epoch_fold_losses)
-
-        logger(
-            f"Epoch {i+1}/{n_epochs}, "
-            f"Train Loss: {train_loss.mean().item():.4f}, "
-            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
-        )
-
-    return np.array(test_losses_per_fold)
-
-
 def split_data2(X, y, n_folds, device, random_state=42):
     kf = KFold(n_splits=n_folds, shuffle=True, random_state=random_state)
     x_train_list, y_train_list, x_test_list, y_test_list = [], [], [], []
@@ -249,7 +155,7 @@ def split_extrapolate_data2(X, y, ratio, device):
     return x_train, y_train, x_test, y_test
 
 
-def mean_cv_gpr2(
+def mean_cv_gpr(
     x_train,  # (*B, N_train, D)
     y_train,  # (*B, N_train, 1)
     x_test,  # (*B, N_test, D)
@@ -324,7 +230,7 @@ def mean_cv_gpr2(
     return np.array(test_losses)
 
 
-def quantiles_cv_gpr2(
+def quantiles_cv_gpr(
     x_train,  # (*B, N_train, D)
     y_train,  # (*B, N_train, 1)
     x_test,  # (*B, N_test, D)
