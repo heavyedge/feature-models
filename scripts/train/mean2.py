@@ -10,7 +10,6 @@ from gpytorch import ExactMarginalLogLikelihood
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.means import ZeroMean
 from save import save_gpr2
-from sklearn.preprocessing import MinMaxScaler
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
@@ -45,7 +44,13 @@ else:
     device = torch.device(args.device)
 
 X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
-y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)[..., None]
+
+X_scaler = model_module.MinMaxScaler().to(device)
+y_scaler = model_module.StandardScaler().to(device)
+
+X_scaler.train()
+X_scaled = X_scaler(X)
 
 if args.prior_mean is not None:
     mean_class = getattr(model_module, args.prior_mean)
@@ -53,15 +58,9 @@ else:
     mean_class = ZeroMean
 mean = mean_class().to(device)
 
-_scaler = MinMaxScaler().fit(X.cpu().numpy())
-X_scale = torch.tensor(_scaler.scale_).float()
-X_min = torch.tensor(_scaler.min_).float()
-scaler = model_module.MinMaxScaler(X_scale, X_min).to(device)
-X_scaled = scaler(X)
-
 model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood().to(device)
-model = model_class(X_scaled, y, likelihood).to(device)
+model = model_class(X_scaled, y.squeeze(-1), likelihood).to(device)
 
 model.train()
 likelihood.train()
@@ -70,12 +69,17 @@ mll = ExactMarginalLogLikelihood(likelihood, model)
 optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
 for i in range(args.num_epochs):
+    X_scaler.train()
+    y_scaler.train()
+    mean.train()
+    model.train()
+    likelihood.train()
     optimizer.zero_grad()
 
-    res = y - mean(X)
     output = model(X_scaled)
+    res = y_scaler(y - mean(X)).squeeze(-1)
     loss = -mll(output, res)
-    loss.backward()
+    loss.sum().backward()
     optimizer.step()
 
     logger.info(f"{args.out}: Epoch {i+1}/{args.num_epochs}, Loss: {loss.item():.4f}")
@@ -83,8 +87,9 @@ for i in range(args.num_epochs):
 save_gpr2(
     X,
     y,
+    X_scaler,
+    y_scaler,
     mean,
-    scaler,
     model,
     likelihood,
     args.out,

@@ -39,8 +39,9 @@ def save_model(
 def save_gpr2(
     train_x,
     train_y,
+    X_scaler,
+    y_scaler,
     mean,
-    scaler,
     model,
     likelihood,
     path,
@@ -49,8 +50,9 @@ def save_gpr2(
         {
             "train_x": train_x,
             "train_y": train_y,
+            "X_scaler_state_dict": X_scaler.state_dict(),
+            "y_scaler_state_dict": y_scaler.state_dict(),
             "mean_state_dict": mean.state_dict(),
-            "scaler_state_dict": scaler.state_dict(),
             "model_state_dict": model.state_dict(),
             "likelihood_state_dict": likelihood.state_dict(),
         },
