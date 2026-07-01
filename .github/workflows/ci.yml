@@ -165,6 +165,8 @@ jobs:
   docker-build:
 
     if: ${{ hashFiles('Dockerfile') != '' }}
+    permissions:
+      contents: read
 
     runs-on: ubuntu-latest
 
