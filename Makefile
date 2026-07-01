@@ -146,8 +146,8 @@ model/%.py: scripts/model/%.py
 _temp/best-config.%.mean2.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%_2.csv
 	python3 $^ --target epoch -o $@
 
-_temp/H.mean2.pt: scripts/train/mean2.py _temp/X.csv _temp/y.csv _temp/best-config.H.mean2.epoch
-	python3 $(wordlist 1,3,$^) --target H --model GPR_H_2 --prior-mean PriorMean_H_2 --num-epochs $(shell cat $(word 4,$^)) -o $@
+_temp/%.mean2.pt: scripts/train/mean2.py _temp/X.csv _temp/y.csv _temp/best-config.%.mean2.epoch
+	python3 $(wordlist 1,3,$^) --target $* --model GPR_$*_2 --prior-mean PriorMean_$*_2 --num-epochs $(shell cat $(word 4,$^)) -o $@
 
 # Window prediction
 
