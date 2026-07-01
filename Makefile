@@ -108,6 +108,9 @@ _temp/extrapolation.CgIndependentMtgpqr_%_ConstantMean.csv: scripts/model_select
 _temp/mean_cv.GPR_%.csv: scripts/model_selection/write-mean_cv.gpr.py _temp/X.csv _temp/y.csv
 	python3 $^ --model GPR_$* --target $* --num-folds=5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
+_temp/mean_cv.GPR_%_2.csv: scripts/model_selection/write-mean_cv.gpr2.py _temp/X.csv _temp/y.csv
+	python3 $^ --model GPR_$*_2 --target $* --prior-mean PriorMean_$*_2 --num-folds=5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+
 _temp/quantiles_cv.GPR_%.csv: scripts/model_selection/write-quantiles_cv.gpr.py _temp/X.csv _temp/y.csv
 	python3 $^ --model GPR_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
@@ -117,16 +120,20 @@ _temp/quantiles_cv.CgLmcMtgpqr_%.csv: scripts/model_selection/write-quantiles_cv
 _temp/quantiles_cv.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-quantiles_cv.gpqr.py _temp/X.csv _temp/y.csv
 	python3 $^ --model CgIndependentMtgpqr_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
-_temp/mean_cv.GPR_%_2.csv: scripts/model_selection/write-mean_cv.gpr2.py _temp/X.csv _temp/y.csv
-	python3 $^ --model GPR_$*_2 --target $* --prior-mean PriorMean_$*_2 --num-folds=5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 # Model
 
 _temp/best-config.%.mean.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%.csv
 	python3 $^ --target epoch -o $@
 
+_temp/best-config.%.mean2.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%_2.csv
+	python3 $^ --target epoch -o $@
+
 model/%.mean.pt: scripts/train/mean.py _temp/X.csv _temp/y.csv _temp/best-config.%.mean.epoch
 	python3 $(wordlist 1,3,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(word 4,$^)) -o $@
+
+_temp/%.mean2.pt: scripts/train/mean2.py _temp/X.csv _temp/y.csv _temp/best-config.%.mean2.epoch
+	python3 $(wordlist 1,3,$^) --target $* --model GPR_$*_2 --prior-mean PriorMean_$*_2 --num-epochs $(shell cat $(word 4,$^)) -o $@
 
 _temp/best-config.H.quantiles.epoch: scripts/train/write-best.py _temp/quantiles_cv.CgLmcMtgpqr_H.csv
 	python3 $^ --target epoch -o $@
@@ -142,12 +149,6 @@ model/phi.quantiles.pt: scripts/train/quantiles.py _temp/X.csv _temp/y.csv _temp
 
 model/%.py: scripts/model/%.py
 	cp $< $@
-
-_temp/best-config.%.mean2.epoch: scripts/train/write-best.py _temp/mean_cv.GPR_%_2.csv
-	python3 $^ --target epoch -o $@
-
-_temp/%.mean2.pt: scripts/train/mean2.py _temp/X.csv _temp/y.csv _temp/best-config.%.mean2.epoch
-	python3 $(wordlist 1,3,$^) --target $* --model GPR_$*_2 --prior-mean PriorMean_$*_2 --num-epochs $(shell cat $(word 4,$^)) -o $@
 
 # Window prediction
 

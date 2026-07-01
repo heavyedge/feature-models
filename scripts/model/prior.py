@@ -7,6 +7,7 @@ __all__ = [
     "Scaler",
     "PriorMean_H_2",
     "PriorMean_b_2",
+    "PriorMean_phi_2",
 ]
 
 
@@ -125,6 +126,16 @@ class PriorMean_H_2(torch.nn.Module):
 
 
 class PriorMean_b_2(torch.nn.Module):
+    def __init__(self, batch_shape=torch.Size()):
+        super().__init__()
+        self.batch_shape = batch_shape
+
+    def forward(self, x):
+        N = x.shape[-2]
+        return torch.zeros(*self.batch_shape, N, 1, device=x.device)
+
+
+class PriorMean_phi_2(torch.nn.Module):
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
         self.batch_shape = batch_shape
