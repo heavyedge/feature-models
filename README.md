@@ -7,6 +7,8 @@ Repository to train and distribute models related to heavy edge shape features.
 - Gaussian process quantile regression models.
 - Quality window models (deterministic and probabilistic).
 
+You would want to build this repository in the CUDA environment.
+
 ## Download feature data
 
 ```
@@ -14,18 +16,28 @@ curl -LsSf https://hf.co/cli/install.sh | bash
 hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
 ```
 
-## Train & plot
+## Install prereqisites
 
 ```
 pip install -r requirements.txt
-make
 ```
 
-You may want to run `make` in the CUDA environment.
+## Train & plot
+
+```
+make models
+make notebooks
+```
+
+### Testing built models
+
+```
+make test
+```
 
 ## Developing
 
-### Re-building notebooks
+### Configuring git
 
 Configure the local git filter (run once after cloning):
 
@@ -35,16 +47,16 @@ git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
 ```
 
-Then build the notebooks:
+### Building models using Docker
 
 ```
-make notebooks
+docker build --target models --output type=local,dest=./model .
 ```
 
-### Testing built models
+### Building notebooks using Docker
 
 ```
-make test
+docker build --target notebooks --output type=local,dest=./notebooks .
 ```
 
 ## Versioning policy
