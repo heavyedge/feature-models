@@ -15,7 +15,8 @@ model/prior.py \
 model/scale.py \
 model/gpr.py \
 model/gpqr.py \
-model/load.py
+model/load.py \
+model/requirements.txt
 
 notebooks: $(NOTEBOOKS)
 
@@ -29,7 +30,7 @@ test:
 all: models notebooks
 
 clean:
-	rm -rf _temp _artifacts model/*.pt model/*.py
+	rm -rf _temp _artifacts model/*.pt model/*.py model/requirements.txt
 
 # Notebooks
 
@@ -135,6 +136,9 @@ model/phi.quantiles.pt: scripts/train/quantiles.py _temp/X.csv _temp/y.csv _temp
 
 model/%.py: scripts/model/%.py
 	cp $< $@
+
+model/requirements.txt: requirements.txt
+	grep -E '^(numpy|torch|gpytorch-qr|gpytorch)([>=<!~,; \t]|$$)' $< > $@
 
 # Window prediction
 
