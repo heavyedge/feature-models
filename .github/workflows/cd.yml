@@ -14,6 +14,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to Docker registry
         shell: bash
         env:
@@ -27,10 +33,20 @@ jobs:
             fi
 
             if [ "$attempt" -lt 2 ]; then
-              echo "Docker login failed. Retrying in 10 seconds..."
-              sleep 10
+              echo "Docker login failed. Retrying in 3 seconds..."
+              sleep 3
             fi
           done
 
           echo "Docker login failed after 2 attempts."
           exit 1
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          target: dev
+          secrets: |
+            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          tags: ${{ secrets.DOCKER_REGISTRY }}/registry/${{ secrets.DOCKER_USERNAME }}/heavyedge-feature-models:latest
