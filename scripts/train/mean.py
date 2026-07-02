@@ -46,8 +46,11 @@ else:
 X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
-X_scaler = model_module.MinMaxScaler().to(device)
-y_scaler = model_module.StandardScaler().to(device)
+dim = X.shape[-1]
+batch_shape = X.shape[:-2]
+
+X_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
 X_scaler.train()
 X_scaled = X_scaler(X)

@@ -61,15 +61,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
+dim = X.shape[-1]
+batch_shape = torch.Size([args.num_folds])
+
 x_train, y_train, x_test, y_test = split_data2(
     X.cpu().numpy(), y.cpu().numpy(), args.num_folds, device
 )
-x_scaler = model_module.MinMaxScaler(batch_shape=torch.Size([args.num_folds])).to(
-    device
-)
-y_scaler = model_module.StandardScaler(batch_shape=torch.Size([args.num_folds])).to(
-    device
-)
+x_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+
 
 x_scaler.train()
 x_scaled = x_scaler(x_train)
@@ -78,10 +78,10 @@ if args.prior_mean is not None:
     mean_class = getattr(model_module, args.prior_mean)
 else:
     mean_class = ZeroMean
-mean = mean_class(batch_shape=torch.Size([args.num_folds])).to(device)
+mean = mean_class(batch_shape=batch_shape).to(device)
 
 model_class = getattr(model_module, args.model)
-likelihood = GaussianLikelihood(batch_shape=torch.Size([args.num_folds])).to(device)
+likelihood = GaussianLikelihood(batch_shape=batch_shape).to(device)
 with torch.no_grad():
     y_scaler.train()
     y_scaled = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
@@ -89,7 +89,7 @@ model = model_class(
     x_scaled,
     y_scaled,
     likelihood,
-    batch_shape=torch.Size([args.num_folds]),
+    batch_shape=batch_shape,
 ).to(device)
 
 cv = mean_cv_gpr(

@@ -79,9 +79,11 @@ def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, devic
     checkpoint = torch.load(path, map_location=device, weights_only=False)
     X = checkpoint["train_x"]
     y = checkpoint["train_y"]
+    dim = X.shape[-1]
+    batch_shape = X.shape[:-2]
 
-    X_scaler = xscaler_class()
-    y_scaler = yscaler_class()
+    X_scaler = xscaler_class(dim, batch_shape=batch_shape)
+    y_scaler = yscaler_class(1, batch_shape=batch_shape)
     mean = mean_class()
     likelihood = GaussianLikelihood()
 

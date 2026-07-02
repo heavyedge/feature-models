@@ -53,8 +53,8 @@ def save_gpr(
             "X_scaler_state_dict": X_scaler.state_dict(),
             "y_scaler_state_dict": y_scaler.state_dict(),
             "mean_state_dict": mean.state_dict(),
-            "model_state_dict": model.state_dict(),
             "likelihood_state_dict": likelihood.state_dict(),
+            "model_state_dict": model.state_dict(),
         },
         path,
     )

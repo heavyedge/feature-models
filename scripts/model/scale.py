@@ -11,13 +11,19 @@ class MinMaxScaler(torch.nn.Module):
 
     Parameters
     ----------
+    dim : int
+        Dimension of the input data.
     batch_shape : torch.Size
         Shape of the batch dimension.
     """
 
-    def __init__(self, batch_shape=torch.Size()):
+    def __init__(self, dim, batch_shape=torch.Size()):
         super().__init__()
+        self.dim = dim
         self.batch_shape = batch_shape
+
+        self.register_buffer("X_min", torch.zeros(batch_shape + torch.Size([dim])))
+        self.register_buffer("X_max", torch.zeros(batch_shape + torch.Size([dim])))
 
     def forward(self, x):
         if self.training:
@@ -36,13 +42,19 @@ class StandardScaler(torch.nn.Module):
 
     Parameters
     ----------
+    dim : int
+        Dimension of the input data.
     batch_shape : torch.Size
         Shape of the batch dimension.
     """
 
-    def __init__(self, batch_shape=torch.Size()):
+    def __init__(self, dim, batch_shape=torch.Size()):
         super().__init__()
+        self.dim = dim
         self.batch_shape = batch_shape
+
+        self.register_buffer("X_mean", torch.zeros(batch_shape + torch.Size([dim])))
+        self.register_buffer("X_scale", torch.zeros(batch_shape + torch.Size([dim])))
 
     def forward(self, x):
         if self.training:
