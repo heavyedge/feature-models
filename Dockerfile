@@ -65,3 +65,13 @@ FROM scratch AS notebooks
 WORKDIR /
 
 COPY --from=build-notebooks /workspace/notebooks ./
+
+
+FROM python:slim AS dev
+
+WORKDIR /src
+COPY . .
+COPY --from=downloader /dataset/_data ./_data
+RUN pip install --no-cache-dir -r requirements.txt
+
+WORKDIR /workspaces
