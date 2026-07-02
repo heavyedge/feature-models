@@ -196,23 +196,3 @@ jobs:
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           outputs: type=local,dest=./notebooks
-
-  docker-dev:
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build docker dev image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          target: dev
-          secrets: |
-            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
