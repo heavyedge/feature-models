@@ -196,3 +196,28 @@ jobs:
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           outputs: type=local,dest=./notebooks
+
+  docker-dev:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          target: dev
+          secrets: |
+            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          tags: heavyedge-feature-models:dev-ci
+
+      - name: Test Docker image
+        run: docker run --rm heavyedge-feature-models:dev-ci sh -c 'HEAVYEDGE_N_EPOCHS=1 make models'

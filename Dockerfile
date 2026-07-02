@@ -70,6 +70,11 @@ COPY --from=build-notebooks /workspace/notebooks ./
 FROM python:slim AS dev
 
 WORKDIR /src
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends make \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=downloader /dataset/_data ./_data
 # Copy the requirements first to cache layer
 COPY requirements.txt .
