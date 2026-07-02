@@ -99,7 +99,7 @@ def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, devic
         likelihood=likelihood,
     )
 
-    X_scaler.load_state_dict(checkpoint["x_scaler_state_dict"])
+    X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
     y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
     mean.load_state_dict(checkpoint["mean_state_dict"])
     likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
