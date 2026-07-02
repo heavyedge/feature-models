@@ -10,11 +10,12 @@ ENV PATH="/root/.local/bin:$PATH"
 
 RUN curl -LsSf https://hf.co/cli/install.sh | bash
 
+COPY setup.sh .
 RUN --mount=type=secret,id=hf_token,required=false \
     if [ -s /run/secrets/hf_token ]; then \
         hf auth login --token "$(cat /run/secrets/hf_token)"; \
     fi \
-    && hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
+    && ./setup.sh
 
 
 FROM python:slim AS build-models

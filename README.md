@@ -13,7 +13,8 @@ You would want to build this repository in the CUDA environment.
 
 ```
 curl -LsSf https://hf.co/cli/install.sh | bash
-hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
+hf auth login --token [Huggingface token]
+./setup.sh
 ```
 
 ## Install prereqisites
@@ -49,14 +50,18 @@ git config filter.nbstripout.required true
 
 ### Building models using Docker
 
+Store Huggingface token in `HF_TOKEN` environment variable and run the following command:
+
 ```
-docker build --target models --output type=local,dest=./model .
+docker build --secret id=hf_token,env=HF_TOKEN --target models --output type=local,dest=./model .
 ```
 
 ### Building notebooks using Docker
 
+Store Huggingface token in `HF_TOKEN` environment variable and run the following command:
+
 ```
-docker build --target notebooks --output type=local,dest=./notebooks .
+docker build --secret id=hf_token,env=HF_TOKEN --target notebooks --output type=local,dest=./notebooks .
 ```
 
 ## Versioning policy
