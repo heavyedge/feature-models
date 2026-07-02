@@ -70,8 +70,21 @@ COPY --from=build-notebooks /workspace/notebooks ./
 FROM python:slim AS dev
 
 WORKDIR /src
-COPY . .
 COPY --from=downloader /dataset/_data ./_data
+# Copy the requirements first to cache layer
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
 
-WORKDIR /workspaces
+ARG IMAGE_CREATED
+ARG IMAGE_VERSION
+ARG IMAGE_REVISION
+ARG IMAGE_TITLE
+ARG IMAGE_DESCRIPTION
+LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
+      org.opencontainers.image.authors="Jisoo Song <jeesoo9595@snu.ac.kr>" \
+      org.opencontainers.image.source="https://github.com/jisoosong/heavyedge" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.title="${IMAGE_TITLE}" \
+      org.opencontainers.image.description="${IMAGE_DESCRIPTION}"
