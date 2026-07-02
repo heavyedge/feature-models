@@ -157,9 +157,9 @@ def split_extrapolate_data2(X, y, ratio, device):
 
 def mean_cv_gpr(
     x_train,  # (*B, N_train, D)
-    y_train,  # (*B, N_train, 1)
+    y_train,  # (*B, N_train)
     x_test,  # (*B, N_test, D)
-    y_test,  # (*B, N_test, 1)
+    y_test,  # (*B, N_test)
     x_scaler,
     y_scaler,
     mean,
@@ -232,9 +232,9 @@ def mean_cv_gpr(
 
 def quantiles_cv_gpr(
     x_train,  # (*B, N_train, D)
-    y_train,  # (*B, N_train, 1)
+    y_train,  # (*B, N_train)
     x_test,  # (*B, N_test, D)
-    y_test,  # (*B, N_test, 1)
+    y_test,  # (*B, N_test)
     x_scaler,
     y_scaler,
     mean,

@@ -66,7 +66,7 @@ torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
-y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)[..., None]
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
 x_train, y_train, x_test, y_test = split_data2(
     X.cpu().numpy(), y.cpu().numpy(), args.num_folds, device

@@ -44,7 +44,7 @@ else:
     device = torch.device(args.device)
 
 X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
-y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)[..., None]
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
 X_scaler = model_module.MinMaxScaler().to(device)
 y_scaler = model_module.StandardScaler().to(device)
