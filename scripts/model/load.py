@@ -87,22 +87,24 @@ def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, devic
     mean = mean_class()
     likelihood = GaussianLikelihood()
 
+    X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
+    y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
+    mean.load_state_dict(checkpoint["mean_state_dict"])
+    likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
+
     X_scaler.eval()
     y_scaler.eval()
     mean.eval()
     with torch.no_grad():
         X_scaled = X_scaler(X)
         res = y_scaler(y - mean(X)).squeeze(-1)
+    print(X_scaled, res)
     model = model_class(
         train_x=X_scaled.detach(),
         train_y=res.detach(),
         likelihood=likelihood,
     )
 
-    X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
-    y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
-    mean.load_state_dict(checkpoint["mean_state_dict"])
-    likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
     model.load_state_dict(checkpoint["model_state_dict"])
 
     if device is not None:
