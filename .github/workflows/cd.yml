@@ -14,21 +14,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Connect to VPN
+        shell: bash
         run: |
           set -euo pipefail
 
           sudo apt-get update
-          sudo apt-get install -y strongswan strongswan-swanctl libcharon-extra-plugins dnsutils
+          sudo apt-get install -y strongswan strongswan-swanctl libcharon-extra-plugins dnsutils jq
 
           # Validate required inputs early.
-          for v in VPN_SERVER VPN_PSK VPN_USERNAME VPN_PASSWORD; do
+          for v in VPN_SERVER VPN_PSK VPN_USERNAME VPN_PASSWORD DOCKER_REGISTRY; do
             if [ -z "${!v:-}" ]; then
               echo "Missing required env: $v"
               exit 1
@@ -115,19 +110,217 @@ jobs:
 
           echo "VPN peer address verified"
 
+          REGISTRY="${DOCKER_REGISTRY%/}"
+          REGISTRY_SCHEME="https"
+          if [[ "$REGISTRY" == http://* ]]; then
+            REGISTRY_SCHEME="http"
+          fi
+
+          REGISTRY_AUTHORITY="${REGISTRY#http://}"
+          REGISTRY_AUTHORITY="${REGISTRY_AUTHORITY#https://}"
+          REGISTRY_AUTHORITY="${REGISTRY_AUTHORITY%%/*}"
+          REGISTRY_HOST="${REGISTRY_AUTHORITY%%:*}"
+          REGISTRY_PORT="${REGISTRY_AUTHORITY##*:}"
+          if [ "$REGISTRY_PORT" = "$REGISTRY_AUTHORITY" ]; then
+            if [ "$REGISTRY_SCHEME" = "http" ]; then
+              REGISTRY_PORT="80"
+            else
+              REGISTRY_PORT="443"
+            fi
+          fi
+          echo "::add-mask::$REGISTRY_AUTHORITY"
+          echo "::add-mask::$REGISTRY_HOST"
+
+          REGISTRY_IP="$(getent ahostsv4 "$REGISTRY_HOST" 2>/dev/null | awk 'NR == 1 { print $1 }' || true)"
+          if [ -z "$REGISTRY_IP" ]; then
+            echo "Cannot resolve Docker registry host after VPN connection: $REGISTRY_HOST"
+            echo "=== resolv.conf ==="
+            cat /etc/resolv.conf || true
+            exit 1
+          fi
+          echo "::add-mask::$REGISTRY_IP"
+
+          VPN_CLIENT_IP="$(sudo ipsec statusall | awk '/virtual IP/ { print $NF; exit }' | tr -d ',' || true)"
+          if [ -z "$VPN_CLIENT_IP" ]; then
+            VPN_CLIENT_IP="$(sudo ip xfrm policy | awk '
+              /^src / { src = $2 }
+              /dir out/ && src != "" {
+                sub(/\/.*/, "", src)
+                print src
+                exit
+              }
+            ' || true)"
+          fi
+
+          if [ -n "$VPN_CLIENT_IP" ] && [ "$VPN_CLIENT_IP" != "0.0.0.0" ]; then
+            echo "::add-mask::$VPN_CLIENT_IP"
+
+            if ! ip -4 addr show | grep -q " $VPN_CLIENT_IP/"; then
+              sudo ip addr add "$VPN_CLIENT_IP/32" dev lo || true
+            fi
+
+            DEFAULT_DEV="$(ip route show default | awk 'NR == 1 { print $5 }')"
+            DEFAULT_GW="$(ip route show default | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "via") print $(i + 1) }')"
+
+            if [ -n "$DEFAULT_DEV" ]; then
+              if [ -n "$DEFAULT_GW" ]; then
+                sudo ip route replace "$REGISTRY_IP/32" via "$DEFAULT_GW" dev "$DEFAULT_DEV" src "$VPN_CLIENT_IP" || true
+              else
+                sudo ip route replace "$REGISTRY_IP/32" dev "$DEFAULT_DEV" src "$VPN_CLIENT_IP" || true
+              fi
+            fi
+          fi
+
+          echo "=== Docker registry route ==="
+          ip route get "$REGISTRY_IP" || true
+          ip route show table 220 || true
+
+          for attempt in 1 2 3 4 5; do
+            if timeout 5 bash -c "</dev/tcp/$REGISTRY_HOST/$REGISTRY_PORT" 2>/dev/null; then
+              echo "Docker registry TCP endpoint is reachable through VPN"
+              break
+            fi
+
+            if [ "$attempt" = "5" ]; then
+              echo "Docker registry TCP endpoint is not reachable through VPN: $REGISTRY_HOST:$REGISTRY_PORT"
+              echo "=== routes ==="
+              ip route || true
+              echo "=== rules ==="
+              ip rule || true
+              echo "=== table 220 ==="
+              ip route show table 220 || true
+              echo "=== xfrm policy ==="
+              sudo ip xfrm policy || true
+              echo "=== ipsec statusall ==="
+              sudo ipsec statusall || true
+              exit 1
+            fi
+
+            echo "Docker registry TCP endpoint is not reachable yet (attempt $attempt/5)"
+            sleep 5
+          done
+
         env:
           VPN_SERVER: ${{ secrets.VPN_SERVER }}
           VPN_PSK: ${{ secrets.VPN_PSK }}
           VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
           VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
           VPN_REMOTE_SUBNET: ${{ secrets.VPN_REMOTE_SUBNET }}
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
 
-      - name: Log in to Docker registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.DOCKER_REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Log in to private Docker registry
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for v in DOCKER_REGISTRY DOCKER_USERNAME DOCKER_PASSWORD; do
+            if [ -z "${!v:-}" ]; then
+              echo "Missing required env: $v"
+              exit 1
+            fi
+          done
+
+          REGISTRY="${DOCKER_REGISTRY%/}"
+          REGISTRY_HOST="${REGISTRY#http://}"
+          REGISTRY_HOST="${REGISTRY_HOST#https://}"
+          REGISTRY_HOST="${REGISTRY_HOST%%/*}"
+          echo "::add-mask::$REGISTRY_HOST"
+
+          reachable() {
+            local url="$1"
+            shift
+
+            local code
+            code="$(curl "$@" --silent --show-error --output /dev/null --write-out "%{http_code}" \
+              --connect-timeout 5 --max-time 15 "$url" 2>/dev/null || true)"
+
+            case "$code" in
+              200|401|403) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          wait_for_registry() {
+            local url="$1"
+            shift
+
+            for attempt in 1 2 3 4 5; do
+              if reachable "$url" "$@"; then
+                return 0
+              fi
+
+              echo "Registry is not reachable at $url yet (attempt $attempt/5)"
+              sleep 5
+            done
+
+            return 1
+          }
+
+          configure_insecure_registry() {
+            if ! command -v jq >/dev/null 2>&1; then
+              echo "jq is required to update Docker daemon config"
+              exit 1
+            fi
+
+            local tmp
+            tmp="$(mktemp)"
+
+            if [ -f /etc/docker/daemon.json ]; then
+              sudo jq --arg registry "$REGISTRY_HOST" \
+                '.["insecure-registries"] = ((.["insecure-registries"] // []) + [$registry] | unique)' \
+                /etc/docker/daemon.json | sudo tee "$tmp" >/dev/null
+            else
+              jq -n --arg registry "$REGISTRY_HOST" \
+                '{"insecure-registries": [$registry]}' | sudo tee "$tmp" >/dev/null
+            fi
+
+            sudo install -m 0644 "$tmp" /etc/docker/daemon.json
+            rm -f "$tmp"
+            sudo systemctl restart docker
+          }
+
+          USE_INSECURE_REGISTRY=false
+
+          if [[ "$REGISTRY" == http://* ]]; then
+            USE_INSECURE_REGISTRY=true
+            if ! wait_for_registry "http://$REGISTRY_HOST/v2/"; then
+              echo "Docker registry is not reachable through the VPN: $REGISTRY_HOST"
+              ip route || true
+              exit 1
+            fi
+          elif wait_for_registry "https://$REGISTRY_HOST/v2/"; then
+            :
+          elif wait_for_registry "https://$REGISTRY_HOST/v2/" --insecure; then
+            USE_INSECURE_REGISTRY=true
+          elif wait_for_registry "http://$REGISTRY_HOST/v2/"; then
+            USE_INSECURE_REGISTRY=true
+          else
+            echo "Docker registry is not reachable through the VPN: $REGISTRY_HOST"
+            ip route || true
+            exit 1
+          fi
+
+          if [ "$USE_INSECURE_REGISTRY" = "true" ]; then
+            configure_insecure_registry
+          fi
+
+          for attempt in 1 2 3; do
+            if printf '%s' "$DOCKER_PASSWORD" | docker login "$REGISTRY_HOST" --username "$DOCKER_USERNAME" --password-stdin; then
+              exit 0
+            fi
+
+            echo "Docker registry login failed (attempt $attempt/3)"
+            sleep 5
+          done
+
+          exit 1
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build docker dev image
         uses: docker/build-push-action@v6
