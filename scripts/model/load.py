@@ -98,7 +98,6 @@ def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, devic
     with torch.no_grad():
         X_scaled = X_scaler(X)
         res = y_scaler(y - mean(X)).squeeze(-1)
-    print(X_scaled, res)
     model = model_class(
         train_x=X_scaled.detach(),
         train_y=res.detach(),
