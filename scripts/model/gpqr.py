@@ -4,10 +4,10 @@ from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
-    LMCVariationalStrategy,
     UnwhitenedVariationalStrategy,
 )
 from gpytorch_qr.models import CenterGapQuantileGP
+from gpytorch_qr.variational import CenterGapLMCVariationalStrategy
 
 __all__ = [
     "CenterGapMTGPQR_H",
@@ -30,15 +30,17 @@ class CenterGapMTGPQR_H(CenterGapQuantileGP):
             N,
             batch_shape=full_batch_shape,
         )
-        variational_strategy = LMCVariationalStrategy(
+        variational_strategy = CenterGapLMCVariationalStrategy(
             UnwhitenedVariationalStrategy(
                 self,
                 inducing_points,
                 variational_distribution,
                 learn_inducing_locations=False,
             ),
-            num_quantiles,
-            num_latents,
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+            num_quantiles=[num_quantiles],
+            num_lower_quantiles=[num_lower_quantiles],
         )
 
         mean = ConstantMean(batch_shape=full_batch_shape)
@@ -68,15 +70,17 @@ class CenterGapMTGPQR_phi(CenterGapQuantileGP):
             N,
             batch_shape=full_batch_shape,
         )
-        variational_strategy = LMCVariationalStrategy(
+        variational_strategy = CenterGapLMCVariationalStrategy(
             UnwhitenedVariationalStrategy(
                 self,
                 inducing_points,
                 variational_distribution,
                 learn_inducing_locations=False,
             ),
-            num_quantiles,
-            num_latents,
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+            num_quantiles=[num_quantiles],
+            num_lower_quantiles=[num_lower_quantiles],
         )
 
         mean = ConstantMean(batch_shape=full_batch_shape)
