@@ -39,10 +39,20 @@ class PriorMean_H(torch.nn.Module):
 
 
 class PriorMean_phi(torch.nn.Module):
+    """Modified version of model by Schmitt.
+
+    Input X must be [Rgt, Ca, cos_theta, ...].
+    """
+
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
         self.batch_shape = batch_shape
+        self.register_buffer("a", torch.full(batch_shape, 2.0))
+        self.register_buffer("b", torch.full(batch_shape, -3.0))
 
     def forward(self, x):
-        N = x.shape[-2]
-        return torch.zeros(*self.batch_shape, N, device=x.device)
+        Rgt = x[..., 0]  # (*B, N)
+
+        a = self.a.unsqueeze(-1)  # (*B, 1)
+        b = self.b.unsqueeze(-1)  # (*B, 1)
+        return a * Rgt + b
