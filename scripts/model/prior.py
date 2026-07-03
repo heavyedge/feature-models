@@ -16,29 +16,27 @@ class PriorMean_H(torch.nn.Module):
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
         self.batch_shape = batch_shape
-        self.params = torch.nn.ParameterDict(
-            {
-                "a": torch.nn.Parameter(torch.full(batch_shape, 1.0)),
-                "b": torch.nn.Parameter(torch.full(batch_shape, 0.0)),
-                "c": torch.nn.Parameter(torch.full(batch_shape, 0.0)),
-            }
-        )
+        self.register_buffer("a", torch.full(batch_shape, 0.22))
+        self.register_buffer("b", torch.full(batch_shape, -0.43))
+        self.register_buffer("c", torch.full(batch_shape, 0.77))
 
     def forward(self, x):
         Rgt = x[..., 0]  # (*B, N)
         Ca = x[..., 1]  # (*B, N)
         cos_theta = x[..., 2]  # (*B, N)
 
-        a = self.params["a"].unsqueeze(-1)  # (*B, 1)
-        b = self.params["b"].unsqueeze(-1)  # (*B, 1)
-        c = self.params["c"].unsqueeze(-1)  # (*B, 1)
+        a = self.a.unsqueeze(-1)  # (*B, 1)
+        b = self.b.unsqueeze(-1)  # (*B, 1)
+        c = self.c.unsqueeze(-1)  # (*B, 1)
 
         lamda = a * Ca**b * cos_theta**c
         E = 2 / (-lamda + torch.sqrt(lamda**2 + (4 / Rgt)))
 
         model = Rgt / E
-        corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
-        return corrected_model  # (*B, N)
+        corrected_model = model.clamp_min(1.0)
+        # Preserve the physical lower bound in the forward pass while keeping
+        # gradients alive when the initial model is below 1 for every sample.
+        return model + (corrected_model - model).detach()  # (*B, N)
 
 
 class PriorMean_b(torch.nn.Module):
