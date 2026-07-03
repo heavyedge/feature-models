@@ -86,7 +86,7 @@ X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(d
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
 dim = X.shape[-1]
-batch_shape = X.shape[:-2]
+batch_shape = torch.Size([1])
 
 x_train, y_train, x_test, y_test = split_extrapolate_data(
     X.cpu().numpy(), y.cpu().numpy(), args.split_ratio, device
@@ -103,7 +103,7 @@ if args.prior_mean is not None:
     mean = mean_class(batch_shape=batch_shape).to(device)
     mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 else:
-    mean_class = ZeroMean(batch_shape=batch_shape).to(device)
+    mean = ZeroMean(batch_shape=batch_shape).to(device)
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 

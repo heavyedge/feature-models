@@ -43,9 +43,9 @@ def split_extrapolate_data(X, y, ratio, device):
     test_idx = np.where(distances > threshold)[0]
 
     # Add singleton batch dimension
-    x_train = torch.tensor(X_scaled[train_idx]).float().to(device).unsqueeze(0)
+    x_train = torch.tensor(X[train_idx]).float().to(device).unsqueeze(0)
     y_train = torch.tensor(y[train_idx]).float().to(device).unsqueeze(0)
-    x_test = torch.tensor(X_scaled[test_idx]).float().to(device).unsqueeze(0)
+    x_test = torch.tensor(X[test_idx]).float().to(device).unsqueeze(0)
     y_test = torch.tensor(y[test_idx]).float().to(device).unsqueeze(0)
 
     return x_train, y_train, x_test, y_test
