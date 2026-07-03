@@ -102,16 +102,13 @@ _temp/extrapolation.CgIndependentMtgpqr_%_ConstantMean.csv: scripts/model_select
 	python3 $^ --model CgIndependentMtgpqr_$*_ConstantMean --target $* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/mean_cv.GPR_%.csv: scripts/model_selection/write-mean_cv.gpr.py _temp/X.csv _temp/y.csv
-	python3 $^ --model GPR_$* --target $* --prior-mean PriorMean_$*2 --num-folds=5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --target $* --model GPR_$* --prior-mean PriorMean_$*2 --num-folds=5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/quantiles_cv.GPR_%.csv: scripts/model_selection/write-quantiles_cv.gpr.py _temp/X.csv _temp/y.csv
-	python3 $^ --model GPR_$* --target $* --prior-mean PriorMean_$*2 --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --target $* --model GPR_$* --prior-mean PriorMean_$*2 --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
-_temp/quantiles_cv.CgLmcMtgpqr_%.csv: scripts/model_selection/write-quantiles_cv.gpqr.py _temp/X.csv _temp/y.csv
-	python3 $^ --model CgLmcMtgpqr_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
-
-_temp/quantiles_cv.CgIndependentMtgpqr_%.csv: scripts/model_selection/write-quantiles_cv.gpqr.py _temp/X.csv _temp/y.csv
-	python3 $^ --model CgIndependentMtgpqr_$* --target $* --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-lower-latents 2 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+_temp/quantiles_cv.CenterGapMTGPQR_%.csv: scripts/model_selection/write-quantiles_cv.gpqr.py _temp/X.csv _temp/y.csv
+	python3 $^ --target $* --model CenterGapMTGPQR_$* --prior-mean PriorMean_$*2 --num-folds=5 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 
 # Model

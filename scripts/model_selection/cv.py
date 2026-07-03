@@ -8,11 +8,11 @@ from sklearn.preprocessing import MinMaxScaler
 __all__ = [
     "split_data",
     "split_extrapolate_data",
-    "quantiles_cv_gpqr",
     "split_data2",
     "split_extrapolate_data2",
     "mean_cv_gpr",
     "quantiles_cv_gpr",
+    "quantiles_cv_gpqr",
 ]
 
 
@@ -60,61 +60,6 @@ def split_extrapolate_data(X, y, ratio, device):
     x_mins = torch.tensor(scaler.min_).float().unsqueeze(0).to(device)
 
     return x_train, y_train, x_test, y_test, x_scales, x_mins
-
-
-def quantiles_cv_gpqr(
-    x_train,
-    y_train,
-    x_test,
-    y_test,
-    quantiles,
-    model,
-    likelihood,
-    n_epochs,
-    learning_rate=0.001,
-    logger=lambda msg: None,
-):
-    mll = VariationalELBO(likelihood, model, num_data=y_train.shape[1])
-    optimizer = torch.optim.Adam(
-        list(model.parameters()) + list(likelihood.parameters()),
-        lr=learning_rate,
-    )
-
-    test_losses_per_fold = []
-    for i in range(n_epochs):
-        model.train()
-        likelihood.train()
-        output = model(x_train)
-
-        train_loss = -mll(output, y_train)
-        train_loss.sum().backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
-        model.eval()
-        likelihood.eval()
-        with torch.no_grad():
-            output = model.mean_quantiles_delta(x_test)  # (K, N, Q)
-            epoch_fold_losses = []
-            for y_test_fold, output_fold in zip(y_test, output):
-                pinball_losses = []
-                for j, q in enumerate(quantiles):
-                    test_loss = mean_pinball_loss(
-                        y_test_fold.cpu().numpy(),
-                        output_fold[:, j].cpu().numpy(),
-                        alpha=q.item(),
-                    )
-                    pinball_losses.append(test_loss)
-                epoch_fold_losses.append(np.mean(pinball_losses))
-            test_losses_per_fold.append(epoch_fold_losses)
-
-        logger(
-            f"Epoch {i+1}/{n_epochs}, "
-            f"Train Loss: {train_loss.mean().item():.4f}, "
-            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
-        )
-
-    return np.array(test_losses_per_fold)
 
 
 def split_data2(X, y, n_folds, device, random_state=42):
@@ -293,6 +238,77 @@ def quantiles_cv_gpr(
         likelihood.eval()
         with torch.no_grad():
             test_output = model.quantiles(x_scaler(x_test), quantiles)
+            test_res = y_scaler((y_test - mean(x_test)).unsqueeze(-1)).squeeze(-1)
+            epoch_fold_losses = []
+            for test_res_fold, output_fold in zip(test_res, test_output):
+                pinball_losses = []
+                for j, q in enumerate(quantiles):
+                    test_loss = mean_pinball_loss(
+                        test_res_fold.cpu().numpy(),
+                        output_fold[:, j].cpu().numpy(),
+                        alpha=q.item(),
+                    )
+                    pinball_losses.append(test_loss)
+                epoch_fold_losses.append(np.mean(pinball_losses))
+            test_losses.append(epoch_fold_losses)
+
+        logger(
+            f"Epoch {i+1}/{n_epochs}, "
+            f"Train Loss: {train_loss.mean().item():.4f}, "
+            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+        )
+
+    return np.array(test_losses)
+
+
+def quantiles_cv_gpqr(
+    x_train,  # (*B, N_train, D)
+    y_train,  # (*B, N_train)
+    x_test,  # (*B, N_test, D)
+    y_test,  # (*B, N_test)
+    x_scaler,
+    y_scaler,
+    mean,
+    model,
+    likelihood,
+    quantiles,
+    n_epochs,
+    learning_rate=0.001,
+    logger=lambda msg: None,
+):
+    mll = VariationalELBO(likelihood, model, num_data=y_train.shape[-1])
+    optimizer = torch.optim.Adam(
+        list(x_scaler.parameters())
+        + list(y_scaler.parameters())
+        + list(mean.parameters())
+        + list(model.parameters())
+        + list(likelihood.parameters()),
+        lr=learning_rate,
+    )
+
+    test_losses = []
+    for i in range(n_epochs):
+        x_scaler.train()
+        y_scaler.train()
+        mean.train()
+        model.train()
+        likelihood.train()
+        optimizer.zero_grad()
+
+        train_x_scaled = x_scaler(x_train)
+        train_res = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
+        train_output = model(train_x_scaled)
+        train_loss = -mll(train_output, train_res)
+        train_loss.sum().backward()
+        optimizer.step()
+
+        mean.eval()
+        x_scaler.eval()
+        y_scaler.eval()
+        model.eval()
+        likelihood.eval()
+        with torch.no_grad():
+            test_output = model.quantiles(x_scaler(x_test))
             test_res = y_scaler((y_test - mean(x_test)).unsqueeze(-1)).squeeze(-1)
             epoch_fold_losses = []
             for test_res_fold, output_fold in zip(test_res, test_output):

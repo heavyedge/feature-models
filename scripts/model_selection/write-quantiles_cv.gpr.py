@@ -78,6 +78,7 @@ x_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
 y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
 x_scaler.train()
+y_scaler.train()
 x_scaled = x_scaler(x_train)
 
 if args.prior_mean is not None:
@@ -86,11 +87,11 @@ else:
     mean_class = ZeroMean
 mean = mean_class(batch_shape=batch_shape).to(device)
 
+with torch.no_grad():
+    y_scaled = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
+
 model_class = getattr(model_module, args.model)
 likelihood = GaussianLikelihood(batch_shape=batch_shape).to(device)
-with torch.no_grad():
-    y_scaler.train()
-    y_scaled = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
 model = model_class(
     x_scaled,
     y_scaled,
