@@ -7,7 +7,6 @@ import sys
 import pandas as pd
 import torch
 from crossing import quantile_crossing
-from gpytorch.means import ZeroMean
 from gpytorch_qr.likelihoods import DirectQuantileLikelihood
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
@@ -35,6 +34,11 @@ parser.add_argument(
     help="Response csv file.",
 )
 parser.add_argument(
+    "prior_mean",
+    type=pathlib.Path,
+    help="Prior mean model weight file.",
+)
+parser.add_argument(
     "X_test",
     type=pathlib.Path,
     nargs="+",
@@ -42,7 +46,6 @@ parser.add_argument(
 )
 parser.add_argument("--target", required=True)
 parser.add_argument("--model", required=True)
-parser.add_argument("--prior-mean", type=str, help="Prior mean class name.")
 parser.add_argument(
     "--quantiles",
     type=float,
@@ -85,11 +88,9 @@ y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 X_scaler.train()
 X_scaled = X_scaler(X)
 
-if args.prior_mean is not None:
-    mean_class = getattr(model_module, args.prior_mean)
-else:
-    mean_class = ZeroMean
+mean_class = getattr(model_module, "PriorMean_" + args.target)
 mean = mean_class(batch_shape=batch_shape).to(device)
+mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 

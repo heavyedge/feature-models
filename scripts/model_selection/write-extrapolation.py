@@ -32,9 +32,14 @@ parser.add_argument(
     type=pathlib.Path,
     help="Response csv file.",
 )
+parser.add_argument(
+    "prior_mean",
+    type=pathlib.Path,
+    nargs="?",
+    help="Prior mean model weight file.",
+)
 parser.add_argument("--target", required=True)
 parser.add_argument("--model", required=True)
-parser.add_argument("--prior-mean", type=str, help="Prior mean class name.")
 parser.add_argument(
     "--split-ratio",
     type=float,
@@ -94,13 +99,11 @@ y_scaler.train()
 x_scaled = x_scaler(x_train)
 
 if args.prior_mean is not None:
-    mean_class = getattr(model_module, args.prior_mean)
+    mean_class = getattr(model_module, "PriorMean_" + args.target)
+    mean = mean_class(batch_shape=batch_shape).to(device)
+    mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 else:
-    mean_class = ZeroMean
-mean = mean_class(batch_shape=batch_shape).to(device)
-
-with torch.no_grad():
-    y_scaled = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
+    mean_class = ZeroMean(batch_shape=batch_shape).to(device)
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
