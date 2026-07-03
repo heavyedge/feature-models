@@ -40,7 +40,7 @@ notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv _temp/crossing.DirectLmcMtgp
 notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.CgLmcMtgpqr_%.csv _temp/extrapolation.CgLmcMtgpqr_%_ConstantMean.csv _temp/extrapolation.CgIndependentMtgpqr_%.csv _temp/extrapolation.CgIndependentMtgpqr_%_ConstantMean.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/quantiles_cv.GPR_%.csv _temp/quantiles_cv.CgLmcMtgpqr_%.csv _temp/quantiles_cv.CgIndependentMtgpqr_%.csv FORCE
+notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/quantiles_cv.GPR_%.csv _temp/quantiles_cv.CenterGapMTGPQR_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/Mean.ipynb: _temp/X.csv _temp/y.csv model/H.mean.pt model/b.mean.pt model/phi.mean.pt FORCE
