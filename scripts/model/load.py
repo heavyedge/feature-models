@@ -220,7 +220,7 @@ def load_H_quantiles(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "H.quantiles.pt"
-    return _load_gpr(
+    return _load_gpqr(
         MinMaxScaler,
         StandardScaler,
         PriorMean_H,
@@ -253,7 +253,7 @@ def load_phi_quantiles(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "phi.quantiles.pt"
-    return _load_gpr(
+    return _load_gpqr(
         MinMaxScaler,
         StandardScaler,
         PriorMean_phi,
