@@ -1,4 +1,5 @@
 NOTEBOOKS := $(wildcard notebooks/*)
+NUM_LATENTS = 3
 HEAVYEDGE_N_EPOCHS ?= 10000
 
 .SECONDARY:
@@ -36,7 +37,7 @@ notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.Cen
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.csv _temp/cv.CenterGapMTGPQR_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Quantiles.%.ipynb: _temp/X.csv _temp/y.csv model/%.gpqr.pt FORCE
+notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv models FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/Window.ipynb: _temp/X.csv _temp/X-pred.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
@@ -74,19 +75,19 @@ _temp/X-test2.csv: scripts/data/write-Xtest.py _temp/X.csv
 # Model selection
 
 _temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/X-test1.csv _temp/X-test2.csv
-	python3 $^ --target $* --model DirectMTGPQR_$* --prior-mean PriorMean_$* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-latents 5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --target $* --model DirectMTGPQR_$* --prior-mean PriorMean_$* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/extrapolation.CenterGapMTGPQR_%.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --prior-mean PriorMean_$* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --target $* --model CenterGapMTGPQR_$* --prior-mean PriorMean_$* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.gpqr.py _temp/X.csv _temp/y.csv
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.8 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/cv.GPR_%.csv: scripts/model_selection/write-cv.gpr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
 	python3 $^ --target $* --model GPR_$* --num-folds=10 --quantiles 0.05 0.25 0.5 0.75 0.95 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/cv.CenterGapMTGPQR_%.csv: scripts/model_selection/write-cv.gpqr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --num-folds=10 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --target $* --model CenterGapMTGPQR_$* --num-folds=10 --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 
 # Model
@@ -98,7 +99,7 @@ _temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.Center
 	python3 $^ --target epoch -o $@
 
 model/%.gpqr.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
-	python3 $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents 5 --num-epochs $(shell cat $(lastword $^)) -o $@
+	python3 $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles 0.05 0.25 0.5 0.75 0.95 --num-lower-quantiles 2 --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
 model/%.py: scripts/model/%.py
 	cp $< $@

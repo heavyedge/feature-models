@@ -6,18 +6,27 @@ import sys
 import numpy as np
 import torch
 
+MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
+sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
 
-def predict(model, X_np, device, chunk_size=4096):
-    pred_chunks = []
-    for j in range(0, len(X_np), chunk_size):
-        X_chunk = torch.tensor(
-            X_np[j : j + chunk_size], dtype=torch.float32, device=device
-        )
-        with torch.no_grad():
-            pred_chunks.append(
-                model.mean_quantiles_delta(X_chunk).detach().cpu().numpy()
-            )
-    return np.concatenate(pred_chunks, axis=0)
+torch.manual_seed(42)
+
+
+def predict(X, X_scaler, y_scaler, mean, model, chunks_size=4096):
+    X_raw = torch.tensor(X, dtype=torch.float32, device=device)
+
+    quantiles = []
+    with torch.no_grad():
+        for i in range(0, X_raw.shape[0], chunks_size):
+            X_pred = X_raw[i : i + chunks_size]
+            X_scaled = X_scaler(X_pred)
+            scaled_res_quantiles = model.mean_quantiles_delta(X_scaled)
+            pred_res = y_scaler.inverse_transform(scaled_res_quantiles)
+            pred_mean = mean(X_pred).reshape(-1, 1)
+            pred_quantiles = pred_res + pred_mean
+            quantiles.append(pred_quantiles.cpu().numpy())
+    return np.concatenate(quantiles, axis=0)
 
 
 parser = argparse.ArgumentParser()
@@ -31,22 +40,18 @@ args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
-
 if args.target == "H":
-    loader = load_module.load_H_quantiles
+    loader = load_module.load_H_models
 elif args.target == "phi":
-    loader = load_module.load_phi_quantiles
+    loader = load_module.load_phi_models
 else:
     raise ValueError(f"Unknown target: {args.target}")
 
 X = np.load(args.X)
-quantiles, model, _, scaler = loader(path=args.model, device=device)
+quantiles, X_scaler, y_scaler, mean, _, model = loader(path=args.model, device=device)
 
-X_scaled = scaler.transform(X.reshape(-1, X.shape[-1]))
+X_flattened = X.reshape(-1, X.shape[-1])
 with torch.no_grad():
-    pred = predict(model, X_scaled, device)  # (N, Q)
+    pred = predict(X_flattened, X_scaler, y_scaler, mean, model)
 pred = pred.reshape(X.shape[:-1] + (pred.shape[-1],))
 np.savez(args.out, quantile_levels=quantiles.cpu().numpy(), quantiles=pred)
