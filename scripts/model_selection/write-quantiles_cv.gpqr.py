@@ -6,7 +6,7 @@ import sys
 
 import pandas as pd
 import torch
-from cv import quantiles_cv_gpqr, split_data2
+from cv import quantiles_cv_gpqr, split_data
 from gpytorch.means import ZeroMean
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
 
@@ -20,6 +20,8 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
+
+torch.manual_seed(42)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -74,7 +76,6 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
@@ -83,15 +84,14 @@ y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 dim = X.shape[-1]
 batch_shape = torch.Size([args.num_folds])
 
-x_train, y_train, x_test, y_test = split_data2(
+x_train, y_train, x_test, y_test = split_data(
     X.cpu().numpy(), y.cpu().numpy(), args.num_folds, device
 )
-x_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+X_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
 y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
-x_scaler.train()
-y_scaler.train()
-x_scaled = x_scaler(x_train)
+X_scaler.train()
+X_scaled = X_scaler(X)
 
 if args.prior_mean is not None:
     mean_class = getattr(model_module, args.prior_mean)
@@ -99,24 +99,21 @@ else:
     mean_class = ZeroMean
 mean = mean_class(batch_shape=batch_shape).to(device)
 
-with torch.no_grad():
-    y_scaled = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
-
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
 model_class = getattr(model_module, args.model)
 likelihood = CenterGapQuantileLikelihood(
     quantiles.unsqueeze(0),
     args.num_lower_quantiles,
-    torch.zeros((args.num_folds, len(quantiles))),
+    torch.zeros((*batch_shape, len(quantiles))),
     learn_scales=True,
 ).to(device)
 model = model_class(
-    inducing_points=x_scaled.clone().detach(),
+    inducing_points=X_scaled.clone().detach(),
     num_quantiles=len(quantiles),
     num_lower_quantiles=args.num_lower_quantiles,
     num_latents=args.num_latents,
-    batch_shape=torch.Size([args.num_folds]),
+    batch_shape=batch_shape,
 ).to(device)
 
 cv = quantiles_cv_gpqr(
@@ -124,7 +121,7 @@ cv = quantiles_cv_gpqr(
     y_train,
     x_test,
     y_test,
-    x_scaler,
+    X_scaler,
     y_scaler,
     mean,
     model,

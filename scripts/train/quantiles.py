@@ -4,16 +4,12 @@ import logging
 import pathlib
 import sys
 
-import gpytorch
 import pandas as pd
 import torch
-from gpytorch_qr.likelihoods import (
-    MultitaskCenterGapQuantileGPLikelihood,
-    MultitaskQuantileGPLikelihood,
-)
-from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
-from save import save_model
-from sklearn.preprocessing import MinMaxScaler
+from gpytorch.means import ZeroMean
+from gpytorch.mlls import VariationalELBO
+from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
+from save import save_gpqr
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
@@ -26,19 +22,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-QUANTILES = torch.tensor([0.05, 0.25, 0.5, 0.75, 0.95])
-CENTER_QUANTILE_INDEX = 2
-NUM_LOWER_QUANTILES = 2
-NUM_LATENTS = len(QUANTILES)
-NUM_LOWER_LATENTS = NUM_LATENTS // 2
-
-torch.manual_seed(0)
+torch.manual_seed(42)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", help="Model class prefix.")
+parser.add_argument("--prior-mean", type=str, help="Prior mean class name.")
+parser.add_argument(
+    "--quantiles",
+    type=float,
+    nargs="+",
+    required=True,
+    help="Quantiles for the model.",
+)
+parser.add_argument(
+    "--num-lower-quantiles",
+    type=int,
+    required=True,
+    help="Number of lower quantiles for the model.",
+)
+parser.add_argument(
+    "--num-latents",
+    type=int,
+    required=True,
+    help="Number of latents for the model.",
+)
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
 parser.add_argument(
     "--learning-rate", type=float, default=0.001, help="Learning rate for optimizer."
@@ -52,70 +62,82 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-X = pd.read_csv(args.X).drop(columns="Slurry")
-y = torch.tensor(pd.read_csv(args.y)[args.target].values).float()
-scaler = MinMaxScaler()
-X_scaled = torch.tensor(scaler.fit_transform(X.to_numpy())).float()
-X_scale = torch.tensor(scaler.scale_).float()
-X_min = torch.tensor(scaler.min_).float()
+X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
+
+dim = X.shape[-1]
+num_data = X.shape[-2]
+batch_shape = X.shape[:-2]
+
+X_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+
+X_scaler.train()
+X_scaled = X_scaler(X)
+
+if args.prior_mean is not None:
+    mean_class = getattr(model_module, args.prior_mean)
+else:
+    mean_class = ZeroMean
+mean = mean_class(batch_shape=batch_shape).to(device)
+
+quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
 model_class = getattr(model_module, args.model)
-
-inducing_points = X_scaled.clone()
+likelihood = CenterGapQuantileLikelihood(
+    quantiles.unsqueeze(0),
+    args.num_lower_quantiles,
+    torch.zeros((*batch_shape, len(quantiles))),
+    learn_scales=True,
+).to(device)
+inducing_points = X_scaled.clone().detach()
 model = model_class(
     inducing_points=inducing_points,
-    num_quantiles=len(QUANTILES),
-    num_lower_quantiles=NUM_LOWER_QUANTILES,
-    num_latents=NUM_LATENTS,
-    num_lower_latents=NUM_LOWER_LATENTS,
-    X_scale=X_scale,
-    X_min=X_min,
+    num_quantiles=len(quantiles),
+    num_lower_quantiles=args.num_lower_quantiles,
+    num_latents=args.num_latents,
+    batch_shape=batch_shape,
 ).to(device)
 
-if issubclass(model_class, CenterGapQuantileGP):
-    likelihood = MultitaskCenterGapQuantileGPLikelihood(
-        QUANTILES, CENTER_QUANTILE_INDEX
-    ).to(device)
-elif issubclass(model_class, DirectQuantileGP):
-    likelihood = MultitaskQuantileGPLikelihood(QUANTILES).to(device)
-else:
-    raise ValueError(f"Unknown model class: {model_class}")
-
-# Train
-train_x = X_scaled.to(device)
-train_y = y.to(device)
-
-model.train()
-likelihood.train()
-
-parameters = list(model.parameters()) + list(likelihood.parameters())
+mll = VariationalELBO(likelihood, model, num_data=num_data)
 optimizer = torch.optim.Adam(
-    parameters,
+    list(X_scaler.parameters())
+    + list(y_scaler.parameters())
+    + list(mean.parameters())
+    + list(model.parameters())
+    + list(likelihood.parameters()),
     lr=args.learning_rate,
 )
 
-mll = gpytorch.mlls.VariationalELBO(likelihood, model, num_data=len(train_y))
-
+X_scaler.train()
+y_scaler.train()
+mean.train()
+likelihood.train()
+model.train()
 for i in range(args.num_epochs):
-    output = model(train_x)
-    loss = -mll(output, train_y)
-    loss.backward()
-    optimizer.step()
     optimizer.zero_grad()
 
-    logger.info(f"{args.out}: Epoch {i+1}/{args.num_epochs}, Loss: {loss.item():.4f}")
+    res = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
+    output = model(X_scaled)
+    loss = -mll(output, res)
+    loss.mean().backward()
+    optimizer.step()
 
-# Save
-save_model(
-    train_x,
-    train_y,
-    model,
+    logger.info(
+        f"{args.out}: Epoch {i+1}/{args.num_epochs}, Loss: {loss.mean().item():.4f}"
+    )
+
+save_gpqr(
+    X,
+    y,
+    X_scaler,
+    y_scaler,
+    mean,
     likelihood,
-    scaler,
+    model,
     inducing_points,
-    QUANTILES,
-    NUM_LOWER_QUANTILES,
-    NUM_LATENTS,
-    NUM_LOWER_LATENTS,
+    quantiles,
+    args.num_lower_quantiles,
+    args.num_latents,
     args.out,
 )

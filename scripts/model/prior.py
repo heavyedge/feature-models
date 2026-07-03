@@ -1,97 +1,13 @@
-import gpytorch
 import torch
 
 __all__ = [
-    "Unscaler",
     "PriorMean_H",
-    "Scaler",
-    "PriorMean_H2",
-    "PriorMean_b2",
-    "PriorMean_phi2",
+    "PriorMean_b",
+    "PriorMean_phi",
 ]
 
 
-class Unscaler(torch.nn.Module):
-    """Un-min-max-scaling.
-
-    Parameters
-    ----------
-    X_scale, X_min: torch.Tensor in shape (*B, D)
-    """
-
-    def __init__(self, X_scale, X_min):
-        super().__init__()
-        self.register_buffer("X_scale", X_scale)
-        self.register_buffer("X_min", X_min)
-
-    def forward(self, x):
-        # x: (*B, 1, N, D)
-        # BELOW IS CORRECT FOR MinMaxScaler (different from StandardScaler)
-        X_min = self.X_min[..., None, None, :]
-        X_scale = self.X_scale[..., None, None, :]
-        x_unscaled = (x - X_min) / X_scale
-        return x_unscaled.view_as(x)
-
-
-class PriorMean_H(gpytorch.means.Mean):
-    """Modified version of model by Schmitt.
-
-    Input X must be [Rgt, Ca, surface_tension, ...].
-    """
-
-    def __init__(self, offset=False, batch_shape=torch.Size()):
-        super().__init__()
-        self.batch_shape = batch_shape
-        if offset:
-            self.register_parameter(
-                "offset",
-                torch.nn.Parameter(torch.zeros(batch_shape)),
-            )
-        else:
-            self.register_buffer(
-                "offset",
-                torch.zeros(batch_shape),
-            )
-
-    def forward(self, x):
-        Rgt = x[..., 0]
-        Ca = x[..., 1]
-        cos_theta = x[..., 2]
-
-        a, b, c = 0.22, -0.43, 0.77  # From GPR prior
-        lamda = a * Ca**b * cos_theta**c
-        E = 2 / (-lamda + torch.sqrt(lamda**2 + (4 / Rgt)))
-
-        model = Rgt / E
-        corrected_model = torch.where(model >= 1, model, torch.ones_like(model))
-        return corrected_model + self.offset[..., None]  # (*B, N)
-
-
-class Scaler(torch.nn.Module):
-    """Min-max-scaling.
-
-    Parameters
-    ----------
-    X_scale, X_min: torch.Tensor in shape (*B, D)
-        Values from sklearn.preprocessing.MinMaxScaler.
-    """
-
-    def __init__(self, X_scale, X_min):
-        super().__init__()
-        self.register_buffer("X_scale", X_scale)
-        self.register_buffer("X_min", X_min)
-
-    def forward(self, x):
-        # x: (*B, N, D)
-        # X_scale, X_min: (*B, D)
-        # BELOW IS CORRECT FOR MinMaxScaler (different from StandardScaler)
-        X_min = self.X_min.unsqueeze(-2)
-        X_scale = self.X_scale.unsqueeze(-2)
-        x_scaled = x * X_scale + X_min
-        return x_scaled.view_as(x)
-
-
-class PriorMean_H2(torch.nn.Module):
+class PriorMean_H(torch.nn.Module):
     """Modified version of model by Schmitt.
 
     Input X must be [Rgt, Ca, cos_theta, ...].
@@ -125,7 +41,7 @@ class PriorMean_H2(torch.nn.Module):
         return corrected_model  # (*B, N)
 
 
-class PriorMean_b2(torch.nn.Module):
+class PriorMean_b(torch.nn.Module):
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
         self.batch_shape = batch_shape
@@ -135,7 +51,7 @@ class PriorMean_b2(torch.nn.Module):
         return torch.zeros(*self.batch_shape, N, device=x.device)
 
 
-class PriorMean_phi2(torch.nn.Module):
+class PriorMean_phi(torch.nn.Module):
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
         self.batch_shape = batch_shape

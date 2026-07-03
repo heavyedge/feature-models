@@ -7,8 +7,12 @@ import sys
 import pandas as pd
 import torch
 from crossing import quantile_crossing
-from gpytorch_qr.likelihoods import MultitaskQuantileGPLikelihood
-from sklearn.preprocessing import MinMaxScaler
+from gpytorch.means import ZeroMean
+from gpytorch_qr.likelihoods import DirectQuantileLikelihood
+
+MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
+sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -16,6 +20,8 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
+
+torch.manual_seed(42)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -34,8 +40,9 @@ parser.add_argument(
     nargs="+",
     help="Predictor csv files for testing.",
 )
-parser.add_argument("--model", required=True)
 parser.add_argument("--target", required=True)
+parser.add_argument("--model", required=True)
+parser.add_argument("--prior-mean", type=str, help="Prior mean class name.")
 parser.add_argument(
     "--quantiles",
     type=float,
@@ -44,22 +51,10 @@ parser.add_argument(
     help="Quantiles for the model.",
 )
 parser.add_argument(
-    "--num-lower-quantiles",
-    type=int,
-    required=True,
-    help="Number of lower quantiles for the model.",
-)
-parser.add_argument(
     "--num-latents",
     type=int,
     required=True,
     help="Number of latents for the model.",
-)
-parser.add_argument(
-    "--num-lower-latents",
-    type=int,
-    required=True,
-    help="Number of lower latents for the model.",
 )
 parser.add_argument(
     "--n-epochs",
@@ -75,54 +70,52 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(MODEL_MODULE_PATH.name)
-model_cls = getattr(model_module, args.model)
+X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
+y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
+X_tests = [torch.tensor(pd.read_csv(f).values).float().to(device) for f in args.X_test]
 
-scaler = MinMaxScaler()
-X = scaler.fit_transform(pd.read_csv(args.X).drop(columns="Slurry").values)
-y = pd.read_csv(args.y)[args.target].values
+dim = X.shape[-1]
+batch_shape = X.shape[:-2]
 
-X_scale = scaler.scale_
-X_min = scaler.min_
+X_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
-X_tests = [scaler.transform(pd.read_csv(f).values) for f in args.X_test]
+X_scaler.train()
+X_scaled = X_scaler(X)
 
-X = torch.tensor(X, dtype=torch.float32).to(device)
-y = torch.tensor(y, dtype=torch.float32).to(device)
-X_scale = torch.tensor(X_scale, dtype=torch.float32).to(device)
-X_min = torch.tensor(X_min, dtype=torch.float32).to(device)
-X_tests = [torch.tensor(X_test, dtype=torch.float32).to(device) for X_test in X_tests]
+if args.prior_mean is not None:
+    mean_class = getattr(model_module, args.prior_mean)
+else:
+    mean_class = ZeroMean
+mean = mean_class(batch_shape=batch_shape).to(device)
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
-model = model_cls(
-    inducing_points=X.clone().detach(),
-    num_quantiles=len(quantiles),
-    num_lower_quantiles=args.num_lower_quantiles,
-    num_latents=args.num_latents,
-    num_lower_latents=args.num_lower_latents,
-    X_scale=X_scale,
-    X_min=X_min,
-).to(device)
-likelihood = MultitaskQuantileGPLikelihood(
-    q=quantiles,
-    raw_scales=torch.zeros((len(quantiles),)),
+model_class = getattr(model_module, args.model)
+likelihood = DirectQuantileLikelihood(
+    quantiles.unsqueeze(0),
+    torch.zeros((*batch_shape, len(quantiles))),
     learn_scales=True,
+).to(device)
+model = model_class(
+    inducing_points=X_scaled.clone().detach(),
+    num_quantiles=len(quantiles),
+    num_latents=args.num_latents,
+    batch_shape=batch_shape,
 ).to(device)
 
 crs, mcs, mxs = quantile_crossing(
     X,
     y,
     X_tests,
+    X_scaler,
+    y_scaler,
+    mean,
     model,
     likelihood,
     n_epochs=args.n_epochs,
-    learning_rate=0.001,
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
 
