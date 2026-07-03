@@ -2,7 +2,6 @@ import torch
 
 __all__ = [
     "PriorMean_H",
-    "PriorMean_b",
     "PriorMean_phi",
 ]
 
@@ -37,16 +36,6 @@ class PriorMean_H(torch.nn.Module):
         # Preserve the physical lower bound in the forward pass while keeping
         # gradients alive when the initial model is below 1 for every sample.
         return model + (corrected_model - model).detach()  # (*B, N)
-
-
-class PriorMean_b(torch.nn.Module):
-    def __init__(self, batch_shape=torch.Size()):
-        super().__init__()
-        self.batch_shape = batch_shape
-
-    def forward(self, x):
-        N = x.shape[-2]
-        return torch.zeros(*self.batch_shape, N, device=x.device)
 
 
 class PriorMean_phi(torch.nn.Module):

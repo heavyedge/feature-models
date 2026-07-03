@@ -10,11 +10,9 @@ from .gpqr import (
 )
 from .gpr import (
     GPR_H,
-    GPR_b,
     GPR_phi,
 )
 from .prior import (
-    PriorMean_b,
     PriorMean_H,
     PriorMean_phi,
 )
@@ -25,7 +23,6 @@ from .scale import (
 
 __all__ = [
     "load_H_mean",
-    "load_b_mean",
     "load_phi_mean",
     "load_H_quantiles",
     "load_phi_quantiles",
@@ -96,33 +93,6 @@ def load_H_mean(path=None, device=None):
         path = Path(__file__).parent / "H.mean.pt"
     return _load_gpr(
         MinMaxScaler, StandardScaler, PriorMean_H, GPR_H, path, device=device
-    )
-
-
-def load_b_mean(path=None, device=None):
-    """Return GPR models for b.
-
-    Parameters
-    ----------
-    path : str or Path, optional
-    device : torch.device, optional
-        Device to run the model on. If None, uses CUDA if available, else CPU.
-
-    Returns
-    -------
-    X_scaler : model_module.MinMaxScaler
-    y_scaler : model_module.StandardScaler
-    mean : model_module.PriorMean_b
-    likelihood : gpytorch.likelihoods.GaussianLikelihood
-    model : gpytorch.models.ExactGP
-    """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if path is None:
-        path = Path(__file__).parent / "b.mean.pt"
-    return _load_gpr(
-        MinMaxScaler, StandardScaler, PriorMean_b, GPR_b, path, device=device
     )
 
 

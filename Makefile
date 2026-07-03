@@ -7,7 +7,6 @@ HEAVYEDGE_N_EPOCHS ?= 10000
 
 models: \
 model/H.mean.pt \
-model/b.mean.pt \
 model/phi.mean.pt \
 model/H.quantiles.pt \
 model/phi.quantiles.pt \
@@ -22,7 +21,6 @@ notebooks: $(NOTEBOOKS)
 
 test:
 	python3 -c "from model.load import load_H_mean; load_H_mean()"
-	python3 -c "from model.load import load_b_mean; load_b_mean()"
 	python3 -c "from model.load import load_phi_mean; load_phi_mean()"
 	python3 -c "from model.load import load_H_quantiles; load_H_quantiles()"
 	python3 -c "from model.load import load_phi_quantiles; load_phi_quantiles()"
@@ -64,7 +62,7 @@ _temp/X.csv: scripts/data/write-X.py _temp/Dataset.csv
 	python3 $^ -o $@
 
 _temp/y.csv: _temp/Dataset.csv
-	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'b', 'phi']].to_csv('$@', index=False)"
+	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
 _temp/X-pred.csv: scripts/data/write-Xpred.py _temp/X.csv
 	python3 $^ -o $@
