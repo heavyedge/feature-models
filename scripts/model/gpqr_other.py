@@ -45,6 +45,14 @@ class DirectMTGPQR_H(DirectQuantileGP):
             RBFKernel(ard_num_dims=D, batch_shape=full_batch_shape),
             batch_shape=full_batch_shape,
         )
+
+        lower = torch.tensor([1, 0.5, 0.5] + [0 for _ in range(D - 3)])
+        upper = torch.tensor([1e4 for _ in range(D)])
+        init_ls = torch.tensor([1, 0.5, 0.5] + [0.5 for _ in range(D - 3)])
+        covar.base_kernel.register_constraint("raw_lengthscale", Interval(lower, upper))
+        with torch.no_grad():
+            covar.base_kernel.lengthscale = init_ls
+
         super().__init__(variational_strategy, mean, covar)
 
     quantiles = DirectQuantileGP.mean_quantiles_delta
@@ -81,9 +89,9 @@ class DirectMTGPQR_phi(DirectQuantileGP):
             batch_shape=full_batch_shape,
         )
 
-        lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
+        lower = torch.tensor([1, 0.5, 0.5] + [0 for _ in range(D - 3)])
         upper = torch.tensor([1e4 for _ in range(D)])
-        init_ls = torch.tensor([2, 2, 2] + [0.5 for _ in range(D - 3)])
+        init_ls = torch.tensor([1, 0.5, 0.5] + [0.5 for _ in range(D - 3)])
         covar.base_kernel.register_constraint("raw_lengthscale", Interval(lower, upper))
         with torch.no_grad():
             covar.base_kernel.lengthscale = init_ls

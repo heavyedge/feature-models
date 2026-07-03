@@ -1,5 +1,6 @@
 import gpytorch
 import torch
+from gpytorch.constraints import Interval
 from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
 from gpytorch.models import ExactGP
@@ -26,6 +27,20 @@ class GPR_H(ExactGP):
             RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
             batch_shape=batch_shape,
         )
+
+        lower = torch.tensor([1, 0.5, 0.5] + [0 for _ in range(D - 3)])
+        upper = torch.tensor([1e4 for _ in range(D)])
+        init_ls = torch.tensor([1, 0.5, 0.5] + [0.5 for _ in range(D - 3)])
+        kernel = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
+            batch_shape=batch_shape,
+        )
+        kernel.base_kernel.register_constraint(
+            "raw_lengthscale", Interval(lower, upper)
+        )
+        with torch.no_grad():
+            kernel.base_kernel.lengthscale = init_ls
+        self.covar_module = kernel
 
     def forward(self, x):
         mean_x = self.mean_module(x)
@@ -64,15 +79,15 @@ class GPR_phi(ExactGP):
 
         self.mean_module = ConstantMean(batch_shape=batch_shape)
 
-        lower = torch.tensor([1, 1, 1] + [0 for _ in range(D - 3)])
+        lower = torch.tensor([1, 0.5, 0.5] + [0 for _ in range(D - 3)])
         upper = torch.tensor([1e4 for _ in range(D)])
-        init_ls = torch.tensor([2, 2, 2] + [0.5 for _ in range(D - 3)])
+        init_ls = torch.tensor([1, 0.5, 0.5] + [0.5 for _ in range(D - 3)])
         kernel = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=D, batch_shape=batch_shape),
             batch_shape=batch_shape,
         )
         kernel.base_kernel.register_constraint(
-            "raw_lengthscale", gpytorch.constraints.Interval(lower, upper)
+            "raw_lengthscale", Interval(lower, upper)
         )
         with torch.no_grad():
             kernel.base_kernel.lengthscale = init_ls

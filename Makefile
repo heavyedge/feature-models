@@ -1,7 +1,7 @@
 NOTEBOOKS := $(wildcard notebooks/*)
 QUANTILES := 0.05 0.25 0.5 0.75 0.95
 NUM_LOWER_QUANTILES := 2
-NUM_LATENTS := 5
+NUM_LATENTS := 3
 HEAVYEDGE_N_EPOCHS ?= 10000
 
 .SECONDARY:
@@ -80,10 +80,10 @@ _temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _te
 	python3 $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/extrapolation.CenterGapMTGPQR_%.csv: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.8 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.8 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
+	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/cv.GPR_%.csv: scripts/model_selection/write-cv.gpr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
 	python3 $^ --target $* --model GPR_$* --num-folds=10 --quantiles $(QUANTILES) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
