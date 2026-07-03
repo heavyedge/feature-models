@@ -43,7 +43,7 @@ notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.Cen
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/quantiles_cv.GPR_%.csv _temp/quantiles_cv.CenterGapMTGPQR_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Mean.ipynb: _temp/X.csv _temp/y.csv model/H.mean.pt model/b.mean.pt model/phi.mean.pt FORCE
+notebooks/Mean.ipynb: _temp/X.csv _temp/y.csv model/H.mean.pt model/phi.mean.pt FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/Quantiles.%.ipynb: _temp/X.csv _temp/y.csv model/%.quantiles.pt FORCE
