@@ -6,10 +6,6 @@ import sys
 
 import pandas as pd
 import torch
-from gpytorch import ExactMarginalLogLikelihood
-from gpytorch.likelihoods import GaussianLikelihood
-from gpytorch.means import ZeroMean
-from save import save_gpr
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
@@ -29,7 +25,6 @@ parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", type=str, help="Model name.")
-parser.add_argument("--prior-mean", type=str, help="Prior mean class name.")
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
 parser.add_argument(
     "--learning-rate", type=float, default=0.001, help="Learning rate for optimizer."
@@ -49,64 +44,24 @@ y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]
 
-X_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
-
-X_scaler.train()
-X_scaled = X_scaler(X)
-
-if args.prior_mean is not None:
-    mean_class = getattr(model_module, args.prior_mean)
-else:
-    mean_class = ZeroMean
-mean = mean_class(batch_shape=batch_shape).to(device)
-
 model_class = getattr(model_module, args.model)
-likelihood = GaussianLikelihood(batch_shape=batch_shape).to(device)
-with torch.no_grad():
-    y_scaler.train()
-    res = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
-model = model_class(X_scaled, res, likelihood, batch_shape=batch_shape).to(device)
+model = model_class(batch_shape=batch_shape).to(device)
 
-mll = ExactMarginalLogLikelihood(likelihood, model)
-optimizer = torch.optim.Adam(
-    list(X_scaler.parameters())
-    + list(y_scaler.parameters())
-    + list(mean.parameters())
-    + list(model.parameters()),
-    lr=args.learning_rate,
-)
-
-X_scaler.train()
-y_scaler.train()
-mean.train()
-likelihood.train()
+# Train
 model.train()
-for i in range(args.num_epochs):
+optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+loss_fn = torch.nn.MSELoss()
+for epoch in range(args.num_epochs):
     optimizer.zero_grad()
-
-    res = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
-    model.set_train_data(
-        inputs=X_scaled.detach(),
-        targets=res.detach(),
-        strict=False,
-    )
-    output = model(X_scaled)
-    loss = -mll(output, res)
-    loss.mean().backward()
+    output = model(X)
+    loss = loss_fn(output, y)
+    loss.backward()
     optimizer.step()
+    if (epoch + 1) % max(1, args.num_epochs // 10) == 0:
+        logger.info(f"Epoch [{epoch + 1}/{args.num_epochs}] Loss: {loss.item():.6f}")
 
-    logger.info(
-        f"{args.out}: Epoch {i+1}/{args.num_epochs}, Loss: {loss.mean().item():.4f}"
-    )
 
-save_gpr(
-    X,
-    y,
-    X_scaler,
-    y_scaler,
-    mean,
-    likelihood,
-    model,
+torch.save(
+    model.state_dict(),
     args.out,
 )

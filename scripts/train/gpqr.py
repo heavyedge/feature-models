@@ -6,7 +6,6 @@ import sys
 
 import pandas as pd
 import torch
-from gpytorch.means import ZeroMean
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
 from save import save_gpqr
@@ -27,9 +26,13 @@ torch.manual_seed(42)
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
+parser.add_argument(
+    "prior_mean",
+    type=pathlib.Path,
+    help="Prior mean model weight file.",
+)
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", help="Model class prefix.")
-parser.add_argument("--prior-mean", type=str, help="Prior mean class name.")
 parser.add_argument(
     "--quantiles",
     type=float,
@@ -75,11 +78,12 @@ y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 X_scaler.train()
 X_scaled = X_scaler(X)
 
-if args.prior_mean is not None:
-    mean_class = getattr(model_module, args.prior_mean)
-else:
-    mean_class = ZeroMean
+mean_class = getattr(model_module, "PriorMean_" + args.target)
 mean = mean_class(batch_shape=batch_shape).to(device)
+mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
+mean.eval()
+for parameter in mean.parameters():
+    parameter.requires_grad_(False)
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
@@ -103,7 +107,6 @@ mll = VariationalELBO(likelihood, model, num_data=num_data)
 optimizer = torch.optim.Adam(
     list(X_scaler.parameters())
     + list(y_scaler.parameters())
-    + list(mean.parameters())
     + list(model.parameters())
     + list(likelihood.parameters()),
     lr=args.learning_rate,
@@ -111,13 +114,14 @@ optimizer = torch.optim.Adam(
 
 X_scaler.train()
 y_scaler.train()
-mean.train()
 likelihood.train()
 model.train()
 for i in range(args.num_epochs):
     optimizer.zero_grad()
 
-    res = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
+    with torch.no_grad():
+        train_mean = mean(X)
+    res = y_scaler((y - train_mean).unsqueeze(-1)).squeeze(-1)
     output = model(X_scaled)
     loss = -mll(output, res)
     loss.mean().backward()

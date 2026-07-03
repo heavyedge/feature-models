@@ -8,7 +8,6 @@ from sklearn.preprocessing import MinMaxScaler
 __all__ = [
     "split_data",
     "split_extrapolate_data",
-    "mean_cv_gpr",
     "quantiles_cv_gpr",
     "quantiles_cv_gpqr",
 ]
@@ -52,68 +51,10 @@ def split_extrapolate_data(X, y, ratio, device):
     return x_train, y_train, x_test, y_test
 
 
-def mean_cv_gpr(
-    x_train,  # (*B, N_train, D)
-    y_train,  # (*B, N_train)
-    x_test,  # (*B, N_test, D)
-    y_test,  # (*B, N_test)
-    X_scaler,
-    y_scaler,
-    mean,
-    model,
-    likelihood,
-    n_epochs,
-    learning_rate=0.001,
-    logger=lambda msg: None,
-):
-    mll = ExactMarginalLogLikelihood(likelihood, model)
-    optimizer = torch.optim.Adam(
-        list(X_scaler.parameters())
-        + list(y_scaler.parameters())
-        + list(mean.parameters())
-        + list(model.parameters()),
-        lr=learning_rate,
-    )
-
-    test_losses = []
-    for i in range(n_epochs):
-        X_scaler.train()
-        y_scaler.train()
-        mean.train()
-        model.train()
-        likelihood.train()
-        optimizer.zero_grad()
-
-        train_x_scaled = X_scaler(x_train)
-        train_res = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
-        model.set_train_data(
-            inputs=train_x_scaled.detach(),
-            targets=train_res.detach(),
-            strict=False,
-        )
-        train_output = model(train_x_scaled)
-        train_loss = -mll(train_output, train_res)
-        train_loss.mean().backward()
-        optimizer.step()
-
-        mean.eval()
-        X_scaler.eval()
-        y_scaler.eval()
-        model.eval()
-        likelihood.eval()
-        with torch.no_grad():
-            test_output = model(X_scaler(x_test))
-            test_res = y_scaler((y_test - mean(x_test)).unsqueeze(-1)).squeeze(-1)
-            test_loss = -mll(test_output, test_res)
-            test_losses.append(test_loss.detach().cpu().numpy())
-
-        logger(
-            f"Epoch {i+1}/{n_epochs}, "
-            f"Train Loss: {train_loss.mean().item():.4f}, "
-            f"Mean test loss: {test_loss.mean().item():.4f}"
-        )
-
-    return np.array(test_losses)
+def _freeze_module(module):
+    module.eval()
+    for parameter in module.parameters():
+        parameter.requires_grad_(False)
 
 
 def quantiles_cv_gpr(
@@ -132,10 +73,10 @@ def quantiles_cv_gpr(
     logger=lambda msg: None,
 ):
     mll = ExactMarginalLogLikelihood(likelihood, model)
+    _freeze_module(mean)
     optimizer = torch.optim.Adam(
         list(X_scaler.parameters())
         + list(y_scaler.parameters())
-        + list(mean.parameters())
         + list(model.parameters()),
         lr=learning_rate,
     )
@@ -144,13 +85,14 @@ def quantiles_cv_gpr(
     for i in range(n_epochs):
         X_scaler.train()
         y_scaler.train()
-        mean.train()
         likelihood.train()
         model.train()
         optimizer.zero_grad()
 
         train_x_scaled = X_scaler(x_train)
-        train_res = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
+        with torch.no_grad():
+            train_mean = mean(x_train)
+        train_res = y_scaler((y_train - train_mean).unsqueeze(-1)).squeeze(-1)
         model.set_train_data(
             inputs=train_x_scaled.detach(),
             targets=train_res.detach(),
@@ -161,7 +103,6 @@ def quantiles_cv_gpr(
         train_loss.mean().backward()
         optimizer.step()
 
-        mean.eval()
         X_scaler.eval()
         y_scaler.eval()
         model.eval()
@@ -207,10 +148,10 @@ def quantiles_cv_gpqr(
     logger=lambda msg: None,
 ):
     mll = VariationalELBO(likelihood, model, num_data=y_train.shape[-1])
+    _freeze_module(mean)
     optimizer = torch.optim.Adam(
         list(X_scaler.parameters())
         + list(y_scaler.parameters())
-        + list(mean.parameters())
         + list(model.parameters())
         + list(likelihood.parameters()),
         lr=learning_rate,
@@ -220,19 +161,19 @@ def quantiles_cv_gpqr(
     for i in range(n_epochs):
         X_scaler.train()
         y_scaler.train()
-        mean.train()
         likelihood.train()
         model.train()
         optimizer.zero_grad()
 
         train_x_scaled = X_scaler(x_train)
-        train_res = y_scaler((y_train - mean(x_train)).unsqueeze(-1)).squeeze(-1)
+        with torch.no_grad():
+            train_mean = mean(x_train)
+        train_res = y_scaler((y_train - train_mean).unsqueeze(-1)).squeeze(-1)
         train_output = model(train_x_scaled)
         train_loss = -mll(train_output, train_res)
         train_loss.mean().backward()
         optimizer.step()
 
-        mean.eval()
         X_scaler.eval()
         y_scaler.eval()
         model.eval()
