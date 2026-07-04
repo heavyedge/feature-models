@@ -43,7 +43,7 @@ notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.csv _temp/cv.Center
 notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv models FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Window.ipynb: _temp/X.csv _temp/X-pred.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
+notebooks/Window.ipynb: _temp/X.csv _temp/Xpred_2D.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
@@ -60,14 +60,20 @@ _temp/X.csv: scripts/data/write-X.py _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
-_temp/X-pred.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ -o $@
+_temp/Xpred_1D.csv: scripts/data/write-Xpred.py _temp/X.csv
+	python3 $^ --target Gap_to_thickness_ratio -o $@
+
+_temp/Xpred_2D.csv: scripts/data/write-Xpred.py _temp/X.csv
+	python3 $^ --target Gap_to_thickness_ratio Capillary_number -o $@
 
 _temp/X.npy: _temp/X.csv
 	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
 
-_temp/X-pred.npy: _temp/X-pred.csv
-	python3 -c "import pandas as pd; import numpy as np; df = pd.read_csv('$<', index_col=[0,1,2]); shape = [df.index.get_level_values(i).nunique() for i in range(df.index.nlevels)]; np.save('$@', df.to_numpy().reshape(*shape, -1))"
+_temp/Xpred_1D.npy: scripts/data/Xpred-array.py _temp/Xpred_1D.csv
+	python3 $^ -o $@
+
+_temp/Xpred_2D.npy: scripts/data/Xpred-array.py _temp/Xpred_2D.csv
+	python3 $^ -o $@
 
 _temp/X-test1.csv: scripts/data/write-Xtest.py _temp/X.csv
 	python3 $^ --start=0 --stop=1 --num=10 -o $@
@@ -115,7 +121,7 @@ model/requirements.txt: requirements.txt
 _temp/%.quantiles.X.npy: model/predict.py _temp/X.npy model/%.gpqr.pt
 	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.X-pred.npy: model/predict.py _temp/X-pred.npy model/%.gpqr.pt
+_temp/%.quantiles.X-pred.npy: model/predict.py _temp/Xpred_2D.npy model/%.gpqr.pt
 	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 _temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles.X.npy _temp/H.quantiles.X-pred.npy
@@ -124,8 +130,8 @@ _temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles
 _temp/phi.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/phi.quantiles.X.npy _temp/phi.quantiles.X-pred.npy
 	python3 $^ --target phi --quantiles $(QUANTILES) --threshold 1.0 -o $@
 
-_temp/joint_probability.X-pred.npz: scripts/joint/write-joint.py _temp/X.csv _temp/X-pred.csv _temp/H.pit.X-pred.npz _temp/phi.pit.X-pred.npz
+_temp/joint_probability.X-pred.npz: scripts/joint/write-joint.py _temp/X.csv _temp/Xpred_2D.csv _temp/H.pit.X-pred.npz _temp/phi.pit.X-pred.npz
 	python3 $^ -o $@
 
-_temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/X-pred.csv
+_temp/X-delaunay.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/Xpred_2D.csv
 	python3 $^ -o $@
