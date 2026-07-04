@@ -40,7 +40,7 @@ notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.Cen
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.csv _temp/cv.CenterGapMTGPQR_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv models FORCE
+notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/Window.ipynb: _temp/X.csv _temp/Xpred_2D.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
@@ -115,6 +115,13 @@ model/%.py: scripts/model/%.py
 
 model/requirements.txt: requirements.txt
 	grep -E '^(numpy|torch|gpytorch-qr|gpytorch)([>=<!~,; \t]|$$)' $< > $@
+
+
+# Prediction
+
+_temp/%.quantiles.Xpred_1D.npy: model/predict.py _temp/Xpred_1D.npy model/%.gpqr.pt
+	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
+
 
 # Window prediction
 
