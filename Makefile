@@ -15,7 +15,8 @@ model/prior.py \
 model/scale.py \
 model/gpqr.py \
 model/load.py \
-model/predict.py \
+model/predict-mean.py \
+model/predict-quantiles.py \
 model/requirements.txt
 
 notebooks: $(NOTEBOOKS)
@@ -40,7 +41,7 @@ notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.Cen
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.csv _temp/cv.CenterGapMTGPQR_%.csv FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy FORCE
+notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.prior_mean.Xpred_1D.npy _temp/phi.prior_mean.Xpred_1D.npy _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 notebooks/Window.ipynb: _temp/X.csv _temp/Xpred_2D.csv _temp/joint_probability.X-pred.npz _temp/X-delaunay.npy FORCE
@@ -119,16 +120,19 @@ model/requirements.txt: requirements.txt
 
 # Prediction
 
-_temp/%.quantiles.Xpred_1D.npy: model/predict.py _temp/Xpred_1D.npy model/%.gpqr.pt
+_temp/%.prior_mean.Xpred_1D.npy: model/predict-mean.py _temp/Xpred_1D.npy model/%.gpqr.pt
+	python3 $(wordlist 1,2,$^) --target $* -o $@
+
+_temp/%.quantiles.Xpred_1D.npy: model/predict-quantiles.py _temp/Xpred_1D.npy model/%.gpqr.pt
 	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 
 # Window prediction
 
-_temp/%.quantiles.X.npy: model/predict.py _temp/X.npy model/%.gpqr.pt
+_temp/%.quantiles.X.npy: model/predict-quantiles.py _temp/X.npy model/%.gpqr.pt
 	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.X-pred.npy: model/predict.py _temp/Xpred_2D.npy model/%.gpqr.pt
+_temp/%.quantiles.X-pred.npy: model/predict-quantiles.py _temp/Xpred_2D.npy model/%.gpqr.pt
 	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 _temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles.X.npy _temp/H.quantiles.X-pred.npy

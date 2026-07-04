@@ -48,15 +48,14 @@ X_flattened = torch.tensor(
 
 ret = []
 with torch.no_grad():
-    with torch.no_grad():
-        for i in range(0, X_flattened.shape[0], args.chunk_size):
-            X_pred = X_flattened[i : i + args.chunk_size]
-            X_scaled = X_scaler(X_pred)
-            scaled_res_quantiles = model.mean_quantiles_delta(X_scaled)
-            pred_res = y_scaler.inverse_transform(scaled_res_quantiles)
-            pred_mean = mean(X_pred).reshape(-1, 1)
-            pred_quantiles = pred_res + pred_mean
-            ret.append(pred_quantiles.cpu().numpy())
+    for i in range(0, X_flattened.shape[0], args.chunk_size):
+        X_pred = X_flattened[i : i + args.chunk_size]
+        X_scaled = X_scaler(X_pred)
+        scaled_res_quantiles = model.mean_quantiles_delta(X_scaled)
+        pred_res = y_scaler.inverse_transform(scaled_res_quantiles)
+        pred_mean = mean(X_pred).reshape(-1, 1)
+        pred_quantiles = pred_res + pred_mean
+        ret.append(pred_quantiles.cpu().numpy())
 ret = np.concatenate(ret, axis=0)
 
 np.save(args.out, ret.reshape(*X.shape[:-1], -1))
