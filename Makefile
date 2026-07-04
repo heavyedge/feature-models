@@ -15,6 +15,7 @@ model/prior.py \
 model/scale.py \
 model/gpqr.py \
 model/load.py \
+model/predict.py \
 model/requirements.txt
 
 notebooks: $(NOTEBOOKS)
@@ -111,17 +112,17 @@ model/requirements.txt: requirements.txt
 
 # Window prediction
 
-_temp/%.quantiles.X.npz: scripts/predict/gpqr.py _temp/X.npy model/%.gpqr.pt
-	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
+_temp/%.quantiles.X.npy: model/predict.py _temp/X.npy model/%.gpqr.pt
+	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.X-pred.npz: scripts/predict/gpqr.py _temp/X-pred.npy model/%.gpqr.pt
-	python3 $(wordlist 1,2,$^) $(abspath $(lastword $^)) --target $* -o $@
+_temp/%.quantiles.X-pred.npy: model/predict.py _temp/X-pred.npy model/%.gpqr.pt
+	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles.X.npz _temp/H.quantiles.X-pred.npz
-	python3 $^ --target H --threshold 1.1 -o $@
+_temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles.X.npy _temp/H.quantiles.X-pred.npy
+	python3 $^ --target H  --quantiles $(QUANTILES) --threshold 1.1 -o $@
 
-_temp/phi.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/phi.quantiles.X.npz _temp/phi.quantiles.X-pred.npz
-	python3 $^ --target phi --threshold 1.0 -o $@
+_temp/phi.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/phi.quantiles.X.npy _temp/phi.quantiles.X-pred.npy
+	python3 $^ --target phi --quantiles $(QUANTILES) --threshold 1.0 -o $@
 
 _temp/joint_probability.X-pred.npz: scripts/joint/write-joint.py _temp/X.csv _temp/X-pred.csv _temp/H.pit.X-pred.npz _temp/phi.pit.X-pred.npz
 	python3 $^ -o $@

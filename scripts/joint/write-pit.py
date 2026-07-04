@@ -15,40 +15,45 @@ from pit import quantile_interpolation, quantile_pit
 parser = argparse.ArgumentParser()
 parser.add_argument("Y", type=pathlib.Path, help="Training data csv file")
 parser.add_argument(
-    "train_pred",
+    "train_quantiles",
     type=pathlib.Path,
-    help="npz file of quantile predictions on training points",
+    help="npy file of quantile predictions on training points",
 )
 parser.add_argument(
-    "pred",
+    "pred_quantiles",
     type=pathlib.Path,
-    help="npz file of quantile predictions on the prediction grid",
+    help="npy file of quantile predictions on the prediction grid",
 )
 parser.add_argument("--target", required=True, choices=["H", "phi"])
+parser.add_argument(
+    "--quantiles",
+    type=float,
+    nargs="+",
+    required=True,
+    help="Quantile levels for the model.",
+)
 parser.add_argument("--threshold", type=float, help="Threshold for PIT computation")
 parser.add_argument(
     "-o", "--out", type=pathlib.Path, required=True, help="Output npz file."
 )
 args = parser.parse_args()
 
-Y_train = pd.read_csv(args.Y)
-y_actual = Y_train[args.target].to_numpy()
+Y_train = pd.read_csv(args.Y)[args.target].to_numpy()
+train_quantiles = np.load(args.train_quantiles)
+pred_quantiles = np.load(args.pred_quantiles)
+quantile_levels = np.array(args.quantiles)
 
-train_pred = np.load(args.train_pred)
-pred = np.load(args.pred)
 
-train_pred_quantiles = train_pred["quantiles"]
 u_train = quantile_pit(
-    train_pred_quantiles.reshape(-1, train_pred_quantiles.shape[-1]),
-    train_pred["quantile_levels"],
-    y_actual,
+    train_quantiles.reshape(-1, train_quantiles.shape[-1]),
+    quantile_levels,
+    Y_train,
 )
 
-pred_quantiles = pred["quantiles"]
 threshold = args.threshold
 u_pred = quantile_interpolation(
     pred_quantiles.reshape(-1, pred_quantiles.shape[-1]),
-    pred["quantile_levels"],
+    quantile_levels,
     threshold=threshold,
 )
 
