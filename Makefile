@@ -44,7 +44,7 @@ notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.csv _temp/cv.Center
 notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.prior_mean.Xpred_1D.npy _temp/phi.prior_mean.Xpred_1D.npy _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Window.ipynb: _temp/X.csv _temp/Xpred_2D.csv _temp/joint_probability.X-pred.npz _temp/delaunay.Xpred_2D.npy FORCE
+notebooks/Window.ipynb: _temp/X.csv _temp/Xpred_2D.csv _temp/joint_probability.X-pred.npy _temp/delaunay.Xpred_2D.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
@@ -144,8 +144,8 @@ _temp/H.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/H.quantiles
 _temp/phi.pit.X-pred.npz: scripts/joint/write-pit.py _temp/y.csv _temp/phi.quantiles.X.npy _temp/phi.quantiles.Xpred_2D.npy
 	python3 $^ --target phi --quantiles $(QUANTILES) --threshold 1.0 -o $@
 
-_temp/joint_probability.X-pred.npz: scripts/joint/write-joint.py _temp/X.csv _temp/Xpred_2D.csv _temp/H.pit.X-pred.npz _temp/phi.pit.X-pred.npz
+_temp/joint_probability.X-pred.npy: scripts/joint/write-joint.py _temp/Xpred_2D.csv _temp/H.pit.X-pred.npz _temp/phi.pit.X-pred.npz
 	python3 $^ -o $@
 
 _temp/delaunay.Xpred_2D.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/Xpred_2D.csv
-	python3 $^ --target Gap_to_thickness_ratio Capillary_number -o $@
+	python3 $^ --grid Gap_to_thickness_ratio Capillary_number -o $@
