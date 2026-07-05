@@ -104,6 +104,7 @@ if args.prior_mean is not None:
     mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 else:
     mean = ZeroMean(batch_shape=batch_shape).to(device)
+mean.eval()
 
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 

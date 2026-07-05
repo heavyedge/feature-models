@@ -120,19 +120,19 @@ model/requirements.txt: requirements.txt
 
 # Prediction
 
-_temp/%.prior_mean.Xpred_1D.npy: model/predict-mean.py _temp/Xpred_1D.npy model/%.gpqr.pt
+_temp/%.prior_mean.Xpred_1D.npy: model/predict-mean.py _temp/Xpred_1D.npy models
 	python3 $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.prior_mean.Xpred_2D.npy: model/predict-mean.py _temp/Xpred_2D.npy model/%.gpqr.pt
+_temp/%.prior_mean.Xpred_2D.npy: model/predict-mean.py _temp/Xpred_2D.npy models
 	python3 $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.quantiles.X.npy: model/predict-quantiles.py _temp/X.npy model/%.gpqr.pt
+_temp/%.quantiles.X.npy: model/predict-quantiles.py _temp/X.npy models
 	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.Xpred_1D.npy: model/predict-quantiles.py _temp/Xpred_1D.npy model/%.gpqr.pt
+_temp/%.quantiles.Xpred_1D.npy: model/predict-quantiles.py _temp/Xpred_1D.npy models
 	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.Xpred_2D.npy: model/predict-quantiles.py _temp/Xpred_2D.npy model/%.gpqr.pt
+_temp/%.quantiles.Xpred_2D.npy: model/predict-quantiles.py _temp/Xpred_2D.npy models
 	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 

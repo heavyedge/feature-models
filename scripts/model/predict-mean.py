@@ -32,7 +32,10 @@ if args.target == "H":
     load_models = load_module.load_H_models
 elif args.target == "phi":
     load_models = load_module.load_phi_models
-_, _, _, mean, _, _ = load_models(device=device)
+models = load_models(device=device)
+for module in models[1:]:
+    module.eval()
+_, _, _, mean, _, _ = models
 
 X = np.load(args.X)
 X_flattened = torch.tensor(

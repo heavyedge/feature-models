@@ -51,12 +51,6 @@ def split_extrapolate_data(X, y, ratio, device):
     return x_train, y_train, x_test, y_test
 
 
-def _freeze_module(module):
-    module.eval()
-    for parameter in module.parameters():
-        parameter.requires_grad_(False)
-
-
 def quantiles_cv_gpr(
     x_train,  # (*B, N_train, D)
     y_train,  # (*B, N_train)
@@ -72,8 +66,8 @@ def quantiles_cv_gpr(
     learning_rate=0.001,
     logger=lambda msg: None,
 ):
+    mean.eval()
     mll = ExactMarginalLogLikelihood(likelihood, model)
-    _freeze_module(mean)
     optimizer = torch.optim.Adam(
         list(X_scaler.parameters())
         + list(y_scaler.parameters())
@@ -147,8 +141,8 @@ def quantiles_cv_gpqr(
     learning_rate=0.001,
     logger=lambda msg: None,
 ):
+    mean.eval()
     mll = VariationalELBO(likelihood, model, num_data=y_train.shape[-1])
-    _freeze_module(mean)
     optimizer = torch.optim.Adam(
         list(X_scaler.parameters())
         + list(y_scaler.parameters())

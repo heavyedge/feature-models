@@ -7,12 +7,6 @@ __all__ = [
 ]
 
 
-def _freeze_module(module):
-    module.eval()
-    for parameter in module.parameters():
-        parameter.requires_grad_(False)
-
-
 def quantile_crossing(
     X_train,  # (*B, N_train, D)
     y_train,  # (*B, N_train)
@@ -26,8 +20,8 @@ def quantile_crossing(
     learning_rate=0.001,
     logger=lambda msg: None,
 ):
+    mean.eval()
     mll = VariationalELBO(likelihood, model, num_data=y_train.shape[-1])
-    _freeze_module(mean)
     optimizer = torch.optim.Adam(
         list(X_scaler.parameters())
         + list(y_scaler.parameters())
