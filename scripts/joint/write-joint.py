@@ -8,10 +8,10 @@ from copula import empirical_copula
 parser = argparse.ArgumentParser()
 parser.add_argument("X_pred", type=pathlib.Path, help="Prediction grid csv file.")
 parser.add_argument(
-    "marginal",
+    "pit_marginal",
     type=pathlib.Path,
     nargs="+",
-    help="Marginal distribution npz files.",
+    help="PIT and marginal distribution npz files.",
 )
 parser.add_argument(
     "-o",
@@ -28,14 +28,14 @@ index_col_pred = [
     "Slurry",
 ]
 Xpred = pd.read_csv(args.X_pred, index_col=index_col_pred)
-u_train = np.column_stack([np.load(p)["u_train"] for p in args.marginal])
-u_pred_full = np.column_stack([np.load(p)["u_pred"] for p in args.marginal])
+pit = np.column_stack([np.load(p)["pit"] for p in args.pit_marginal])
+marginal = np.column_stack([np.load(p)["marginal"] for p in args.pit_marginal])
 
 Slurries = Xpred.index.get_level_values("Slurry")
 
 joint_probs = np.empty(len(Xpred), dtype=float)
 for slurry in Slurries.unique():
     ok = Slurries == slurry
-    u_pred_slurry = u_pred_full[ok]
-    joint_probs[ok] = empirical_copula(u_train, u_pred_slurry)
+    marginal_slurry = marginal[ok]
+    joint_probs[ok] = empirical_copula(pit, marginal_slurry)
 np.save(args.out, joint_probs)
