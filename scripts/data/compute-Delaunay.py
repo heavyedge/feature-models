@@ -8,24 +8,37 @@ from scipy.spatial import Delaunay
 parser = argparse.ArgumentParser()
 parser.add_argument("X_true", type=pathlib.Path, help="Predictor csv file.")
 parser.add_argument("X_pred", type=pathlib.Path, help="Predictor csv file.")
+parser.add_argument(
+    "--target",
+    type=str,
+    nargs="+",
+    choices=["Gap_to_thickness_ratio", "Capillary_number", "Cos_theta"],
+    help="Target name.",
+)
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output npy file.")
 args = parser.parse_args()
 
-Xtrue = pd.read_csv(args.X_true)
-Xpred = pd.read_csv(args.X_pred, index_col=[0, 1, 2]).drop(columns=["Cos_theta"])
+index_col_true = ["Slurry"]
+Xtrue = pd.read_csv(args.X_true, index_col=index_col_true)
+index_col_pred = [
+    "Gap_to_thickness_ratio_idx",
+    "Capillary_number_idx",
+    "Cos_theta_idx",
+    "Slurry",
+]
+Xpred = pd.read_csv(args.X_pred, index_col=index_col_pred)
+
+Xtrue_Slurries = Xtrue.index.get_level_values("Slurry")
+Xpred_Slurries = Xpred.index.get_level_values("Slurry")
 
 simplices = []
-for slurry, xtrue in Xtrue.groupby("Slurry"):
-    delaunay = Delaunay(xtrue.drop(columns=["Slurry", "Cos_theta"]).to_numpy())
-    xpred = Xpred.xs(slurry, level="Slurry")
+for slurry in Xtrue_Slurries.unique():
+    xtrue_ok = Xtrue_Slurries == slurry
+    xtrue = Xtrue[xtrue_ok][args.target]
+    delaunay = Delaunay(xtrue.to_numpy())
 
-    grid_shape = tuple(
-        len(xpred.index.get_level_values(i).unique())
-        for i in range(xpred.index.nlevels)
-    )
-    xpred = xpred.to_numpy().reshape(*grid_shape, xpred.shape[1])
+    xpred_ok = Xpred_Slurries == slurry
+    xpred = Xpred[xpred_ok][args.target]
+    simplices.append(delaunay.find_simplex(xpred.to_numpy()) != -1)
 
-    simplex = delaunay.find_simplex(xpred.reshape(-1, xpred.shape[-1])) != -1
-    simplices.append(simplex.reshape(xpred.shape[:-1]))
-
-np.save(args.out, np.stack(simplices, axis=0))
+np.save(args.out, np.concatenate(simplices))
