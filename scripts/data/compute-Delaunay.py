@@ -31,7 +31,7 @@ Xpred = pd.read_csv(args.X_pred, index_col=index_col_pred)
 Xtrue_Slurries = Xtrue.index.get_level_values("Slurry")
 Xpred_Slurries = Xpred.index.get_level_values("Slurry")
 
-simplices = []
+simplices = np.zeros(len(Xpred), dtype=bool)
 for slurry in Xtrue_Slurries.unique():
     xtrue_ok = Xtrue_Slurries == slurry
     xtrue = Xtrue[xtrue_ok][args.grid]
@@ -39,6 +39,6 @@ for slurry in Xtrue_Slurries.unique():
 
     xpred_ok = Xpred_Slurries == slurry
     xpred = Xpred[xpred_ok][args.grid]
-    simplices.append(delaunay.find_simplex(xpred.to_numpy()) != -1)
+    simplices[xpred_ok] = delaunay.find_simplex(xpred.to_numpy()) != -1
 
-np.save(args.out, np.concatenate(simplices))
+np.save(args.out, simplices)

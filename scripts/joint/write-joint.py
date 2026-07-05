@@ -33,9 +33,9 @@ u_pred_full = np.column_stack([np.load(p)["u_pred"] for p in args.marginal])
 
 Slurries = Xpred.index.get_level_values("Slurry")
 
-joint_probs = []
+joint_probs = np.empty(len(Xpred), dtype=float)
 for slurry in Slurries.unique():
     ok = Slurries == slurry
     u_pred_slurry = u_pred_full[ok]
-    joint_probs.append(empirical_copula(u_train, u_pred_slurry))
-np.save(args.out, np.concatenate(joint_probs))
+    joint_probs[ok] = empirical_copula(u_train, u_pred_slurry)
+np.save(args.out, joint_probs)
