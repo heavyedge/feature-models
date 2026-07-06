@@ -21,7 +21,7 @@ spec:
         - name: regcred
       containers:
         - name: main
-          image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:dev
+          image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:${DOCKER_TAG}
           imagePullPolicy: Always
           resources:
             limits:

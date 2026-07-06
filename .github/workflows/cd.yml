@@ -27,6 +27,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker registry
+        if: github.event_name == 'release'
         shell: bash
         env:
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
@@ -51,7 +52,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ github.event_name == 'release' }}
           target: dev
           platforms: linux/amd64,linux/arm64
           build-args: |
@@ -62,7 +63,9 @@ jobs:
             IMAGE_DESCRIPTION='Image for developing heavyedge/feature-models. Includes source in '/src' directory. Does not include trained models.'
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models:dev
+          tags: |
+            ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models:dev-latest
+            ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models:dev-${{ github.ref_name }}
 
   deploy-k8s:
 
@@ -118,11 +121,14 @@ jobs:
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          RELEASE_TAG_NAME: ${{ github.ref_name }}
         run: |
           export GIT_SHA_SHORT=${GIT_SHA::7}
           if [ "$EVENT_NAME" = "release" ]; then
+            export DOCKER_TAG="dev-${RELEASE_TAG_NAME}"
             export JOB_NAME="heavyedge-feature-models-release-${GIT_SHA_SHORT}"
           else
+            export DOCKER_TAG="dev-latest"
             export JOB_NAME="heavyedge-feature-models-${GIT_SHA_SHORT}"
           fi
           envsubst < .github/job.yaml | kubectl apply -f -
