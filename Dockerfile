@@ -94,6 +94,9 @@ ARG IMAGE_VERSION
 ARG IMAGE_REVISION
 ARG IMAGE_TITLE
 ARG IMAGE_DESCRIPTION
+RUN mkdir -p /etc/heavyedge \
+    && echo "${IMAGE_VERSION}" > /etc/heavyedge/image-version \
+    && echo "${IMAGE_REVISION}" > /etc/heavyedge/image-revision
 LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.authors="Jisoo Song <jeesoo9595@snu.ac.kr>" \
       org.opencontainers.image.source="https://github.com/jisoosong/heavyedge" \
