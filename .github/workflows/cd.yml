@@ -106,4 +106,5 @@ jobs:
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         run: |
+          export GIT_SHA_SHORT=${GIT_SHA::7}
           envsubst < .github/job.yaml | kubectl apply -f -
