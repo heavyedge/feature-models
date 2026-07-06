@@ -121,7 +121,7 @@ crs, mcs, mxs = quantile_crossing(
     mean,
     model,
     likelihood,
-    n_epochs=1,
+    n_epochs=args.n_epochs,
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
 
