@@ -3,6 +3,9 @@ NUM_LOWER_QUANTILES := 2
 NUM_LATENTS := 3
 HEAVYEDGE_N_EPOCHS ?= 10000
 
+H_THRESHOLD := 1.1
+PHI_THRESHOLD := 1.0
+
 NOTEBOOKS := $(wildcard notebooks/*)
 MODEL_FILES := \
 model/H.gpqr.pt \
@@ -147,10 +150,10 @@ _temp/%.pit.Xpred_2D.npy: scripts/joint/write-pit.py _temp/y.csv _temp/%.quantil
 	python3 $^ --target $* --quantiles $(QUANTILES) -o $@
 
 _temp/H.marginal.Xpred_2D.npy: scripts/joint/write-marginal.py _temp/H.quantiles.Xpred_2D.npy
-	python3 $^ --quantiles $(QUANTILES) --threshold 1.1 -o $@
+	python3 $^ --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
 _temp/phi.marginal.Xpred_2D.npy: scripts/joint/write-marginal.py _temp/phi.quantiles.Xpred_2D.npy
-	python3 $^ --quantiles $(QUANTILES) --threshold 1.0 -o $@
+	python3 $^ --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
 _temp/%.pit_marginal.Xpred_2D.npz: _temp/%.pit.Xpred_2D.npy _temp/%.marginal.Xpred_2D.npy
 	python3 -c "import numpy as np; pit, marginal = map(np.load, '$^'.split(' ')); np.savez('$@', pit=pit, marginal=marginal)"
