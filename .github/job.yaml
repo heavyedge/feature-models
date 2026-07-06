@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: heavyedge-feature-models-${GIT_SHA_SHORT}
+  name: ${JOB_NAME}
   namespace: ${KUBE_NAMESPACE}
 spec:
   ttlSecondsAfterFinished: 0

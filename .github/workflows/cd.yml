@@ -119,4 +119,9 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         run: |
           export GIT_SHA_SHORT=${GIT_SHA::7}
+          if [ "$EVENT_NAME" = "release" ]; then
+            export JOB_NAME="heavyedge-feature-models-release-${GIT_SHA_SHORT}"
+          else
+            export JOB_NAME="heavyedge-feature-models-${GIT_SHA_SHORT}"
+          fi
           envsubst < .github/job.yaml | kubectl apply -f -
