@@ -61,4 +61,4 @@ jobs:
             IMAGE_DESCRIPTION='Image for developing heavyedge/feature-models. Includes source in '/src' directory. Does not include trained models.'
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/heavyedge-feature-models:dev
+          tags: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models:dev
