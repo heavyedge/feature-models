@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: heavyedge-feature-models
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        git-sha: ${GIT_SHA}
+        github-event: ${EVENT_NAME}
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      nodeSelector:
+          mlx.navercorp.com/zone: ${MLXP_ZONE}
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: main
+          image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:dev
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: "8Gi"
+              cpu: "4"
+              nvidia.com/gpu: "1"
+          command: ["sh"]
+          args:
+            - "-c"
+            - "pip install -r requirements.txt && HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make models"
