@@ -13,4 +13,5 @@ pip install -r requirements.txt
 
 Usage:
 
-Import functions from `load.py` to load models in Python runtime.
+Run `predict-mean.py` script to evaluate prior mean functions.
+Run `predict-quantiles.py` script to evaluate quantiles.

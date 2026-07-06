@@ -11,3 +11,4 @@ nbstripout
 optuna
 scipy
 xarray
+huggingface_hub

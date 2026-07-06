@@ -86,9 +86,6 @@ RUN apt-get update \
 
 COPY --from=downloader /dataset/_data ./_data
 
-COPY --from=downloader /root/.local/bin/hf /root/.local/bin/hf
-ENV PATH="/root/.local/bin:$PATH"
-
 COPY --from=clear-notebooks /src/notebooks ./notebooks
 COPY --exclude=.git --exclude=.github --exclude=notebooks . .
 

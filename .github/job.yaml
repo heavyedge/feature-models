@@ -29,6 +29,19 @@ spec:
               cpu: "4"
               nvidia.com/gpu: "1"
           command: ["sh"]
+          env:
+            - name: HUGGINGFACE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface-token
+                  key: HUGGINGFACE_TOKEN
+                  optional: true
           args:
             - "-c"
-            - "pip install -r requirements.txt && HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make models"
+            - |
+              set -e
+              pip install -r requirements.txt
+              HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make models
+              if [ "${UPLOAD_TO_HUGGINGFACE}" = "1" ]; then
+                python upload.py
+              fi

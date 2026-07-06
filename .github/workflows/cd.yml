@@ -96,11 +96,23 @@ jobs:
             --namespace=${{ secrets.KUBE_NAMESPACE }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Create Hugging Face token secret
+        if: github.event_name == 'release'
+        env:
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          kubectl create secret generic huggingface-token \
+            --from-literal=HUGGINGFACE_TOKEN="$HUGGINGFACE_TOKEN" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Run job
         env:
           GIT_SHA: ${{ github.sha }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVYEDGE_TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
+          UPLOAD_TO_HUGGINGFACE: ${{ github.event_name == 'release' && '1' || '0' }}
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
