@@ -49,12 +49,22 @@ X_flattened = torch.tensor(
     X.reshape(-1, X.shape[-1]), dtype=torch.float32, device=device
 )
 
+if args.method == "delta":
+    quantiles = model.mean_quantiles_delta
+elif args.method == "mc":
+
+    def quantiles(x):
+        return model.mean_quantiles_mc(x, num_samples=args.num_samples)
+
+else:
+    raise ValueError(f"Unknown method: {args.method}")
+
 ret = []
 with torch.no_grad():
     for i in range(0, X_flattened.shape[0], args.chunk_size):
         X_pred = X_flattened[i : i + args.chunk_size]
         X_scaled = X_scaler(X_pred)
-        scaled_res_quantiles = model.mean_quantiles_delta(X_scaled)
+        scaled_res_quantiles = quantiles(X_scaled)
         pred_res = y_scaler.inverse_transform(scaled_res_quantiles)
         pred_mean = mean(X_pred).reshape(-1, 1)
         pred_quantiles = pred_res + pred_mean
