@@ -3,6 +3,7 @@ NUM_LOWER_QUANTILES := 2
 NUM_LATENTS := 3
 
 N_EPOCHS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
+N_FOLDS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
@@ -100,10 +101,10 @@ _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/model_selection/
 	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/cv.GPR_%.csv: scripts/model_selection/write-cv.gpr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
-	python3 $^ --target $* --model GPR_$* --num-folds=10 --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
+	python3 $^ --target $* --model GPR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/cv.CenterGapMTGPQR_%.csv: scripts/model_selection/write-cv.gpqr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --num-folds=10 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
+	python3 $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 
 # Model
