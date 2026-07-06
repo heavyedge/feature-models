@@ -76,7 +76,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=downloader /dataset/_data ./_data
-# Copy the requirements first to cache layer
+COPY --from=downloader /root/.local/bin/hf /root/.local/bin/hf
+ENV PATH="/root/.local/bin:$PATH"
+
+# Copy requirements first in order to cache layer
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
