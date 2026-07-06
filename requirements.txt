@@ -1,7 +1,7 @@
 numpy
 torch
 gpytorch
-gpytorch-qr>=0.6.0,<0.7.0
+gpytorch-qr==0.8.0
 pandas
 scikit-learn
 matplotlib
@@ -10,3 +10,4 @@ nbconvert
 nbstripout
 optuna
 scipy
+xarray

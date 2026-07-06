@@ -1,45 +1,84 @@
 import argparse
 import pathlib
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
 
-parser = argparse.ArgumentParser(description="Xpred of Rgt and Ca grid")
+TARGET_COLUMNS = [
+    "Gap_to_thickness_ratio",
+    "Capillary_number",
+    "Cos_theta",
+]
+
+parser = argparse.ArgumentParser(description="Construct Xpred grid")
 parser.add_argument("X", type=pathlib.Path, help="Observed X csv file.")
+parser.add_argument("--target", nargs="*", choices=TARGET_COLUMNS)
+parser.add_argument(
+    "--ngrid",
+    nargs="*",
+    type=int,
+    default=200,
+    help="Number of grid points per target column.",
+)
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
 
-COLUMNS = ["Gap_to_thickness_ratio", "Capillary_number"]
+if args.target is None:
+    args.target = []
+if len(args.target) != len(set(args.target)):
+    raise ValueError("Duplicate targets provided.")
+args.target = sorted(args.target, key=lambda x: TARGET_COLUMNS.index(x))
+if not isinstance(args.ngrid, Iterable):
+    args.ngrid = [args.ngrid] * len(args.target)
 
 X = pd.read_csv(args.X)
-slurry_cos = X[["Slurry", "Cos_theta"]].drop_duplicates()
+ranges = [(X[col].min(), X[col].max()) for col in args.target]
+grids = [np.linspace(r[0], r[1], n) for r, n in zip(ranges, args.ngrid)]
+mesh_array = np.stack(np.meshgrid(*grids, indexing="ij"), axis=-1)
 
-ranges = {col: (X[col].min(), X[col].max()) for col in COLUMNS}
-grids = {col: np.linspace(ranges[col][0], ranges[col][1], 200) for col in COLUMNS}
-mesh_array = np.stack(np.meshgrid(*grids.values(), indexing="ij"), axis=-1)
+other_columns = [col for col in X.columns if col not in args.target]
+other_values = X[other_columns].drop_duplicates().reset_index(drop=True)
 
 grid_shape = mesh_array.shape[:-1]  # e.g. (200, 200)
-flat_mesh = mesh_array.reshape(-1, len(COLUMNS))
-
-n_pairs = len(slurry_cos)
-n_grid = int(np.prod(grid_shape))
+G = int(np.prod(grid_shape)) if grid_shape else 1
 grid_indices = np.indices(grid_shape).reshape(len(grid_shape), -1)
 
-index = pd.MultiIndex.from_arrays(
-    [
-        np.repeat(slurry_cos["Slurry"].values, n_grid),
-    ]
-    + [np.tile(grid_indices[i], n_pairs) for i in range(len(grid_shape))],
-    names=["Slurry"] + [col + "_idx" for col in COLUMNS],
+# Non-target TARGET_COLUMNS get indices based on rank in sorted unique values
+other_target_columns = [col for col in TARGET_COLUMNS if col not in args.target]
+other_target_idx = {
+    col: other_values[col]
+    .map({v: i for i, v in enumerate(sorted(other_values[col].unique()))})
+    .values
+    for col in other_target_columns
+}
+
+# Build index arrays in TARGET_COLUMNS order
+index_arrays = []
+index_names = []
+for col in TARGET_COLUMNS:
+    if col in args.target:
+        i = args.target.index(col)
+        index_arrays.append(np.tile(grid_indices[i], len(other_values)))
+    else:
+        index_arrays.append(np.repeat(other_target_idx[col], G))
+    index_names.append(col + "_idx")
+
+index = pd.MultiIndex.from_arrays(index_arrays, names=index_names)
+Xpred = pd.DataFrame(
+    np.tile(mesh_array.reshape(-1, len(args.target)), (len(other_values), 1)),
+    columns=args.target,
+    index=index,
 )
 
-Xpred = pd.DataFrame(
-    np.tile(flat_mesh, (n_pairs, 1)),
+other_values_expanded = pd.DataFrame(
+    np.repeat(
+        other_values.values, mesh_array.reshape(-1, len(args.target)).shape[0], axis=0
+    ),
+    columns=other_columns,
     index=index,
-    columns=COLUMNS,
 )
-Xpred.insert(
-    len(Xpred.columns), "Cos_theta", np.repeat(slurry_cos["Cos_theta"].values, n_grid)
-)
+Xpred = pd.concat([other_values_expanded, Xpred], axis=1)
+Xpred = Xpred[X.columns]
 
 Xpred.to_csv(args.out)

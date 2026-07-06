@@ -6,49 +6,36 @@ import pandas as pd
 from copula import empirical_copula
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "X",
-    type=pathlib.Path,
-    help="Feature csv file (for slurry groupings).",
-)
 parser.add_argument("X_pred", type=pathlib.Path, help="Prediction grid csv file.")
 parser.add_argument(
-    "marginal",
+    "pit_marginal",
     type=pathlib.Path,
     nargs="+",
-    help="Marginal distribution npz files.",
+    help="PIT and marginal distribution npz files.",
 )
 parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output npz file of joint distribution.",
+    help="Output npy file of joint distribution.",
 )
 args = parser.parse_args()
 
-u_train = np.column_stack([np.load(p)["u_train"] for p in args.marginal])
-u_pred_full = np.column_stack([np.load(p)["u_pred"] for p in args.marginal])
+index_col_pred = [
+    "Gap_to_thickness_ratio_idx",
+    "Capillary_number_idx",
+    "Cos_theta_idx",
+    "Slurry",
+]
+Xpred = pd.read_csv(args.X_pred, index_col=index_col_pred)
+pit = np.column_stack([np.load(p)["pit"] for p in args.pit_marginal])
+marginal = np.column_stack([np.load(p)["marginal"] for p in args.pit_marginal])
 
-Xtrue = pd.read_csv(args.X)
-Xpred = pd.read_csv(args.X_pred, index_col=[0, 1, 2])
+Slurries = Xpred.index.get_level_values("Slurry")
 
-slurry_levels = Xpred.index.get_level_values("Slurry")
-
-groups = list(Xtrue.groupby("Slurry"))
-
-grids, probs = [], []
-for i, (slurry, _) in enumerate(groups):
-    xpred = Xpred.xs(slurry, level="Slurry")
-    grid_shape = tuple(
-        len(xpred.index.get_level_values(j).unique())
-        for j in range(xpred.index.nlevels)
-    )
-    grid = xpred.to_numpy().reshape(*grid_shape, xpred.shape[1])
-    grids.append(grid)
-
-    slurry_mask = slurry_levels == slurry
-    u_pred_slurry = u_pred_full[slurry_mask]
-    joint_prob = empirical_copula(u_train, u_pred_slurry)
-    probs.append(joint_prob.reshape(grid_shape))
-
-np.savez(args.out, grids=grids, probs=probs)
+joint_probs = np.empty(len(Xpred), dtype=float)
+for slurry in Slurries.unique():
+    ok = Slurries == slurry
+    marginal_slurry = marginal[ok]
+    joint_probs[ok] = empirical_copula(pit, marginal_slurry)
+np.save(args.out, joint_probs)
