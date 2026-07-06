@@ -30,9 +30,8 @@ parser.add_argument(
 )
 parser.add_argument(
     "--ngrid",
-    nargs="*",
+    nargs="+",
     type=int,
-    default=200,
     help="Number of grid points per target column.",
 )
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
