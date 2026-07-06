@@ -69,6 +69,18 @@ _temp/Xpred_1D.csv: scripts/data/write-Xpred.py _temp/X.csv
 _temp/Xpred_2D.csv: scripts/data/write-Xpred.py _temp/X.csv
 	python3 $^ --target Gap_to_thickness_ratio Capillary_number -o $@
 
+_temp/Xpred_3D-1.csv: scripts/data/write-Xpred.py _temp/X.csv
+	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=0 --stop=1 --ngrid=10 -o $@
+
+_temp/Xpred_3D-2.csv: scripts/data/write-Xpred.py _temp/X.csv
+	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=-2 --stop=2 --ngrid=10 -o $@
+
+_temp/X-test1.csv: scripts/data/write-Xtest.py _temp/X.csv
+	python3 $^ --start=0 --stop=1 --num=10 -o $@
+
+_temp/X-test2.csv: scripts/data/write-Xtest.py _temp/X.csv
+	python3 $^ --start=-2 --stop=2 --num=10 -o $@
+
 _temp/X.npy: _temp/X.csv
 	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
 
@@ -77,12 +89,6 @@ _temp/Xpred_1D.npy: scripts/data/Xpred-array.py _temp/Xpred_1D.csv
 
 _temp/Xpred_2D.npy: scripts/data/Xpred-array.py _temp/Xpred_2D.csv
 	python3 $^ -o $@
-
-_temp/X-test1.csv: scripts/data/write-Xtest.py _temp/X.csv
-	python3 $^ --start=0 --stop=1 --num=10 -o $@
-
-_temp/X-test2.csv: scripts/data/write-Xtest.py _temp/X.csv
-	python3 $^ --start=-2 --stop=2 --num=10 -o $@
 
 # Model selection
 
@@ -140,6 +146,9 @@ _temp/%.quantiles.Xpred_2D.npy: model/predict-quantiles.py _temp/Xpred_2D.npy $(
 
 # Window prediction
 
+_temp/delaunay.Xpred_2D.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/Xpred_2D.csv
+	python3 $^ --grid Gap_to_thickness_ratio Capillary_number -o $@
+
 _temp/%.pit.Xpred_2D.npy: scripts/joint/write-pit.py _temp/y.csv _temp/%.quantiles.X.npy
 	python3 $^ --target $* --quantiles $(QUANTILES) -o $@
 
@@ -154,6 +163,3 @@ _temp/%.pit_marginal.Xpred_2D.npz: _temp/%.pit.Xpred_2D.npy _temp/%.marginal.Xpr
 
 _temp/joint_probability.Xpred_2D.npy: scripts/joint/write-joint.py _temp/Xpred_2D.csv _temp/H.pit_marginal.Xpred_2D.npz _temp/phi.pit_marginal.Xpred_2D.npz
 	python3 $^ -o $@
-
-_temp/delaunay.Xpred_2D.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/Xpred_2D.csv
-	python3 $^ --grid Gap_to_thickness_ratio Capillary_number -o $@
