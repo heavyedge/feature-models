@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.19
 FROM python:slim AS downloader
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /dataset
@@ -67,6 +68,14 @@ WORKDIR /
 COPY --from=build-notebooks /workspace/notebooks ./
 
 
+FROM python:slim as clear-notebooks
+
+WORKDIR /src
+RUN pip install --no-cache-dir nbconvert
+COPY notebooks ./notebooks
+RUN jupyter nbconvert --clear-output --inplace notebooks/*.ipynb
+
+
 FROM python:slim AS dev
 
 WORKDIR /src
@@ -76,10 +85,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=downloader /dataset/_data ./_data
+
 COPY --from=downloader /root/.local/bin/hf /root/.local/bin/hf
 ENV PATH="/root/.local/bin:$PATH"
 
-COPY . .
+COPY --from=clear-notebooks /src/notebooks ./notebooks
+COPY --exclude=notebooks . .
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
