@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.19
 FROM python:slim AS downloader
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /dataset
