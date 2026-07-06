@@ -46,7 +46,7 @@ notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.csv _temp/cv.Center
 notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.prior_mean.Xpred_1D.npy _temp/phi.prior_mean.Xpred_1D.npy _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
-notebooks/Window.ipynb: _temp/X.csv _temp/Xpred_2D.csv _temp/delaunay.Xpred_2D.npy _temp/H.prior_mean.Xpred_2D.npy _temp/phi.prior_mean.Xpred_2D.npy _temp/H.quantiles.Xpred_2D.npy _temp/phi.quantiles.Xpred_2D.npy _temp/H.marginal.Xpred_2D.npy _temp/phi.marginal.Xpred_2D.npy _temp/joint_probability.Xpred_2D.npy FORCE
+notebooks/Window.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_2D.csv _temp/delaunay.Xpred_2D.npy _temp/H.prior_mean.Xpred_2D.npy _temp/phi.prior_mean.Xpred_2D.npy _temp/H.quantiles.Xpred_2D.npy _temp/phi.quantiles.Xpred_2D.npy _temp/H.marginal.Xpred_2D.npy _temp/phi.marginal.Xpred_2D.npy _temp/joint_probability.Xpred_2D.npy FORCE
 	jupyter nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
