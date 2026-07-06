@@ -5,6 +5,7 @@ metadata:
   namespace: ${KUBE_NAMESPACE}
 spec:
   ttlSecondsAfterFinished: 0
+  activeDeadlineSeconds: 10800
   backoffLimit: 1
   template:
     metadata:
