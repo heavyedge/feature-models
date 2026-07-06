@@ -3,10 +3,13 @@ import shutil
 
 from huggingface_hub import HfApi
 
+from version import __version__
+
 api = HfApi(token=os.getenv("HUGGINGFACE_TOKEN"))
 
-REPO = "jeesoo9595/heavyedge-features-v1"
-MODEL_VERSION = "v1.0.0"
+MODEL_VERSION = f"v{__version__}"
+MAJOR_VERSION = __version__.split(".")[0]
+REPO = f"jeesoo9595/heavyedge-features-v{MAJOR_VERSION}"
 
 shutil.rmtree("model/__pycache__", ignore_errors=True)
 
