@@ -17,9 +17,14 @@ parser.add_argument(
     required=True,
     help="Quantile levels for the model.",
 )
-parser.add_argument("--threshold", type=float, help="Threshold for PIT computation")
 parser.add_argument(
-    "-o", "--out", type=pathlib.Path, required=True, help="Output npz file."
+    "--threshold",
+    type=float,
+    required=True,
+    help="Threshold for marginal CDF computation",
+)
+parser.add_argument(
+    "-o", "--out", type=pathlib.Path, required=True, help="Output npy file."
 )
 args = parser.parse_args()
 
@@ -28,7 +33,7 @@ quantile_levels = np.array(args.quantiles)
 
 threshold = args.threshold
 marginal = quantile_interpolation(
-    pred_quantiles.reshape(-1, pred_quantiles.shape[-1]),
+    pred_quantiles,
     quantile_levels,
     threshold=threshold,
 )
