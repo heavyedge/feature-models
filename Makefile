@@ -87,6 +87,9 @@ _temp/Xpred_1D.npy: _temp/Xpred_1D.csv
 _temp/Xpred_2D.npy: _temp/Xpred_2D.csv
 	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<', index_col=[0, 1, 2, 3]).to_numpy())"
 
+_temp/label.csv: scripts/data/write-label.py _temp/y.csv
+	python3 $^ --target H phi --threshold $(H_THRESHOLD) $(PHI_THRESHOLD) -o $@
+
 # Model selection
 
 _temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/Xpred_3D-1.csv _temp/Xpred_3D-2.csv
