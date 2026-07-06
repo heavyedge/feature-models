@@ -1,9 +1,9 @@
-NOTEBOOKS := $(wildcard notebooks/*)
 QUANTILES := 0.05 0.25 0.5 0.75 0.95
 NUM_LOWER_QUANTILES := 2
 NUM_LATENTS := 3
 HEAVYEDGE_N_EPOCHS ?= 10000
 
+NOTEBOOKS := $(wildcard notebooks/*)
 MODEL_FILES := \
 model/H.gpqr.pt \
 model/phi.gpqr.pt \
