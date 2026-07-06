@@ -78,11 +78,11 @@ _temp/Xpred_3D-2.csv: scripts/data/write-Xpred.py _temp/X.csv
 _temp/X.npy: _temp/X.csv
 	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
 
-_temp/Xpred_1D.npy: scripts/data/Xpred-array.py _temp/Xpred_1D.csv
-	python3 $^ -o $@
+_temp/Xpred_1D.npy: _temp/Xpred_1D.csv
+	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<', index_col=[0, 1, 2, 3]).to_numpy())"
 
-_temp/Xpred_2D.npy: scripts/data/Xpred-array.py _temp/Xpred_2D.csv
-	python3 $^ -o $@
+_temp/Xpred_2D.npy: _temp/Xpred_2D.csv
+	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<', index_col=[0, 1, 2, 3]).to_numpy())"
 
 # Model selection
 
