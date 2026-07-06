@@ -220,4 +220,4 @@ jobs:
           tags: heavyedge-feature-models:dev-ci
 
       - name: Test Docker image
-        run: docker run --rm heavyedge-feature-models:dev-ci sh -c 'HEAVYEDGE_N_EPOCHS=1 make models'
+        run: docker run --rm heavyedge-feature-models:dev-ci sh -c 'pip install -r requirements.txt && HEAVYEDGE_N_EPOCHS=1 make models'

@@ -79,9 +79,6 @@ COPY --from=downloader /dataset/_data ./_data
 COPY --from=downloader /root/.local/bin/hf /root/.local/bin/hf
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy requirements first in order to cache layer
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 ARG IMAGE_CREATED
