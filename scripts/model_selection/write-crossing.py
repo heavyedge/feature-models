@@ -77,7 +77,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
-X_tests = [torch.tensor(pd.read_csv(f).values).float().to(device) for f in args.X_test]
+
+X_tests = []
+for path in args.X_test:
+    Xtest_df = pd.read_csv(path, index_col=[0, 1, 2, 3])
+    Xtest_arr = Xtest_df.groupby(level=[0, 1, 2]).first().values
+    X_tests.append(torch.tensor(Xtest_arr).float().to(device))
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]

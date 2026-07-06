@@ -15,6 +15,20 @@ parser = argparse.ArgumentParser(description="Construct Xpred grid")
 parser.add_argument("X", type=pathlib.Path, help="Observed X csv file.")
 parser.add_argument("--target", nargs="*", choices=TARGET_COLUMNS)
 parser.add_argument(
+    "--start",
+    nargs="*",
+    type=float,
+    default=0.0,
+    help="Start value for each minmax-scaled target column.",
+)
+parser.add_argument(
+    "--stop",
+    nargs="*",
+    type=float,
+    default=1.0,
+    help="Stop value for each minmax-scaled target column.",
+)
+parser.add_argument(
     "--ngrid",
     nargs="*",
     type=int,
@@ -29,11 +43,27 @@ if args.target is None:
 if len(args.target) != len(set(args.target)):
     raise ValueError("Duplicate targets provided.")
 args.target = sorted(args.target, key=lambda x: TARGET_COLUMNS.index(x))
-if not isinstance(args.ngrid, Iterable):
-    args.ngrid = [args.ngrid] * len(args.target)
+if not isinstance(args.start, Iterable) or len(args.start) == 1:
+    args.start = [args.start[0] if isinstance(args.start, list) else args.start] * len(
+        args.target
+    )
+if not isinstance(args.stop, Iterable) or len(args.stop) == 1:
+    args.stop = [args.stop[0] if isinstance(args.stop, list) else args.stop] * len(
+        args.target
+    )
+if not isinstance(args.ngrid, Iterable) or len(args.ngrid) == 1:
+    args.ngrid = [args.ngrid[0] if isinstance(args.ngrid, list) else args.ngrid] * len(
+        args.target
+    )
 
 X = pd.read_csv(args.X)
-ranges = [(X[col].min(), X[col].max()) for col in args.target]
+ranges = [
+    (
+        X[col].min() + s * (X[col].max() - X[col].min()),
+        X[col].min() + e * (X[col].max() - X[col].min()),
+    )
+    for col, s, e in zip(args.target, args.start, args.stop)
+]
 grids = [np.linspace(r[0], r[1], n) for r, n in zip(ranges, args.ngrid)]
 mesh_array = np.stack(np.meshgrid(*grids, indexing="ij"), axis=-1)
 
