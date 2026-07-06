@@ -68,7 +68,7 @@ WORKDIR /
 COPY --from=build-notebooks /workspace/notebooks ./
 
 
-FROM python:slim as dev-notebooks
+FROM python:slim as clear-notebooks
 
 WORKDIR /src
 RUN pip install --no-cache-dir nbconvert
@@ -89,7 +89,7 @@ COPY --from=downloader /dataset/_data ./_data
 COPY --from=downloader /root/.local/bin/hf /root/.local/bin/hf
 ENV PATH="/root/.local/bin:$PATH"
 
-COPY --from=dev-notebooks /src/notebooks ./notebooks
+COPY --from=clear-notebooks /src/notebooks ./notebooks
 COPY --exclude=notebooks . .
 
 ARG IMAGE_CREATED
