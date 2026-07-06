@@ -75,12 +75,6 @@ _temp/Xpred_3D-1.csv: scripts/data/write-Xpred.py _temp/X.csv
 _temp/Xpred_3D-2.csv: scripts/data/write-Xpred.py _temp/X.csv
 	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=-2 --stop=2 --ngrid=10 -o $@
 
-_temp/X-test1.csv: scripts/data/write-Xtest.py _temp/X.csv
-	python3 $^ --start=0 --stop=1 --num=10 -o $@
-
-_temp/X-test2.csv: scripts/data/write-Xtest.py _temp/X.csv
-	python3 $^ --start=-2 --stop=2 --num=10 -o $@
-
 _temp/X.npy: _temp/X.csv
 	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
 
@@ -92,7 +86,7 @@ _temp/Xpred_2D.npy: scripts/data/Xpred-array.py _temp/Xpred_2D.csv
 
 # Model selection
 
-_temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/X-test1.csv _temp/X-test2.csv
+_temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/Xpred_3D-1.csv _temp/Xpred_3D-2.csv
 	python3 $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(HEAVYEDGE_N_EPOCHS) -o $@
 
 _temp/extrapolation.CenterGapMTGPQR_%.csv: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
