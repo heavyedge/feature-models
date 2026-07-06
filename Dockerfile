@@ -33,8 +33,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-ARG HEAVYEDGE_N_EPOCHS
-RUN env ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make models
+ARG HEAVYEDGE_TEST_MODE
+RUN env ${HEAVYEDGE_TEST_MODE:+HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE}} make models
 
 
 FROM python:slim AS build-notebooks
@@ -52,8 +52,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-ARG HEAVYEDGE_N_EPOCHS
-RUN env ${HEAVYEDGE_N_EPOCHS:+HEAVYEDGE_N_EPOCHS=${HEAVYEDGE_N_EPOCHS}} make notebooks
+ARG HEAVYEDGE_TEST_MODE
+RUN env ${HEAVYEDGE_TEST_MODE:+HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE}} make notebooks
 
 
 FROM scratch AS models
