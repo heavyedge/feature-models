@@ -90,7 +90,7 @@ COPY --from=downloader /root/.local/bin/hf /root/.local/bin/hf
 ENV PATH="/root/.local/bin:$PATH"
 
 COPY --from=clear-notebooks /src/notebooks ./notebooks
-COPY --exclude=notebooks . .
+COPY --exclude=.git --exclude=.github --exclude=notebooks . .
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
