@@ -4,6 +4,8 @@ NUM_LATENTS := 3
 
 N_EPOCHS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_FOLDS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
+N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
+N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
@@ -69,16 +71,16 @@ _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
 _temp/Xpred_1D.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ --target Gap_to_thickness_ratio -o $@
+	python3 $^ --target Gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
 _temp/Xpred_2D.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ --target Gap_to_thickness_ratio Capillary_number -o $@
+	python3 $^ --target Gap_to_thickness_ratio Capillary_number --ngrid $(N_GRID_1) -o $@
 
 _temp/Xpred_3D-1.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=0 --stop=1 --ngrid=10 -o $@
+	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=0 --stop=1 --ngrid=$(N_GRID_2) -o $@
 
 _temp/Xpred_3D-2.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=-2 --stop=2 --ngrid=10 -o $@
+	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=-2 --stop=2 --ngrid=$(N_GRID_2) -o $@
 
 _temp/X.npy: _temp/X.csv
 	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
