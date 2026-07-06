@@ -10,3 +10,4 @@ nbconvert
 nbstripout
 optuna
 scipy
+xarray
