@@ -60,15 +60,31 @@ def nvidia_smi_devices():
     return []
 
 
+def torch_cuda_devices():
+    try:
+        import torch
+    except ImportError:
+        return []
+
+    if not torch.cuda.is_available():
+        return []
+
+    return [str(index) for index in range(torch.cuda.device_count())]
+
+
+def detected_devices():
+    return nvidia_smi_devices() or torch_cuda_devices()
+
+
 def visible_devices():
     if "HEAVYEDGE_GPU_DEVICES" in os.environ:
         override = split_device_list(os.environ.get("HEAVYEDGE_GPU_DEVICES"))
-        return override if override is not None else nvidia_smi_devices()
+        return override if override is not None else detected_devices()
 
     if "CUDA_VISIBLE_DEVICES" in os.environ:
         cuda_visible_devices = split_device_list(os.environ.get("CUDA_VISIBLE_DEVICES"))
         if cuda_visible_devices is None:
-            return nvidia_smi_devices()
+            return detected_devices()
         return cuda_visible_devices
 
     if "NVIDIA_VISIBLE_DEVICES" in os.environ:
@@ -78,10 +94,10 @@ def visible_devices():
         return (
             nvidia_visible_devices
             if nvidia_visible_devices is not None
-            else nvidia_smi_devices()
+            else detected_devices()
         )
 
-    return nvidia_smi_devices()
+    return detected_devices()
 
 
 def lock_path(lock_dir, device):
