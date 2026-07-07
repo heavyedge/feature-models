@@ -2,12 +2,14 @@
 [![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/jeesoo9595/heavyedge-features-v1)
 [![GitHub repository](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/heavyedge/feature-models)
 
-Repository to train and distribute models related to heavy edge shape features.
+Repository to train and distribute Gaussian process quantile regression (GPQR) models of heavy edge shape features.
 
-- Gaussian process quantile regression models.
-- Quality window models (deterministic and probabilistic).
+Provides:
+- GPQR models of H and phi.
+- Cross validation and other validation examples.
+- Yield estimation and probabilistic quality window examples.
 
-You would want to build this repository in the CUDA environment.
+Trained models are distributed in [Huggingface repository](https://huggingface.co/jeesoo9595/heavyedge-features-v1).
 
 ## Download feature data
 
@@ -30,6 +32,8 @@ make models
 make notebooks
 ```
 
+You would want to run these commands in the CUDA environment.
+
 ### Testing built models
 
 ```
@@ -40,7 +44,15 @@ make test
 
 > https://heavyedge.github.io/feature-models/
 
-Documentation consists of notebooks, whose outputs are not tracked by default.
+To build the documents yourself, run the following commands:
+
+```
+make notebooks
+cd doc
+make html
+```
+
+Document will be generated in `build/html` directory. Open `index.html` to see the central page.
 
 ## Developing
 
@@ -72,7 +84,7 @@ docker build --secret id=hf_token,env=HF_TOKEN --target notebooks --output type=
 
 ## Versioning policy
 
-The HeavyEdge-Features model follows semantic versioning with [Python version specifiers](https://packaging.python.org/en/latest/specifications/version-specifiers/):
+This repository follows semantic versioning with [Python version specifiers](https://packaging.python.org/en/latest/specifications/version-specifiers/):
 
 ```
 N.N.N[.postN]
