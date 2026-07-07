@@ -32,6 +32,10 @@ spec:
               memory: "4Gi"
               cpu: "${CPU_REQUEST}"
               nvidia.com/gpu: "${GPU_REQUEST}"
+            limits:
+              memory: "16Gi"
+              cpu: "${CPU_REQUEST}"
+              nvidia.com/gpu: "${GPU_REQUEST}"
           command: ["sh", ".github/scripts/deploy.sh"]
           env:
             - name: GIT_SHA
