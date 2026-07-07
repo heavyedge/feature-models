@@ -43,6 +43,10 @@ spec:
               value: "${UPLOAD_TO_HUGGINGFACE}"
             - name: PUSH_DOC
               value: "${PUSH_DOC}"
+            - name: GIT_AUTHOR_NAME
+              value: "${GIT_AUTHOR_NAME}"
+            - name: GIT_AUTHOR_EMAIL
+              value: "${GIT_AUTHOR_EMAIL}"
             - name: HUGGINGFACE_TOKEN
               valueFrom:
                 secretKeyRef:

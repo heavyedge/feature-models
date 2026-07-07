@@ -22,6 +22,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GIT_AUTHOR_NAME: heavyedge-bot
+      GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
 
     steps:
       - name: Resolve documentation version
@@ -77,7 +80,7 @@ jobs:
           GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
           GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
         run: |
-          sh .github/scripts/github-app.sh
+          . .github/scripts/github-app.sh
           github_app_token="$(github_app_create_installation_token '{"contents":"write"}')"
           echo "::add-mask::${github_app_token}"
           echo "token=${github_app_token}" >> "${GITHUB_OUTPUT}"
@@ -109,8 +112,8 @@ jobs:
         shell: bash
         run: |
           version="${{ steps.version.outputs.version }}"
-          git -C pages-site config user.name "github-actions[bot]"
-          git -C pages-site config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C pages-site config user.name "${GIT_AUTHOR_NAME}"
+          git -C pages-site config user.email "${GIT_AUTHOR_EMAIL}"
           git -C pages-site add .
 
           if git -C pages-site diff --cached --quiet; then

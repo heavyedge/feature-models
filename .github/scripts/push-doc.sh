@@ -10,7 +10,7 @@ if [ -z "${TAG_NAME}" ]; then
   exit 1
 fi
 
-sh .github/scripts/github-app.sh
+. .github/scripts/github-app.sh
 
 doc_branch="${TAG_NAME}-doc"
 doc_repo="/tmp/heavyedge-doc-repo-$$"
@@ -33,8 +33,8 @@ git -C "${doc_repo}" checkout -B "${doc_branch}" "${base_commit}"
 
 cp notebooks/*.ipynb "${doc_repo}/notebooks/"
 
-git -C "${doc_repo}" config user.name "${DOCS_GIT_AUTHOR_NAME:-heavyedge-doc-bot}"
-git -C "${doc_repo}" config user.email "${DOCS_GIT_AUTHOR_EMAIL:-heavyedge-doc-bot@users.noreply.github.com}"
+git -C "${doc_repo}" config user.name "${GIT_AUTHOR_NAME}"
+git -C "${doc_repo}" config user.email "${GIT_AUTHOR_EMAIL}"
 git -C "${doc_repo}" \
   -c filter.nbstripout.clean=cat \
   -c filter.nbstripout.smudge=cat \
