@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1.19
+FROM ghcr.io/astral-sh/uv:latest AS uv
+
 FROM python:slim AS downloader
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /dataset
@@ -22,6 +24,7 @@ RUN --mount=type=secret,id=hf_token,required=false \
 FROM python:slim AS build-models
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /workspace
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends make \
@@ -30,7 +33,7 @@ RUN apt-get update \
 COPY --from=downloader /dataset/_data ./_data
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv --no-cache pip install --system -r requirements.txt
 
 COPY . .
 ARG HEAVYEDGE_TEST_MODE
@@ -40,6 +43,7 @@ RUN env ${HEAVYEDGE_TEST_MODE:+HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE}} make 
 FROM python:slim AS build-notebooks
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /workspace
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends make \
@@ -50,7 +54,7 @@ COPY --from=build-models /workspace/model ./model
 
 COPY requirements.txt .
 COPY notebooks/requirements.txt notebooks/
-RUN pip install --no-cache-dir -r requirements.txt -r notebooks/requirements.txt
+RUN uv --no-cache pip install --system -r requirements.txt -r notebooks/requirements.txt
 
 COPY . .
 ARG HEAVYEDGE_TEST_MODE
@@ -72,7 +76,8 @@ COPY --from=build-notebooks /workspace/notebooks ./
 FROM python:slim AS clear-notebooks
 
 WORKDIR /src
-RUN pip install --no-cache-dir nbstripout
+COPY --from=uv /uv /uvx /usr/local/bin/
+RUN uv --no-cache pip install --system nbstripout
 COPY notebooks ./notebooks
 RUN nbstripout notebooks/*.ipynb
 
@@ -80,6 +85,7 @@ RUN nbstripout notebooks/*.ipynb
 FROM python:slim AS dev
 
 WORKDIR /src
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl git make openssl \

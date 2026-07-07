@@ -18,9 +18,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: set up uv
+        uses: astral-sh/setup-uv@v5
+
       - name: install dependencies
         run: |
-          pip install flake8 black[jupyter] isort
+          uv pip install --system flake8 "black[jupyter]" isort
 
       - name: lint with flake8
         run: |
@@ -50,6 +53,9 @@ jobs:
           with:
             python-version: "3.12"
 
+        - name: set up uv
+          uses: astral-sh/setup-uv@v5
+
         - name: Download feature dataset
           run: |
             curl -LsSf https://hf.co/cli/install.sh | bash
@@ -60,7 +66,7 @@ jobs:
 
         - name: install package
           run: |
-            pip install -r requirements.txt
+            uv pip install --system -r requirements.txt
 
         - name: build models
           run: |
@@ -116,6 +122,9 @@ jobs:
           with:
             python-version: "3.12"
 
+        - name: set up uv
+          uses: astral-sh/setup-uv@v5
+
         - name: Download feature dataset
           run: |
             curl -LsSf https://hf.co/cli/install.sh | bash
@@ -126,8 +135,7 @@ jobs:
 
         - name: install package
           run: |
-            pip install -r requirements.txt
-            pip install -r notebooks/requirements.txt
+            uv pip install --system -r requirements.txt -r notebooks/requirements.txt
 
         - uses: actions/download-artifact@v4
           with:
@@ -152,13 +160,16 @@ jobs:
           with:
             python-version: "3.12"
 
+        - name: set up uv
+          uses: astral-sh/setup-uv@v5
+
         - uses: actions/download-artifact@v4
           with:
             name: trained-models
             path: model
 
         - name: install package
-          run: pip install -r model/requirements.txt
+          run: uv pip install --system -r model/requirements.txt
 
         - name: test models in inference environment
           run: make test
@@ -221,7 +232,7 @@ jobs:
           tags: heavyedge-feature-models:dev-ci
 
       - name: Test Docker image
-        run: docker run --rm heavyedge-feature-models:dev-ci sh -c 'pip install -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models'
+        run: docker run --rm heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models'
 
   doc:
 
@@ -237,9 +248,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: set up uv
+        uses: astral-sh/setup-uv@v5
+
       - name: install package
         run: |
-          pip install -r doc/requirements.txt
+          uv pip install --system -r doc/requirements.txt
 
       - name: build document
         run: |

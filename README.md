@@ -20,7 +20,7 @@ hf auth login --token [Huggingface token]
 ## Install prereqisites
 
 ```
-pip install -r requirements.txt
+uv pip install --system -r requirements.txt
 ```
 
 ## Train & plot
