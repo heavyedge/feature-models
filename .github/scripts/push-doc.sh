@@ -31,8 +31,6 @@ git -C "${doc_repo}" \
 base_commit="$(git -C "${doc_repo}" rev-parse "FETCH_HEAD^{commit}")"
 git -C "${doc_repo}" checkout -B "${doc_branch}" "${base_commit}"
 
-git -C "${doc_repo}" rm -r --cached --ignore-unmatch .github/workflows/
-
 cp notebooks/*.ipynb "${doc_repo}/notebooks/"
 
 git -C "${doc_repo}" config user.name "${GIT_AUTHOR_NAME}"
