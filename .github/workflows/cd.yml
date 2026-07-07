@@ -183,6 +183,7 @@ jobs:
           UPLOAD_TO_HUGGINGFACE: ${{ steps.release-policy.outputs.upload_to_huggingface }}
           PUSH_DOC: ${{ github.event_name == 'release' && '1' || '0' }}
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+          KUBE_USERNAME: ${{ secrets.KUBE_USERNAME }}
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}

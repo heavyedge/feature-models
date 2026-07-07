@@ -3,6 +3,8 @@ kind: Job
 metadata:
   name: ${JOB_NAME}
   namespace: ${KUBE_NAMESPACE}
+  annotations:
+    creator: "${KUBE_USERNAME}"
 spec:
   ttlSecondsAfterFinished: 0
   activeDeadlineSeconds: 21600
@@ -14,6 +16,7 @@ spec:
         github-event: ${EVENT_NAME}
       annotations:
         sidecar.istio.io/inject: "false"
+        creator: "${KUBE_USERNAME}"
     spec:
       nodeSelector:
           mlx.navercorp.com/zone: ${MLXP_ZONE}
@@ -21,12 +24,16 @@ spec:
       imagePullSecrets:
         - name: regcred
       containers:
-        - name: main
+        - name: heavyedge-feature-models
           image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:${DOCKER_TAG}
           imagePullPolicy: Always
           resources:
-            limits:
+            requests:
               memory: "8Gi"
+              cpu: "1"
+              nvidia.com/gpu: "1"
+            limits:
+              memory: "16Gi"
               cpu: "4"
               nvidia.com/gpu: "1"
           command: ["sh", ".github/scripts/deploy.sh"]
