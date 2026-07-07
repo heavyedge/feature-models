@@ -29,13 +29,13 @@ spec:
           imagePullPolicy: Always
           resources:
             requests:
-              memory: "8Gi"
-              cpu: "2"
-              nvidia.com/gpu: "2"
+              memory: "4Gi"
+              cpu: "1"
+              nvidia.com/gpu: "1"
             limits:
               memory: "16Gi"
               cpu: "4"
-              nvidia.com/gpu: "2"
+              nvidia.com/gpu: "4"
           command: ["sh", ".github/scripts/deploy.sh"]
           env:
             - name: GIT_SHA
