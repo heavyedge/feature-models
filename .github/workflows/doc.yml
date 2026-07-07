@@ -108,6 +108,44 @@ jobs:
           cp -a doc/build/html/. "pages-site/${version}/"
           touch pages-site/.nojekyll
 
+      - name: Stage root documentation redirect
+        shell: bash
+        run: |
+          latest_version="$(
+            {
+              find pages-site -mindepth 1 -maxdepth 1 -type d -printf '%f\n'
+              printf '%s\n' "${{ steps.version.outputs.version }}"
+            } |
+              awk '/^v?[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?$/ { print }' |
+              sort -Vu |
+              tail -n 1
+          )"
+
+          if [ -z "${latest_version}" ]; then
+            latest_version="${{ steps.version.outputs.version }}"
+          fi
+
+          latest_url="./${latest_version}/"
+          cat > pages-site/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <title>HeavyEdge Feature Models documentation</title>
+              <meta http-equiv="refresh" content="0; url=${latest_url}">
+              <link rel="canonical" href="${latest_url}">
+              <script>
+                window.location.replace("${latest_url}");
+              </script>
+            </head>
+            <body>
+              <p>Redirecting to <a href="${latest_url}">${latest_version}</a>.</p>
+            </body>
+          </html>
+          EOF
+
+          echo "Root documentation URL redirects to ${latest_version}."
+
       - name: Persist Pages site state
         shell: bash
         run: |
