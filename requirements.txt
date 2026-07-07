@@ -6,10 +6,3 @@ gpytorch
 gpytorch-qr==0.8.0
 pandas
 xarray
-matplotlib
-ipykernel
-nbconvert
-nbstripout
-sphinx
-myst-nb
-huggingface_hub

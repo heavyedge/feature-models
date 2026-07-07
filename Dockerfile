@@ -48,8 +48,8 @@ RUN apt-get update \
 COPY --from=downloader /dataset/_data ./_data
 COPY --from=build-models /workspace/model ./model
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt notebooks/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt -r notebooks/requirements.txt
 
 COPY . .
 ARG HEAVYEDGE_TEST_MODE
