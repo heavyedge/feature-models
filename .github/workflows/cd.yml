@@ -162,12 +162,8 @@ jobs:
           upload_to_huggingface=0
 
           if [ "$EVENT_NAME" = "release" ]; then
-            upload_to_huggingface=1
-
-            if [[ "$REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+\.post[0-9]+$ ]]; then
-              upload_to_huggingface=0
-            elif [[ ! "$REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "::warning::Release tag '$REF_NAME' does not match versioning policy N.N.N[.postN]; defaulting UPLOAD_TO_HUGGINGFACE to 1."
+            if [[ "$REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              upload_to_huggingface=1
             fi
           fi
 
