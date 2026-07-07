@@ -1,6 +1,29 @@
 #!/bin/sh
 set -e
 
+job_done_file="${POSTFIX_DONE_FILE:-/var/run/heavyedge/deploy-complete}"
+
+notify_deploy() {
+  sh .github/scripts/notify-deploy.sh "$1" || true
+}
+
+finish_deploy() {
+  status=$?
+  if [ "${status}" -eq 0 ]; then
+    notify_deploy succeeded
+  else
+    notify_deploy failed
+  fi
+
+  mkdir -p "$(dirname "${job_done_file}")"
+  touch "${job_done_file}"
+  exit "${status}"
+}
+
+trap finish_deploy EXIT
+
+notify_deploy started
+
 # Check revision
 if [ ! -r /etc/heavyedge/image-revision ]; then
   echo "Missing image revision file: /etc/heavyedge/image-revision" >&2

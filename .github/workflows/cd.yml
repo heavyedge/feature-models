@@ -107,6 +107,17 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
+      - name: Resolve notification recipient
+        id: notification-recipient
+        shell: bash
+        run: |
+          author_email="$(git log -1 --format=%ae)"
+          if [ -z "$author_email" ]; then
+            echo "::error::Could not resolve the latest commit author email."
+            exit 1
+          fi
+          echo "email=$author_email" >> "$GITHUB_OUTPUT"
+
       - name: Create image pull secret
         env:
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
@@ -118,6 +129,27 @@ jobs:
             --docker-username="$DOCKER_USERNAME" \
             --docker-password="$DOCKER_PASSWORD" \
             --namespace=${{ secrets.KUBE_NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Gmail relay secret
+        env:
+          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          if [ -z "$GMAIL_USERNAME" ]; then
+            echo "::error::Missing GMAIL_USERNAME secret for SMTP relay."
+            exit 1
+          fi
+          if [ -z "$GMAIL_APP_PASSWORD" ]; then
+            echo "::error::Missing GMAIL_APP_PASSWORD secret for SMTP relay."
+            exit 1
+          fi
+
+          kubectl create secret generic gmail-smtp-relay \
+            --from-literal=GMAIL_USERNAME="$GMAIL_USERNAME" \
+            --from-literal=GMAIL_APP_PASSWORD="$GMAIL_APP_PASSWORD" \
+            --namespace="$KUBE_NAMESPACE" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Set release upload policy
@@ -190,6 +222,8 @@ jobs:
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          SMTP_NOTIFY_TO: ${{ steps.notification-recipient.outputs.email }}
           RELEASE_TAG_NAME: ${{ github.ref_name }}
           GIT_AUTHOR_NAME: heavyedge-bot
           GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
@@ -209,4 +243,5 @@ jobs:
             export CPU_REQUEST="2"
             export GPU_REQUEST="4"
           fi
-          envsubst < .github/job.yaml | kubectl apply -f -
+          template_vars='$JOB_NAME $KUBE_NAMESPACE $KUBE_USERNAME $GIT_SHA $EVENT_NAME $MLXP_ZONE $DOCKER_REGISTRY $DOCKER_USERNAME $DOCKER_TAG $CPU_REQUEST $GPU_REQUEST $GITHUB_REPOSITORY $GITHUB_RUN_ID $RELEASE_TAG_NAME $HEAVYEDGE_TEST_MODE $UPLOAD_TO_HUGGINGFACE $PUSH_DOC $GIT_AUTHOR_NAME $GIT_AUTHOR_EMAIL $SMTP_NOTIFY_TO'
+          envsubst "$template_vars" < .github/job.yaml | kubectl apply -f -
