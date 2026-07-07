@@ -31,6 +31,8 @@ git -C "${doc_repo}" \
 base_commit="$(git -C "${doc_repo}" rev-parse "FETCH_HEAD^{commit}")"
 git -C "${doc_repo}" checkout -B "${doc_branch}" "${base_commit}"
 
+git -C "${doc_repo}" rm -r --cached --ignore-unmatch .github/workflows/
+
 cp notebooks/*.ipynb "${doc_repo}/notebooks/"
 
 git -C "${doc_repo}" config user.name "${GIT_AUTHOR_NAME}"
@@ -41,8 +43,8 @@ git -C "${doc_repo}" \
   -c filter.nbstripout.required=false \
   add notebooks
 
-if git -C "${doc_repo}" diff --cached --quiet -- notebooks; then
-  echo "No notebook changes to commit for ${doc_branch}"
+if git -C "${doc_repo}" diff --cached --quiet; then
+  echo "No changes to commit for ${doc_branch}"
 else
   git -C "${doc_repo}" commit -m "Build notebooks for ${TAG_NAME}"
 fi
