@@ -10,6 +10,11 @@ N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
 
+PYTHON ?= python3
+GPU_RUN ?= $(PYTHON) scripts/gpu-run.py --
+GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
+GPU_JUPYTER ?= $(GPU_RUN) jupyter
+
 NOTEBOOKS := $(wildcard notebooks/*)
 MODEL_FILES := \
 model/H.gpqr.pt \
@@ -31,8 +36,8 @@ models: $(MODEL_FILES)
 notebooks: $(NOTEBOOKS)
 
 test:
-	python3 -c "from model.load import load_H_models; load_H_models()"
-	python3 -c "from model.load import load_phi_models; load_phi_models()"
+	$(GPU_PYTHON) -c "from model.load import load_H_models; load_H_models()"
+	$(GPU_PYTHON) -c "from model.load import load_phi_models; load_phi_models()"
 
 all: models notebooks
 
@@ -42,19 +47,19 @@ clean:
 # Notebooks
 
 notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv _temp/crossing.DirectMTGPQR_%.csv FORCE
-	jupyter nbconvert --to notebook --execute --inplace $@
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.CenterGapMTGPQR_%.csv _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv FORCE
-	jupyter nbconvert --to notebook --execute --inplace $@
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.csv _temp/cv.CenterGapMTGPQR_%.csv FORCE
-	jupyter nbconvert --to notebook --execute --inplace $@
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.prior_mean.Xpred_1D.npy _temp/phi.prior_mean.Xpred_1D.npy _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy FORCE
-	jupyter nbconvert --to notebook --execute --inplace $@
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 notebooks/Window.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_2D.csv _temp/delaunay.Xpred_2D.npy _temp/H.prior_mean.Xpred_2D.npy _temp/phi.prior_mean.Xpred_2D.npy _temp/H.quantiles.Xpred_2D.npy _temp/phi.quantiles.Xpred_2D.npy _temp/H.marginal.Xpred_2D.npy _temp/phi.marginal.Xpred_2D.npy _temp/joint_probability.Xpred_2D.npy FORCE
-	jupyter nbconvert --to notebook --execute --inplace $@
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 FORCE:  # dummy target to force execution of dependent targets
 
@@ -94,31 +99,31 @@ _temp/Xpred_2D.npy: _temp/Xpred_2D.csv
 # Model selection
 
 _temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/Xpred_3D-1.csv _temp/Xpred_3D-2.csv
-	python3 $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
+	$(GPU_PYTHON) $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/extrapolation.CenterGapMTGPQR_%.csv: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
+	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
+	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/cv.GPR_%.csv: scripts/model_selection/write-cv.gpr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
-	python3 $^ --target $* --model GPR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
+	$(GPU_PYTHON) $^ --target $* --model GPR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/cv.CenterGapMTGPQR_%.csv: scripts/model_selection/write-cv.gpqr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
-	python3 $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
+	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 
 # Model
 
 _temp/%.prior_mean.pt: scripts/train/prior_mean.py _temp/X.csv _temp/y.csv
-	python3 $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	$(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 _temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.CenterGapMTGPQR_%.csv
 	python3 $^ --target epoch -o $@
 
 model/%.gpqr.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
-	python3 $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
+	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
 model/%.py: scripts/model/%.py
 	cp $< $@
@@ -130,19 +135,19 @@ model/requirements.txt: requirements.txt
 # Prediction
 
 _temp/%.prior_mean.Xpred_1D.npy: model/predict-mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
-	python3 $(wordlist 1,2,$^) --target $* -o $@
+	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
 _temp/%.prior_mean.Xpred_2D.npy: model/predict-mean.py _temp/Xpred_2D.npy $(MODEL_FILES)
-	python3 $(wordlist 1,2,$^) --target $* -o $@
+	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
 _temp/%.quantiles.X.npy: model/predict-quantiles.py _temp/X.npy $(MODEL_FILES)
-	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
+	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 _temp/%.quantiles.Xpred_1D.npy: model/predict-quantiles.py _temp/Xpred_1D.npy $(MODEL_FILES)
-	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
+	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 _temp/%.quantiles.Xpred_2D.npy: model/predict-quantiles.py _temp/Xpred_2D.npy $(MODEL_FILES)
-	python3 $(wordlist 1,2,$^) --target $* --method delta -o $@
+	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 
 # Window prediction

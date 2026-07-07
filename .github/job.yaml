@@ -30,12 +30,12 @@ spec:
           resources:
             requests:
               memory: "8Gi"
-              cpu: "1"
-              nvidia.com/gpu: "1"
+              cpu: "2"
+              nvidia.com/gpu: "2"
             limits:
               memory: "16Gi"
               cpu: "4"
-              nvidia.com/gpu: "1"
+              nvidia.com/gpu: "2"
           command: ["sh", ".github/scripts/deploy.sh"]
           env:
             - name: GIT_SHA
@@ -78,3 +78,5 @@ spec:
                   name: github-app
                   key: GH_APP_INSTALLATION_ID
                   optional: true
+            - name: MAKE_JOBS
+              value: "2"

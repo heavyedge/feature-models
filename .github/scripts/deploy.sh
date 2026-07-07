@@ -15,7 +15,7 @@ fi
 
 # Build model
 pip install -r requirements.txt
-HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make models
+HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make -j ${MAKE_JOBS} models
 
 # Deploy model
 if [ "${UPLOAD_TO_HUGGINGFACE}" = "1" ]; then
@@ -26,6 +26,6 @@ fi
 # Build and push notebook
 if [ "${PUSH_DOC}" = "1" ]; then
   pip install -r notebooks/requirements.txt
-  HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make notebooks
+  HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make -j ${MAKE_JOBS} notebooks
   sh .github/scripts/push-doc.sh
 fi
