@@ -49,7 +49,8 @@ COPY --from=downloader /dataset/_data ./_data
 COPY --from=build-models /workspace/model ./model
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY notebooks/requirements.txt notebooks/
+RUN pip install --no-cache-dir -r requirements.txt -r notebooks/requirements.txt
 
 COPY . .
 ARG HEAVYEDGE_TEST_MODE
@@ -68,7 +69,7 @@ WORKDIR /
 COPY --from=build-notebooks /workspace/notebooks ./
 
 
-FROM python:slim as clear-notebooks
+FROM python:slim AS clear-notebooks
 
 WORKDIR /src
 RUN pip install --no-cache-dir nbstripout

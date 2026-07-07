@@ -4,6 +4,8 @@ _artifacts
 model/*
 !model/README.md
 
+doc/source/notebooks/
+
 .vscode
 build.sh
 slurm*

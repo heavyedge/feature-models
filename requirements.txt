@@ -1,14 +1,8 @@
 numpy
+scipy
 torch
+scikit-learn
 gpytorch
 gpytorch-qr==0.8.0
 pandas
-scikit-learn
-matplotlib
-ipykernel
-nbconvert
-nbstripout
-optuna
-scipy
 xarray
-huggingface_hub

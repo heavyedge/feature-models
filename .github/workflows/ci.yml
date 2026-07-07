@@ -127,6 +127,7 @@ jobs:
         - name: install package
           run: |
             pip install -r requirements.txt
+            pip install -r notebooks/requirements.txt
 
         - uses: actions/download-artifact@v4
           with:
@@ -221,3 +222,26 @@ jobs:
 
       - name: Test Docker image
         run: docker run --rm heavyedge-feature-models:dev-ci sh -c 'pip install -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models'
+
+  doc:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: get repo
+        uses: actions/checkout@v3
+
+      - name: set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: install package
+        run: |
+          pip install -r doc/requirements.txt
+
+      - name: build document
+        run: |
+          cd doc
+          make html SPHINXOPTS="-W --keep-going"
