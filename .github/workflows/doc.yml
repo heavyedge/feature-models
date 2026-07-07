@@ -157,8 +157,9 @@ jobs:
           if git -C pages-site diff --cached --quiet; then
             echo "No Pages site changes to persist."
           else
+            git -C pages-site checkout --orphan gh-pages-deploy
             git -C pages-site commit -m "Deploy documentation for ${version}"
-            git -C pages-site push origin gh-pages
+            git -C pages-site push --force origin HEAD:gh-pages
           fi
 
       - name: Prepare Pages artifact
