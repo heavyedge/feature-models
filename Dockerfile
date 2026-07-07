@@ -100,6 +100,7 @@ RUN mkdir -p /etc/heavyedge \
     && echo "${IMAGE_REVISION}" > /etc/heavyedge/image-revision
 LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.authors="Jisoo Song <jeesoo9595@snu.ac.kr>" \
+      org.opencontainers.image.documentation="https://heavyedge.github.io/feature-models/" \
       org.opencontainers.image.source="https://github.com/jisoosong/heavyedge" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \

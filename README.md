@@ -36,6 +36,14 @@ make notebooks
 make test
 ```
 
+## Documentation
+
+```
+https://heavyedge.github.io/feature-models/
+```
+
+Documentation consists of notebooks, whose outputs are not tracked by default.
+
 ## Developing
 
 ### Configuring git
