@@ -125,9 +125,10 @@ for i in range(args.num_epochs):
     loss.mean().backward()
     optimizer.step()
 
-    logger.info(
-        f"{args.out}: Epoch {i+1}/{args.num_epochs}, Loss: {loss.mean().item():.4f}"
-    )
+    if (i + 1) % 100 == 0:
+        logger.info(
+            f"{args.out}: Epoch {i+1}/{args.num_epochs}, Loss: {loss.mean().item():.4f}"
+        )
 
 save_gpqr(
     X,

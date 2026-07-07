@@ -117,11 +117,12 @@ def quantiles_cv_gpr(
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses.append(epoch_fold_losses)
 
-        logger(
-            f"Epoch {i+1}/{n_epochs}, "
-            f"Train Loss: {train_loss.mean().item():.4f}, "
-            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
-        )
+        if (i + 1) % 100 == 0:
+            logger(
+                f"Epoch {i+1}/{n_epochs}, "
+                f"Train Loss: {train_loss.mean().item():.4f}, "
+                f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+            )
 
     return np.array(test_losses)
 
@@ -188,10 +189,11 @@ def quantiles_cv_gpqr(
                 epoch_fold_losses.append(np.mean(pinball_losses))
             test_losses.append(epoch_fold_losses)
 
-        logger(
-            f"Epoch {i+1}/{n_epochs}, "
-            f"Train Loss: {train_loss.mean().item():.4f}, "
-            f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
-        )
+        if (i + 1) % 100 == 0:
+            logger(
+                f"Epoch {i+1}/{n_epochs}, "
+                f"Train Loss: {train_loss.mean().item():.4f}, "
+                f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+            )
 
     return np.array(test_losses)

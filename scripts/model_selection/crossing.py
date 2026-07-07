@@ -67,6 +67,7 @@ def quantile_crossing(
                 ).item()
                 max_crossings[j, i] = (-quantile_diff).clip(0).max().item()
 
-        logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
+        if (i + 1) % 100 == 0:
+            logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
 
     return crossing_rates, mean_crossings, max_crossings

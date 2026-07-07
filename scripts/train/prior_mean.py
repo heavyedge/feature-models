@@ -57,7 +57,7 @@ for epoch in range(args.num_epochs):
     loss = loss_fn(output, y)
     loss.backward()
     optimizer.step()
-    if (epoch + 1) % max(1, args.num_epochs // 10) == 0:
+    if (epoch + 1) % 100 == 0:
         logger.info(f"Epoch [{epoch + 1}/{args.num_epochs}] Loss: {loss.item():.6f}")
 
 
