@@ -8,7 +8,7 @@ language:
 Setup:
 
 ```
-pip install -r requirements.txt
+uv pip install --system -r requirements.txt
 ```
 
 Usage:
