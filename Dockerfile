@@ -87,7 +87,7 @@ RUN apt-get update \
 COPY --from=downloader /dataset/_data ./_data
 
 COPY --from=clear-notebooks /src/notebooks ./notebooks
-COPY --exclude=.git --exclude=.github --exclude=notebooks . .
+COPY --exclude=.git --exclude=notebooks . .
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
