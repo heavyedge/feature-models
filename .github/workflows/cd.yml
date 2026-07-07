@@ -150,12 +150,30 @@ jobs:
             --namespace="$KUBE_NAMESPACE" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Create GitHub doc token secret
+        if: github.event_name == 'release'
+        env:
+          DOCS_GITHUB_TOKEN: ${{ secrets.DOCS_GITHUB_TOKEN }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          if [ -z "$DOCS_GITHUB_TOKEN" ]; then
+            echo "::error::Missing DOCS_GITHUB_TOKEN secret for documentation branch pushes."
+            exit 1
+          fi
+
+          kubectl create secret generic github-doc-token \
+            --from-literal=DOCS_GITHUB_TOKEN="$DOCS_GITHUB_TOKEN" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Run job
         env:
           GIT_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVYEDGE_TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
           UPLOAD_TO_HUGGINGFACE: ${{ steps.release-policy.outputs.upload_to_huggingface }}
+          PUSH_DOC: ${{ github.event_name == 'release' && '1' || '0' }}
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
