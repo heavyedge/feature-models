@@ -1,14 +1,6 @@
 #!/bin/sh
 set -e
 
-if [ -z "${GH_APP_ID}" ]; then
-  echo "Missing GH_APP_ID for pushing built notebooks" >&2
-  exit 1
-fi
-if [ -z "${GH_APP_PRIVATE_KEY}" ]; then
-  echo "Missing GH_APP_PRIVATE_KEY for pushing built notebooks" >&2
-  exit 1
-fi
 if [ -z "${GITHUB_REPOSITORY}" ]; then
   echo "Missing GITHUB_REPOSITORY for pushing built notebooks" >&2
   exit 1
@@ -17,6 +9,8 @@ if [ -z "${TAG_NAME}" ]; then
   echo "Missing TAG_NAME for pushing built notebooks" >&2
   exit 1
 fi
+
+sh .github/scripts/github-app.sh
 
 doc_branch="${TAG_NAME}-doc"
 doc_repo="/tmp/heavyedge-doc-repo-$$"
@@ -27,44 +21,7 @@ if ! git check-ref-format "refs/heads/${doc_branch}"; then
   exit 1
 fi
 
-private_key_file="$(mktemp)"
-printf '%b\n' "${GH_APP_PRIVATE_KEY}" > "${private_key_file}"
-trap 'rm -f "${private_key_file}"' EXIT
-
-base64_urlencode() {
-  base64 | tr '+/' '-_' | tr -d '=\n'
-}
-
-now="$(date +%s)"
-iat=$((now - 60))
-exp=$((now + 540))
-jwt_header="$(printf '{"alg":"RS256","typ":"JWT"}' | base64_urlencode)"
-jwt_payload="$(printf '{"iat":%s,"exp":%s,"iss":"%s"}' "${iat}" "${exp}" "${GH_APP_ID}" | base64_urlencode)"
-jwt_signature="$(printf '%s.%s' "${jwt_header}" "${jwt_payload}" | openssl dgst -sha256 -sign "${private_key_file}" -binary | base64_urlencode)"
-github_app_jwt="${jwt_header}.${jwt_payload}.${jwt_signature}"
-
-if [ -z "${GH_APP_INSTALLATION_ID}" ]; then
-  owner="${GITHUB_REPOSITORY%/*}"
-  repo="${GITHUB_REPOSITORY#*/}"
-  installation_response="$(curl -fsS \
-    -H "Accept: application/vnd.github+json" \
-    -H "Authorization: Bearer ${github_app_jwt}" \
-    -H "X-GitHub-Api-Version: 2022-11-28" \
-    "https://api.github.com/repos/${owner}/${repo}/installation")"
-  installation_id="$(printf '%s' "${installation_response}" | python -c 'import json, sys; print(json.load(sys.stdin)["id"])')"
-else
-  installation_id="${GH_APP_INSTALLATION_ID}"
-fi
-
-token_response="$(curl -fsS \
-  -X POST \
-  -H "Accept: application/vnd.github+json" \
-  -H "Authorization: Bearer ${github_app_jwt}" \
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  -d '{"permissions":{"contents":"write"}}' \
-  "https://api.github.com/app/installations/${installation_id}/access_tokens")"
-docs_github_token="$(printf '%s' "${token_response}" | python -c 'import json, sys; print(json.load(sys.stdin)["token"])')"
-auth_header="$(printf 'x-access-token:%s' "${docs_github_token}" | base64 | tr -d '\n')"
+auth_header="$(github_app_create_basic_auth_header '{"contents":"write"}')"
 
 git init "${doc_repo}"
 git -C "${doc_repo}" remote add origin "${remote_url}"

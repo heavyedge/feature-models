@@ -1,0 +1,146 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - "*-doc"
+      - "**/*-doc"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.deleted != true }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Resolve documentation version
+        id: version
+        shell: bash
+        run: |
+          ref_name="${GITHUB_REF_NAME}"
+          if [[ ! "${ref_name}" =~ ^(.+)-doc$ ]]; then
+            echo "Unsupported documentation branch: ${ref_name}" >&2
+            exit 1
+          fi
+
+          version="${BASH_REMATCH[1]}"
+          artifact_name="${version//\//-}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
+          echo "Documentation version: ${version}"
+
+      - name: Checkout documentation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: doc/requirements.txt
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r doc/requirements.txt
+
+      - name: Build Sphinx documentation
+        run: |
+          python -m sphinx -b html doc/source doc/build/html
+
+      - name: Upload Sphinx HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sphinx-html-${{ steps.version.outputs.artifact_name }}
+          path: doc/build/html
+          if-no-files-found: error
+
+      - name: Create GitHub App token
+        id: app-token
+        shell: bash
+        env:
+          GH_APP_ID: ${{ secrets.GH_APP_ID }}
+          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
+        run: |
+          sh .github/scripts/github-app.sh
+          github_app_token="$(github_app_create_installation_token '{"contents":"write"}')"
+          echo "::add-mask::${github_app_token}"
+          echo "token=${github_app_token}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore Pages site state
+        shell: bash
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          mkdir -p pages-site
+          git -C pages-site init -b gh-pages
+          git -C pages-site remote add origin "https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git -C pages-site ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git -C pages-site fetch --depth=1 origin gh-pages
+            git -C pages-site reset --hard FETCH_HEAD
+          fi
+
+      - name: Stage versioned documentation
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          rm -rf "pages-site/${version}"
+          mkdir -p "pages-site/${version}"
+          cp -a doc/build/html/. "pages-site/${version}/"
+          touch pages-site/.nojekyll
+
+      - name: Persist Pages site state
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          git -C pages-site config user.name "github-actions[bot]"
+          git -C pages-site config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C pages-site add .
+
+          if git -C pages-site diff --cached --quiet; then
+            echo "No Pages site changes to persist."
+          else
+            git -C pages-site commit -m "Deploy documentation for ${version}"
+            git -C pages-site push origin gh-pages
+          fi
+
+      - name: Prepare Pages artifact
+        run: |
+          mkdir -p pages-artifact
+          cp -a pages-site/. pages-artifact/
+          rm -rf pages-artifact/.git
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: pages-artifact
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Delete documentation branch
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git push "https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ":refs/heads/${GITHUB_REF_NAME}"
+
+      - name: Print version URL
+        run: |
+          echo "${{ steps.deployment.outputs.page_url }}${{ steps.version.outputs.version }}/"
