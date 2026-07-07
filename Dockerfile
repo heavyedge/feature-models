@@ -110,5 +110,6 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.source="https://github.com/jisoosong/heavyedge/feature-models" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.title="${IMAGE_TITLE}" \
       org.opencontainers.image.description="${IMAGE_DESCRIPTION}"
