@@ -43,7 +43,7 @@ make test
 Configure the local git filter (run once after cloning):
 
 ```
-git config filter.nbstripout.clean "nbstripout --keep-output --keep-metadata-keys 'metadata.language_info'"
+git config filter.nbstripout.clean "nbstripout"
 git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
 ```
@@ -66,7 +66,11 @@ docker build --secret id=hf_token,env=HF_TOKEN --target notebooks --output type=
 
 ## Versioning policy
 
-The HeavyEdge-Features model follows semantic versioning.
+The HeavyEdge-Features model follows semantic versioning with [Python version specifiers](https://packaging.python.org/en/latest/specifications/version-specifiers/):
+
+```
+N.N.N[.postN]
+```
 
 **Major version**
 
@@ -80,4 +84,9 @@ The HeavyEdge-Features model follows semantic versioning.
 **Patch version**
 
 - Bug fix.
-- Metadata change.
+- Model metadata change.
+
+**Post release**
+
+- Changes that do not affect models, e.g., documentation update.
+- Post releases are not pushed to Huggingface repository.
