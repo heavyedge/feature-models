@@ -8,6 +8,7 @@ on:
     types: [published]
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
@@ -74,6 +75,8 @@ jobs:
           push: true
           target: dev
           platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=feature-models-dev
+          cache-to: type=gha,mode=max,scope=feature-models-dev
           build-args: |
             IMAGE_CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             IMAGE_VERSION=${{ github.ref_name }}

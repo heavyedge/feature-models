@@ -191,6 +191,8 @@ jobs:
           context: .
           push: false
           target: models
+          cache-from: type=gha,scope=feature-models-models
+          cache-to: type=gha,mode=max,scope=feature-models-models
           build-args: |
             HEAVYEDGE_TEST_MODE=1
           secrets: |
@@ -203,6 +205,8 @@ jobs:
           context: .
           push: false
           target: notebooks
+          cache-from: type=gha,scope=feature-models-notebooks
+          cache-to: type=gha,mode=max,scope=feature-models-notebooks
           build-args: |
             HEAVYEDGE_TEST_MODE=1
           secrets: |
@@ -227,6 +231,8 @@ jobs:
           load: true
           push: false
           target: dev
+          cache-from: type=gha,scope=feature-models-dev
+          cache-to: type=gha,mode=max,scope=feature-models-dev
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           tags: heavyedge-feature-models:dev-ci
