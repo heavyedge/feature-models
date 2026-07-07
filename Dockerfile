@@ -71,9 +71,9 @@ COPY --from=build-notebooks /workspace/notebooks ./
 FROM python:slim as clear-notebooks
 
 WORKDIR /src
-RUN pip install --no-cache-dir nbconvert
+RUN pip install --no-cache-dir nbstripout
 COPY notebooks ./notebooks
-RUN jupyter nbconvert --clear-output --inplace notebooks/*.ipynb
+RUN nbstripout notebooks/*.ipynb
 
 
 FROM python:slim AS dev
