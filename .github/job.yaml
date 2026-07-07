@@ -78,7 +78,3 @@ spec:
                   name: github-app
                   key: GH_APP_INSTALLATION_ID
                   optional: true
-            - name: MAKE_JOBS
-              value: "2"
-            - name: HEAVYEDGE_GPU_DEVICES
-              value: "0,1"
