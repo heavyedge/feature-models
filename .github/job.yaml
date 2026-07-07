@@ -49,9 +49,21 @@ spec:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
                   optional: true
-            - name: DOCS_GITHUB_TOKEN
+            - name: GH_APP_ID
               valueFrom:
                 secretKeyRef:
-                  name: github-doc-token
-                  key: DOCS_GITHUB_TOKEN
+                  name: github-app
+                  key: GH_APP_ID
+                  optional: true
+            - name: GH_APP_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: github-app
+                  key: GH_APP_PRIVATE_KEY
+                  optional: true
+            - name: GH_APP_INSTALLATION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: github-app
+                  key: GH_APP_INSTALLATION_ID
                   optional: true

@@ -81,7 +81,7 @@ FROM python:slim AS dev
 WORKDIR /src
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git make \
+    && apt-get install -y --no-install-recommends ca-certificates curl git make openssl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=downloader /dataset/_data ./_data
