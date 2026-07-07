@@ -15,6 +15,7 @@ fi
 
 # Build model
 pip install -r requirements.txt
+python3 scripts/cuda-preflight.py
 HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make -j ${MAKE_JOBS} models
 
 # Deploy model
