@@ -8,20 +8,15 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: github-pages
+  group: doc-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     if: ${{ github.event.deleted != true }}
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     env:
       GIT_AUTHOR_NAME: heavyedge-bot
       GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
@@ -109,42 +104,14 @@ jobs:
           touch pages-site/.nojekyll
 
       - name: Stage root documentation redirect
-        shell: bash
         run: |
-          latest_version="$(
-            {
-              find pages-site -mindepth 1 -maxdepth 1 -type d -printf '%f\n'
-              printf '%s\n' "${{ steps.version.outputs.version }}"
-            } |
-              awk '/^v?[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?$/ { print }' |
-              sort -Vu |
-              tail -n 1
-          )"
+          cp .github/static/index.html pages-site/index.html
 
-          if [ -z "${latest_version}" ]; then
-            latest_version="${{ steps.version.outputs.version }}"
-          fi
-
-          latest_url="./${latest_version}/"
-          cat > pages-site/index.html <<EOF
-          <!doctype html>
-          <html lang="en">
-            <head>
-              <meta charset="utf-8">
-              <title>HeavyEdge Feature Models documentation</title>
-              <meta http-equiv="refresh" content="0; url=${latest_url}">
-              <link rel="canonical" href="${latest_url}">
-              <script>
-                window.location.replace("${latest_url}");
-              </script>
-            </head>
-            <body>
-              <p>Redirecting to <a href="${latest_url}">${latest_version}</a>.</p>
-            </body>
-          </html>
-          EOF
-
-          echo "Root documentation URL redirects to ${latest_version}."
+      - name: Stage documentation version metadata
+        run: |
+          python .github/scripts/write-doc-versions.py \
+            --site-dir pages-site \
+            --fallback-version "${{ steps.version.outputs.version }}"
 
       - name: Persist Pages site state
         shell: bash
@@ -157,32 +124,12 @@ jobs:
           if git -C pages-site diff --cached --quiet; then
             echo "No Pages site changes to persist."
           else
-            git -C pages-site checkout --orphan gh-pages-deploy
             git -C pages-site commit -m "Deploy documentation for ${version}"
-            git -C pages-site push --force origin HEAD:gh-pages
+            git -C pages-site push origin HEAD:gh-pages
           fi
-
-      - name: Prepare Pages artifact
-        run: |
-          mkdir -p pages-artifact
-          cp -a pages-site/. pages-artifact/
-          rm -rf pages-artifact/.git
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: pages-artifact
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
 
       - name: Delete documentation branch
         env:
           GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git push "https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ":refs/heads/${GITHUB_REF_NAME}"
-
-      - name: Print version URL
-        run: |
-          echo "${{ steps.deployment.outputs.page_url }}${{ steps.version.outputs.version }}/"

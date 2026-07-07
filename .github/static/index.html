@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>HeavyEdge Feature Models documentation</title>
+  </head>
+  <body>
+    <p id="message">Redirecting to the latest documentation.</p>
+    <script>
+      fetch("./versions.json", { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Unable to load documentation versions.");
+          }
+          return response.json();
+        })
+        .then((metadata) => {
+          const versions = Array.isArray(metadata.versions) ? metadata.versions : [];
+          const latest = metadata.latest || versions[versions.length - 1];
+          if (!latest) {
+            throw new Error("No documentation versions are available.");
+          }
+          window.location.replace(`./${latest}/`);
+        })
+        .catch((error) => {
+          document.getElementById("message").textContent = error.message;
+        });
+    </script>
+  </body>
+</html>
