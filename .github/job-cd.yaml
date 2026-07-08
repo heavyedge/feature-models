@@ -30,7 +30,7 @@ spec:
           secret:
             secretName: gmail-smtp-relay
       containers:
-        - name: heavyedge-feature-models
+        - name: build
           image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:${DOCKER_TAG}
           imagePullPolicy: Always
           resources:
