@@ -70,6 +70,8 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 COPY model .
 RUN uv --no-cache pip install --system -r ./requirements.txt
 
+WORKDIR /app
+
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
 ARG IMAGE_REVISION

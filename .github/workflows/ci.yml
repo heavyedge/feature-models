@@ -232,7 +232,7 @@ jobs:
 
         - name: Test Docker image
           run: |
-            docker run --rm -v $PWD/_temp:/app heavyedge-feature-models:ci 'python3 /model/predict-quantiles.py /app/X.npy --target H --method delta -o /app/H.quantiles.npy'
+            docker run --rm -v $PWD/_temp:/app heavyedge-feature-models:ci python3 /model/predict-quantiles.py /app/X.npy --target H --method delta -o /app/H.quantiles.npy
 
   docker-dev:
 
