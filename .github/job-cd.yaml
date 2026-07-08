@@ -505,6 +505,8 @@ spec:
           env:
             - name: GITHUB_REPOSITORY
               value: "${GITHUB_REPOSITORY}"
+            - name: GITHUB_APP_TOKEN_PERMISSIONS
+              value: '{"contents":"write","checks":"write"}'
             - name: GH_APP_ID
               valueFrom:
                 secretKeyRef:
