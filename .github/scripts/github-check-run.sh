@@ -54,13 +54,23 @@ payload_file="$(mktemp)"
 trap 'rm -f "${payload_file}"' EXIT
 
 if [ "${action}" = "started" ]; then
-  write_payload "${payload_file}" create
-  response="$(github_api POST "${api_url}" "${payload_file}")"
-  printf '%s' "${response}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' > "${check_id_file}"
+  if [ -n "${GITHUB_CHECK_RUN_ID:-}" ]; then
+    printf '%s\n' "${GITHUB_CHECK_RUN_ID}" > "${check_id_file}"
+    write_payload "${payload_file}" update
+    github_api PATCH "${api_url}/${GITHUB_CHECK_RUN_ID}" "${payload_file}" >/dev/null
+  else
+    write_payload "${payload_file}" create
+    response="$(github_api POST "${api_url}" "${payload_file}")"
+    printf '%s' "${response}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' > "${check_id_file}"
+  fi
   exit 0
 fi
 
-if [ -s "${check_id_file}" ]; then
+if [ -n "${GITHUB_CHECK_RUN_ID:-}" ]; then
+  check_id="${GITHUB_CHECK_RUN_ID}"
+  write_payload "${payload_file}" update
+  github_api PATCH "${api_url}/${check_id}" "${payload_file}" >/dev/null
+elif [ -s "${check_id_file}" ]; then
   check_id="$(cat "${check_id_file}")"
   write_payload "${payload_file}" update
   github_api PATCH "${api_url}/${check_id}" "${payload_file}" >/dev/null

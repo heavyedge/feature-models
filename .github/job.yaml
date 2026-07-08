@@ -140,6 +140,8 @@ spec:
               value: "${GITHUB_REPOSITORY}"
             - name: GITHUB_RUN_URL
               value: "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            - name: GITHUB_CHECK_RUN_ID
+              value: "${GITHUB_CHECK_RUN_ID}"
             - name: GH_APP_ID
               valueFrom:
                 secretKeyRef:
