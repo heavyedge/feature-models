@@ -1,0 +1,14 @@
+name: Image
+
+on:
+  repository_dispatch:
+    types:
+      - GPU-completed
+
+jobs:
+
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
