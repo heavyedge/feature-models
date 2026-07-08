@@ -86,6 +86,28 @@ spec:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
                   optional: true
+        - name: github-check-run
+          image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:${DOCKER_TAG}
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          command: ["sh", ".github/scripts/github-check-run-sidecar.sh"]
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+          env:
+            - name: JOB_NAME
+              value: "${JOB_NAME}"
+            - name: GIT_SHA
+              value: "${GIT_SHA}"
+            - name: GITHUB_REPOSITORY
+              value: "${GITHUB_REPOSITORY}"
+            - name: GITHUB_RUN_URL
+              value: "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             - name: GH_APP_ID
               valueFrom:
                 secretKeyRef:

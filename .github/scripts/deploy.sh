@@ -2,6 +2,7 @@
 set -e
 
 job_done_file="${POSTFIX_DONE_FILE:-/var/run/heavyedge/deploy-complete}"
+github_check_run_result_file="${GITHUB_CHECK_RUN_RESULT_FILE:-/var/run/heavyedge/github-check-run-result}"
 
 notify_deploy() {
   sh .github/scripts/notify-deploy.sh "$1" || true
@@ -9,13 +10,16 @@ notify_deploy() {
 
 finish_deploy() {
   status=$?
+  mkdir -p "$(dirname "${job_done_file}")"
+
   if [ "${status}" -eq 0 ]; then
+    printf '%s\n' succeeded > "${github_check_run_result_file}"
     notify_deploy succeeded
   else
+    printf '%s\n' failed > "${github_check_run_result_file}"
     notify_deploy failed
   fi
 
-  mkdir -p "$(dirname "${job_done_file}")"
   touch "${job_done_file}"
   exit "${status}"
 }

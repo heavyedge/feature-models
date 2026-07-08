@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - master
   release:
     types: [published]
 
@@ -182,7 +185,6 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create GitHub app secret
-        if: github.event_name == 'release'
         env:
           GH_APP_ID: ${{ secrets.GH_APP_ID }}
           GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
@@ -190,11 +192,11 @@ jobs:
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
         run: |
           if [ -z "$GH_APP_ID" ]; then
-            echo "::error::Missing GH_APP_ID secret for documentation branch pushes."
+            echo "::error::Missing GH_APP_ID secret for GitHub check runs and documentation branch pushes."
             exit 1
           fi
           if [ -z "$GH_APP_PRIVATE_KEY" ]; then
-            echo "::error::Missing GH_APP_PRIVATE_KEY secret for documentation branch pushes."
+            echo "::error::Missing GH_APP_PRIVATE_KEY secret for GitHub check runs and documentation branch pushes."
             exit 1
           fi
 
