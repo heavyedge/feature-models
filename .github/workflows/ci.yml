@@ -230,6 +230,10 @@ jobs:
             make _temp/X.npy
             python3 -c "import numpy as np; np.save('_temp/X.npy', np.load('_temp/X.npy')[:1])"
 
+        - name: Test Docker image
+          run: |
+            docker run --rm -v $PWD/_temp:/app heavyedge-feature-models:ci 'python3 /model/predict-quantiles.py /app/X.npy --target H --method delta -o /app/H.quantiles.npy'
+
   docker-dev:
 
     runs-on: ubuntu-latest
