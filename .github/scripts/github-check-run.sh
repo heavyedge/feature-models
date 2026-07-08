@@ -28,7 +28,7 @@ github_api() {
   url="$2"
   payload_file="$3"
 
-  curl -fsS \
+  curl --fail-with-body -sS \
     -X "${method}" \
     -H "Accept: application/vnd.github+json" \
     -H "Authorization: Bearer ${token}" \
