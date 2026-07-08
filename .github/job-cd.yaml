@@ -45,19 +45,7 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              set +e
-              sh .github/scripts/deploy.sh
-              deploy_exit_code=$?
-
-              sh .github/scripts/delete-image.sh
-              cleanup_exit_code=$?
-
-              if [ "${cleanup_exit_code}" -ne 0 ]; then
-                echo "Temporary Docker image cleanup failed with exit code ${cleanup_exit_code}." >&2
-                exit "${cleanup_exit_code}"
-              fi
-
-              exit "${deploy_exit_code}"
+              exec sh .github/scripts/deploy.sh
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
@@ -84,6 +72,41 @@ spec:
               value: "${GIT_AUTHOR_NAME}"
             - name: GIT_AUTHOR_EMAIL
               value: "${GIT_AUTHOR_EMAIL}"
+            - name: HUGGINGFACE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface-token
+                  key: HUGGINGFACE_TOKEN
+                  optional: true
+        - name: image-cleanup
+          image: curlimages/curl:8.21.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+
+              state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
+              result_file="${DEPLOY_RESULT_FILE:-${state_dir}/deploy-result}"
+
+              while [ ! -f "${result_file}" ]; do
+                sleep 5
+              done
+
+              printf '%s' "${DELETE_IMAGE_SCRIPT_BASE64:?missing delete image script}" | base64 -d > /tmp/delete-image.sh
+              sh /tmp/delete-image.sh
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+          env:
+            - name: DELETE_IMAGE_SCRIPT_BASE64
+              value: "${DELETE_IMAGE_SCRIPT_BASE64}"
             - name: DOCKER_REGISTRY
               value: "${DOCKER_REGISTRY}"
             - name: DOCKER_REPOSITORY
@@ -92,12 +115,6 @@ spec:
               value: "${DOCKER_TAG}"
             - name: DELETE_TEMP_DOCKER_TAG
               value: "${DELETE_TEMP_DOCKER_TAG}"
-            - name: HUGGINGFACE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: huggingface-token
-                  key: HUGGINGFACE_TOKEN
-                  optional: true
             - name: DOCKER_USERNAME
               valueFrom:
                 secretKeyRef:
