@@ -10,18 +10,39 @@ if [ -z "${TAG_NAME}" ]; then
   exit 1
 fi
 
-. .github/scripts/github-app.sh
-
 doc_branch="${TAG_NAME}-doc"
 doc_repo="/tmp/heavyedge-doc-repo-$$"
 remote_url="https://github.com/${GITHUB_REPOSITORY}.git"
+state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
+token_file="${GITHUB_APP_TOKEN_FILE:-${state_dir}/github-app-token}"
+token_error_file="${GITHUB_APP_TOKEN_ERROR_FILE:-${state_dir}/github-app-token-error}"
+token_wait_seconds="${GITHUB_APP_TOKEN_WAIT_SECONDS:-120}"
 
 if ! git check-ref-format "refs/heads/${doc_branch}"; then
   echo "Invalid documentation branch name: ${doc_branch}" >&2
   exit 1
 fi
 
-auth_header="$(github_app_create_basic_auth_header '{"contents":"write"}')"
+wait_for_github_token() {
+  waited=0
+  while [ ! -s "${token_file}" ]; do
+    if [ -s "${token_error_file}" ]; then
+      echo "GitHub App token sidecar reported an error; cannot push documentation branch." >&2
+      cat "${token_error_file}" >&2
+      return 1
+    fi
+    if [ "${waited}" -ge "${token_wait_seconds}" ]; then
+      echo "Timed out waiting for GitHub App token at ${token_file}; cannot push documentation branch." >&2
+      return 1
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+}
+
+wait_for_github_token
+github_app_token="$(cat "${token_file}")"
+auth_header="$(printf 'x-access-token:%s' "${github_app_token}" | base64 | tr -d '\n')"
 
 git init "${doc_repo}"
 git -C "${doc_repo}" remote add origin "${remote_url}"

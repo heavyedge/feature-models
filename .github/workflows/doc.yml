@@ -69,16 +69,11 @@ jobs:
 
       - name: Create GitHub App token
         id: app-token
-        shell: bash
-        env:
-          GH_APP_ID: ${{ secrets.GH_APP_ID }}
-          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
-        run: |
-          . .github/scripts/github-app.sh
-          github_app_token="$(github_app_create_installation_token '{"contents":"write"}')"
-          echo "::add-mask::${github_app_token}"
-          echo "token=${github_app_token}" >> "${GITHUB_OUTPUT}"
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-contents: write
 
       - name: Restore Pages site state
         shell: bash

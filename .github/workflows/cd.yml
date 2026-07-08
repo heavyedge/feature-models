@@ -24,6 +24,7 @@ jobs:
     outputs:
       check-run-id: ${{ steps.gpu-check.outputs.check-run-id }}
       docker-tag: ${{ steps.k8s-job.outputs.docker_tag }}
+      temp-docker-tag: ${{ steps.k8s-job.outputs.temp_docker_tag }}
       job-name: ${{ steps.k8s-job.outputs.job_name }}
       cpu-request: ${{ steps.k8s-job.outputs.cpu_request }}
       gpu-request: ${{ steps.k8s-job.outputs.gpu_request }}
@@ -41,11 +42,12 @@ jobs:
           HEAVYEDGE_TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
           REF_NAME: ${{ github.ref_name }}
         run: |
+          temp_docker_tag="${GIT_SHA::7}-dev"
+          docker_tag="${temp_docker_tag}"
+
           if [ "$EVENT_NAME" = "release" ]; then
-            docker_tag="latest-dev"
             job_name="heavyedge-feature-models-release-${GIT_SHA::7}"
           else
-            docker_tag="${GIT_SHA::7}-dev"
             job_name="heavyedge-feature-models-cd-${GIT_SHA::7}"
           fi
 
@@ -59,6 +61,7 @@ jobs:
 
           {
             echo "docker_tag=${docker_tag}"
+            echo "temp_docker_tag=${temp_docker_tag}"
             echo "job_name=${job_name}"
             echo "cpu_request=${cpu_request}"
             echo "gpu_request=${gpu_request}"
@@ -145,18 +148,15 @@ jobs:
           GIT_SHA: ${{ github.sha }}
         run: |
           image="${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models"
+          temp_tag="${GIT_SHA::7}-dev"
 
           {
-            echo 'tags<<EOF'
-            if [ "$EVENT_NAME" = "release" ]; then
-              echo "${image}:latest-dev"
-            else
-              echo "${image}:${GIT_SHA::7}-dev"
-            fi
-            echo 'EOF'
+            echo "temp_tag=${image}:${temp_tag}"
+            echo "temp_tag_name=${temp_tag}"
+            echo "latest_tag=${image}:latest-dev"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build and push Docker image
+      - name: Build and push temporary Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -167,11 +167,29 @@ jobs:
           cache-to: type=gha,mode=max,scope=feature-models-dev
           build-args: |
             IMAGE_CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-            IMAGE_VERSION=${{ github.ref_name }}
+            IMAGE_VERSION=${{ steps.docker-tags.outputs.temp_tag_name }}
             IMAGE_REVISION=${{ github.sha }}
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: ${{ steps.docker-tags.outputs.tags }}
+          tags: ${{ steps.docker-tags.outputs.temp_tag }}
+
+      - name: Build and push latest Docker image
+        if: ${{ github.event_name == 'release' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          target: dev
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=feature-models-dev
+          cache-to: type=gha,mode=max,scope=feature-models-dev
+          build-args: |
+            IMAGE_CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            IMAGE_VERSION=latest-dev
+            IMAGE_REVISION=${{ github.sha }}
+          secrets: |
+            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          tags: ${{ steps.docker-tags.outputs.latest_tag }}
 
   deploy-GPU:
 
@@ -271,7 +289,6 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create Docker registry cleanup secret
-        if: ${{ github.event_name != 'release' }}
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -370,7 +387,6 @@ jobs:
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DELETE_TEMP_DOCKER_TAG: ${{ github.event_name != 'release' && '1' || '0' }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_CHECK_RUN_ID: ${{ needs.create-check.outputs.check-run-id }}
           SMTP_NOTIFY_TO: ${{ steps.notification-recipient.outputs.email }}
@@ -378,11 +394,14 @@ jobs:
           GIT_AUTHOR_NAME: heavyedge-bot
           GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
           DOCKER_TAG: ${{ needs.create-check.outputs.docker-tag }}
+          TEMP_DOCKER_TAG: ${{ needs.create-check.outputs.temp-docker-tag }}
           JOB_NAME: ${{ needs.create-check.outputs.job-name }}
           CPU_REQUEST: ${{ needs.create-check.outputs.cpu-request }}
           GPU_REQUEST: ${{ needs.create-check.outputs.gpu-request }}
         run: |
-          template_vars='$JOB_NAME $KUBE_NAMESPACE $KUBE_USERNAME $GIT_SHA $EVENT_NAME $MLXP_ZONE $DOCKER_REGISTRY $DOCKER_USERNAME $DOCKER_TAG $DELETE_TEMP_DOCKER_TAG $CPU_REQUEST $GPU_REQUEST $GITHUB_REPOSITORY $GITHUB_RUN_ID $GITHUB_CHECK_RUN_ID $RELEASE_TAG_NAME $HEAVYEDGE_TEST_MODE $UPLOAD_TO_HUGGINGFACE $PUSH_DOC $GIT_AUTHOR_NAME $GIT_AUTHOR_EMAIL $SMTP_NOTIFY_TO'
+          DELETE_IMAGE_SCRIPT_BASE64="$(base64 -w 0 .github/scripts/delete-image.sh)"
+          export DELETE_IMAGE_SCRIPT_BASE64
+          template_vars='$JOB_NAME $KUBE_NAMESPACE $KUBE_USERNAME $GIT_SHA $EVENT_NAME $MLXP_ZONE $DOCKER_REGISTRY $DOCKER_USERNAME $DOCKER_TAG $TEMP_DOCKER_TAG $DELETE_IMAGE_SCRIPT_BASE64 $CPU_REQUEST $GPU_REQUEST $GITHUB_REPOSITORY $GITHUB_RUN_ID $GITHUB_CHECK_RUN_ID $RELEASE_TAG_NAME $HEAVYEDGE_TEST_MODE $UPLOAD_TO_HUGGINGFACE $PUSH_DOC $GIT_AUTHOR_NAME $GIT_AUTHOR_EMAIL $SMTP_NOTIFY_TO'
           envsubst "$template_vars" < .github/job-cd.yaml | kubectl apply -f -
           kubectl wait \
             --namespace="$KUBE_NAMESPACE" \
@@ -424,17 +443,16 @@ jobs:
             });
 
       - name: Delete temporary Docker image when job startup fails
-        if: ${{ failure() && github.event_name != 'release' && steps.run-job.outcome == 'failure' }}
+        if: ${{ failure() && steps.run-job.outcome == 'failure' }}
         shell: bash
         env:
-          DELETE_TEMP_DOCKER_TAG: "1"
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_REPOSITORY: ${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models
-          DOCKER_TAG: ${{ needs.create-check.outputs.docker-tag }}
+          TEMP_DOCKER_TAG: ${{ needs.create-check.outputs.temp-docker-tag }}
         run: |
-          sh .github/scripts/delete-registry-tag.sh
+          sh .github/scripts/delete-image.sh
 
   post-fail-deploy:
 
@@ -482,14 +500,12 @@ jobs:
             });
 
       - name: Delete temporary Docker image
-        if: ${{ github.event_name != 'release' }}
         shell: bash
         env:
-          DELETE_TEMP_DOCKER_TAG: "1"
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_REPOSITORY: ${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models
-          DOCKER_TAG: ${{ needs.create-check.outputs.docker-tag }}
+          TEMP_DOCKER_TAG: ${{ needs.create-check.outputs.temp-docker-tag }}
         run: |
-          sh .github/scripts/delete-registry-tag.sh
+          sh .github/scripts/delete-image.sh

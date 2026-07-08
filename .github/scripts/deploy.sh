@@ -1,49 +1,6 @@
 #!/bin/sh
 set -e
 
-deploy_result_file="${DEPLOY_RESULT_FILE:-/var/run/heavyedge/deploy-result}"
-
-finish_deploy() {
-  exit_code=$?
-  mkdir -p "$(dirname "${deploy_result_file}")"
-
-  if [ "${exit_code}" -eq 0 ]; then
-    result_status=succeeded
-  else
-    result_status=failed
-  fi
-
-  set +e
-  sh .github/scripts/delete-registry-tag.sh
-  cleanup_exit_code=$?
-  set -e
-  if [ "${cleanup_exit_code}" -ne 0 ]; then
-    echo "Temporary Docker image cleanup failed with exit code ${cleanup_exit_code}." >&2
-  fi
-
-  result_file_tmp="${deploy_result_file}.$$"
-  {
-    printf 'status=%s\n' "${result_status}"
-    printf 'exit_code=%s\n' "${exit_code}"
-  } > "${result_file_tmp}"
-  mv "${result_file_tmp}" "${deploy_result_file}"
-  exit "${exit_code}"
-}
-
-trap finish_deploy EXIT
-
-# Check revision
-if [ ! -r /etc/heavyedge/image-revision ]; then
-  echo "Missing image revision file: /etc/heavyedge/image-revision" >&2
-  exit 1
-fi
-if [ "$(cat /etc/heavyedge/image-revision)" != "${GIT_SHA}" ]; then
-  echo "Image revision mismatch: expected ${GIT_SHA}" >&2
-  echo "Actual image revision:" >&2
-  cat /etc/heavyedge/image-revision >&2
-  exit 1
-fi
-
 # Build model
 if [ "${PUSH_DOC}" = "1" ]; then
     uv pip install --system -r requirements.txt -r notebooks/requirements.txt

@@ -2,17 +2,13 @@
 
 set -eu
 
-if [ "${DELETE_TEMP_DOCKER_TAG:-0}" != "1" ]; then
-  exit 0
-fi
-
-if [ -z "${DOCKER_REGISTRY:-}" ] || [ -z "${DOCKER_REPOSITORY:-}" ] || [ -z "${DOCKER_TAG:-}" ]; then
-  echo "Docker registry cleanup environment is incomplete; skipping ${DOCKER_TAG:-unknown} deletion." >&2
+if [ -z "${DOCKER_REGISTRY:-}" ] || [ -z "${DOCKER_REPOSITORY:-}" ] || [ -z "${TEMP_DOCKER_TAG:-}" ]; then
+  echo "Docker registry cleanup environment is incomplete; skipping ${TEMP_DOCKER_TAG:-unknown} deletion." >&2
   exit 0
 fi
 
 if [ -z "${DOCKER_USERNAME:-}" ] || [ -z "${DOCKER_PASSWORD:-}" ]; then
-  echo "Docker registry cleanup credentials are incomplete; skipping ${DOCKER_TAG} deletion." >&2
+  echo "Docker registry cleanup credentials are incomplete; skipping ${TEMP_DOCKER_TAG} deletion." >&2
   exit 0
 fi
 
@@ -25,7 +21,7 @@ case "${DOCKER_REGISTRY}" in
     ;;
 esac
 
-manifest_url="${registry_url}/v2/${DOCKER_REPOSITORY}/manifests/${DOCKER_TAG}"
+manifest_url="${registry_url}/v2/${DOCKER_REPOSITORY}/manifests/${TEMP_DOCKER_TAG}"
 headers_file="$(mktemp)"
 trap 'rm -f "${headers_file}"' EXIT
 
@@ -43,12 +39,12 @@ http_status="$(
 )"
 
 if [ "${http_status}" = "404" ]; then
-  echo "Docker image tag ${DOCKER_REPOSITORY}:${DOCKER_TAG} is already absent."
+  echo "Docker image tag ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG} is already absent."
   exit 0
 fi
 
 if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
-  echo "Could not inspect Docker image tag ${DOCKER_REPOSITORY}:${DOCKER_TAG}; registry returned HTTP ${http_status}." >&2
+  echo "Could not inspect Docker image tag ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG}; registry returned HTTP ${http_status}." >&2
   exit 1
 fi
 
@@ -57,7 +53,7 @@ digest="$(
 )"
 
 if [ -z "${digest}" ]; then
-  echo "Registry did not return Docker-Content-Digest for ${DOCKER_REPOSITORY}:${DOCKER_TAG}." >&2
+  echo "Registry did not return Docker-Content-Digest for ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG}." >&2
   exit 1
 fi
 
@@ -72,9 +68,9 @@ delete_status="$(
 )"
 
 if [ "${delete_status}" = "404" ] || [ "${delete_status}" = "202" ]; then
-  echo "Deleted Docker image tag ${DOCKER_REPOSITORY}:${DOCKER_TAG}."
+  echo "Deleted Docker image tag ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG}."
   exit 0
 fi
 
-echo "Could not delete Docker image tag ${DOCKER_REPOSITORY}:${DOCKER_TAG}; registry returned HTTP ${delete_status}." >&2
+echo "Could not delete Docker image tag ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG}; registry returned HTTP ${delete_status}." >&2
 exit 1
