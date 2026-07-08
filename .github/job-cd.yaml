@@ -535,7 +535,7 @@ spec:
               end
 
               check_name = ENV["GITHUB_CHECK_RUN_NAME"].to_s
-              check_name = "GPU run" if check_name.empty?
+              check_name = "GPU" if check_name.empty?
               check_id_file = ENV.fetch("CHECK_ID_FILE")
               token_file = ENV.fetch("GITHUB_APP_TOKEN_FILE")
 

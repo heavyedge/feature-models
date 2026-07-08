@@ -17,12 +17,12 @@ permissions:
 
 jobs:
 
-  gpu-run-check-bootstrap:
+  create-gpu-check:
 
     runs-on: ubuntu-latest
 
     outputs:
-      check-run-id: ${{ steps.gpu-run-check.outputs.check-run-id }}
+      check-run-id: ${{ steps.gpu-check.outputs.check-run-id }}
       docker-tag: ${{ steps.k8s-job.outputs.docker_tag }}
       job-name: ${{ steps.k8s-job.outputs.job_name }}
       cpu-request: ${{ steps.k8s-job.outputs.cpu_request }}
@@ -64,16 +64,25 @@ jobs:
             echo "gpu_request=${gpu_request}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create GPU run check
-        id: gpu-run-check
+      - name: Create GitHub App token for GPU check
+        id: gpu-check-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Create GPU check
+        id: gpu-check
         uses: actions/github-script@v9
         env:
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GIT_SHA: ${{ github.sha }}
           JOB_NAME: ${{ steps.k8s-job.outputs.job_name }}
         with:
+          github-token: ${{ steps.gpu-check-token.outputs.token }}
           script: |
-            const checkName = 'GPU run';
+            const checkName = 'GPU';
             const response = await github.rest.checks.create({
               ...context.repo,
               name: checkName,
@@ -164,10 +173,10 @@ jobs:
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           tags: ${{ steps.docker-tags.outputs.tags }}
 
-  deploy-k8s:
+  deploy-GPU:
 
     needs:
-      - gpu-run-check-bootstrap
+      - create-gpu-check
       - publish-image
 
     runs-on: ubuntu-latest
@@ -312,15 +321,15 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DELETE_TEMP_DOCKER_TAG: ${{ github.event_name != 'release' && '1' || '0' }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_CHECK_RUN_ID: ${{ needs.gpu-run-check-bootstrap.outputs.check-run-id }}
+          GITHUB_CHECK_RUN_ID: ${{ needs.create-gpu-check.outputs.check-run-id }}
           SMTP_NOTIFY_TO: ${{ steps.notification-recipient.outputs.email }}
           RELEASE_TAG_NAME: ${{ github.ref_name }}
           GIT_AUTHOR_NAME: heavyedge-bot
           GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
-          DOCKER_TAG: ${{ needs.gpu-run-check-bootstrap.outputs.docker-tag }}
-          JOB_NAME: ${{ needs.gpu-run-check-bootstrap.outputs.job-name }}
-          CPU_REQUEST: ${{ needs.gpu-run-check-bootstrap.outputs.cpu-request }}
-          GPU_REQUEST: ${{ needs.gpu-run-check-bootstrap.outputs.gpu-request }}
+          DOCKER_TAG: ${{ needs.create-gpu-check.outputs.docker-tag }}
+          JOB_NAME: ${{ needs.create-gpu-check.outputs.job-name }}
+          CPU_REQUEST: ${{ needs.create-gpu-check.outputs.cpu-request }}
+          GPU_REQUEST: ${{ needs.create-gpu-check.outputs.gpu-request }}
         run: |
           template_vars='$JOB_NAME $KUBE_NAMESPACE $KUBE_USERNAME $GIT_SHA $EVENT_NAME $MLXP_ZONE $DOCKER_REGISTRY $DOCKER_USERNAME $DOCKER_TAG $DELETE_TEMP_DOCKER_TAG $CPU_REQUEST $GPU_REQUEST $GITHUB_REPOSITORY $GITHUB_RUN_ID $GITHUB_CHECK_RUN_ID $RELEASE_TAG_NAME $HEAVYEDGE_TEST_MODE $UPLOAD_TO_HUGGINGFACE $PUSH_DOC $GIT_AUTHOR_NAME $GIT_AUTHOR_EMAIL $SMTP_NOTIFY_TO'
           envsubst "$template_vars" < .github/job-cd.yaml | kubectl apply -f -
@@ -331,15 +340,25 @@ jobs:
             --selector="job-name=${JOB_NAME}" \
             --timeout=120s
 
-      - name: Fail GPU run check when job startup fails
-        if: ${{ failure() && needs.gpu-run-check-bootstrap.outputs.check-run-id != '' && steps.run-job.outcome == 'failure' }}
+      - name: Create GitHub App token for GPU check failure
+        if: ${{ failure() && needs.create-gpu-check.outputs.check-run-id != '' && steps.run-job.outcome == 'failure' }}
+        id: gpu-check-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Fail GPU check when job startup fails
+        if: ${{ failure() && needs.create-gpu-check.outputs.check-run-id != '' && steps.run-job.outcome == 'failure' }}
         uses: actions/github-script@v9
         env:
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GITHUB_CHECK_RUN_ID: ${{ needs.gpu-run-check-bootstrap.outputs.check-run-id }}
+          GITHUB_CHECK_RUN_ID: ${{ needs.create-gpu-check.outputs.check-run-id }}
         with:
+          github-token: ${{ steps.gpu-check-token.outputs.token }}
           script: |
-            const checkName = 'GPU run';
+            const checkName = 'GPU';
             await github.rest.checks.update({
               ...context.repo,
               check_run_id: Number(process.env.GITHUB_CHECK_RUN_ID),
@@ -362,18 +381,18 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_REPOSITORY: ${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models
-          DOCKER_TAG: ${{ needs.gpu-run-check-bootstrap.outputs.docker-tag }}
+          DOCKER_TAG: ${{ needs.create-gpu-check.outputs.docker-tag }}
         run: |
           sh .github/scripts/delete-registry-tag.sh
 
-  fail-gpu-run-check-before-k8s:
+  post-fail-GPU:
 
     needs:
-      - gpu-run-check-bootstrap
+      - create-gpu-check
       - publish-image
-      - deploy-k8s
+      - deploy-GPU
 
-    if: ${{ always() && needs.gpu-run-check-bootstrap.outputs.check-run-id != '' && (needs.publish-image.result == 'failure' || needs.publish-image.result == 'cancelled' || needs.deploy-k8s.result == 'failure' || needs.deploy-k8s.result == 'cancelled') }}
+    if: ${{ always() && needs.create-gpu-check.outputs.check-run-id != '' && (needs.publish-image.result == 'failure' || needs.publish-image.result == 'cancelled' || needs.deploy-GPU.result == 'failure' || needs.deploy-GPU.result == 'cancelled') }}
 
     runs-on: ubuntu-latest
 
@@ -381,14 +400,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fail GPU run check
+      - name: Create GitHub App token for GPU check
+        id: gpu-check-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Fail GPU check
         uses: actions/github-script@v9
         env:
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GITHUB_CHECK_RUN_ID: ${{ needs.gpu-run-check-bootstrap.outputs.check-run-id }}
+          GITHUB_CHECK_RUN_ID: ${{ needs.create-gpu-check.outputs.check-run-id }}
         with:
+          github-token: ${{ steps.gpu-check-token.outputs.token }}
           script: |
-            const checkName = 'GPU run';
+            const checkName = 'GPU';
             await github.rest.checks.update({
               ...context.repo,
               check_run_id: Number(process.env.GITHUB_CHECK_RUN_ID),
@@ -411,6 +439,6 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_REPOSITORY: ${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models
-          DOCKER_TAG: ${{ needs.gpu-run-check-bootstrap.outputs.docker-tag }}
+          DOCKER_TAG: ${{ needs.create-gpu-check.outputs.docker-tag }}
         run: |
           sh .github/scripts/delete-registry-tag.sh
