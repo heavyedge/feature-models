@@ -133,8 +133,8 @@ spec:
               value: "${DOCKER_USERNAME}/heavyedge/feature-models"
             - name: DOCKER_TAG
               value: "${DOCKER_TAG}"
-            - name: DELETE_TEMP_DOCKER_TAG
-              value: "${DELETE_TEMP_DOCKER_TAG}"
+            - name: TEMP_DOCKER_TAG
+              value: "${TEMP_DOCKER_TAG}"
             - name: DOCKER_USERNAME
               valueFrom:
                 secretKeyRef:

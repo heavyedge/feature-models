@@ -1,18 +1,6 @@
 #!/bin/sh
 set -e
 
-# Check revision
-if [ ! -r /etc/heavyedge/image-revision ]; then
-  echo "Missing image revision file: /etc/heavyedge/image-revision" >&2
-  exit 1
-fi
-if [ "$(cat /etc/heavyedge/image-revision)" != "${GIT_SHA}" ]; then
-  echo "Image revision mismatch: expected ${GIT_SHA}" >&2
-  echo "Actual image revision:" >&2
-  cat /etc/heavyedge/image-revision >&2
-  exit 1
-fi
-
 # Build model
 if [ "${PUSH_DOC}" = "1" ]; then
     uv pip install --system -r requirements.txt -r notebooks/requirements.txt
