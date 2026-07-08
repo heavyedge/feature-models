@@ -24,8 +24,12 @@ fi
 
 # Deploy model
 if [ "${UPLOAD_TO_HUGGINGFACE}" = "1" ]; then
+  if [ -z "${TAG_NAME:-}" ]; then
+    echo "TAG_NAME is required to upload to Hugging Face" >&2
+    exit 1
+  fi
   uv pip install --system huggingface_hub
-  python upload.py
+  python upload.py "${TAG_NAME}"
 fi
 
 # Deploy notebooks

@@ -1,15 +1,24 @@
+import argparse
+import importlib
 import os
+import re
 import shutil
+import sys
 
-from huggingface_hub import HfApi
+parser = argparse.ArgumentParser(description="Upload model to Hugging Face Hub")
+parser.add_argument("tag", help="Model version tag (e.g., v1.0.0)")
+args = parser.parse_args()
 
-from version import __version__
+if re.search(r"\.post\d*$", args.tag):
+    print(f"Skipping Hugging Face upload for post release tag: {args.tag}")
+    sys.exit(0)
 
+HfApi = importlib.import_module("huggingface_hub").HfApi
 api = HfApi(token=os.getenv("HUGGINGFACE_TOKEN"))
 
-MODEL_VERSION = f"v{__version__}"
-MAJOR_VERSION = __version__.split(".")[0]
-REPO = f"jeesoo9595/heavyedge-features-v{MAJOR_VERSION}"
+MODEL_VERSION = args.tag
+MAJOR_VERSION = args.tag.split(".")[0]
+REPO = f"jeesoo9595/heavyedge-features-{MAJOR_VERSION}"
 
 shutil.rmtree("model/__pycache__", ignore_errors=True)
 
