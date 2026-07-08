@@ -68,7 +68,7 @@ WORKDIR /model
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 COPY model .
-RUN uv --no-cache pip install --system -r model/requirements.txt
+RUN uv --no-cache pip install --system -r ./requirements.txt
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
