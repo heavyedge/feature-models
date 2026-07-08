@@ -44,7 +44,7 @@ jobs:
             docker_tag="latest-dev"
             job_name="heavyedge-feature-models-release-${GIT_SHA::7}"
           else
-            docker_tag="${REF_NAME}-${GIT_SHA::7}-dev"
+            docker_tag="${GIT_SHA::7}-dev"
             job_name="heavyedge-feature-models-cd-${GIT_SHA::7}"
           fi
 
@@ -132,7 +132,7 @@ jobs:
             if [ "$EVENT_NAME" = "release" ]; then
               echo "${image}:latest-dev"
             else
-              echo "${image}:${REF_NAME}-${GIT_SHA::7}-dev"
+              echo "${image}:${GIT_SHA::7}-dev"
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
@@ -150,8 +150,6 @@ jobs:
             IMAGE_CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             IMAGE_VERSION=${{ github.ref_name }}
             IMAGE_REVISION=${{ github.sha }}
-            IMAGE_TITLE='HeavyEdge Feature Models (dev)'
-            IMAGE_DESCRIPTION='Image for developing heavyedge/feature-models. Includes source in '/src' directory. Does not include trained models.'
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           tags: ${{ steps.docker-tags.outputs.tags }}

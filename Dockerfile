@@ -20,7 +20,6 @@ RUN --mount=type=secret,id=hf_token,required=false \
     fi \
     && ./setup.sh
 
-
 FROM python:slim AS clear-notebooks
 
 WORKDIR /src
@@ -59,5 +58,32 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.title="${IMAGE_TITLE}" \
-      org.opencontainers.image.description="${IMAGE_DESCRIPTION}"
+      org.opencontainers.image.title="HeavyEdge Feature Models (dev)" \
+      org.opencontainers.image.description="Image for developing heavyedge/feature-models. Includes source in '/src' directory. Does not include trained models."
+
+
+FROM python:slim
+COPY --from=uv /uv /uvx /usr/local/bin/
+
+WORKDIR /model
+COPY model .
+
+WORKDIR /app
+
+ARG IMAGE_CREATED
+ARG IMAGE_VERSION
+ARG IMAGE_REVISION
+ARG IMAGE_TITLE
+ARG IMAGE_DESCRIPTION
+RUN mkdir -p /etc/heavyedge \
+    && echo "${IMAGE_VERSION}" > /etc/heavyedge/image-version \
+    && echo "${IMAGE_REVISION}" > /etc/heavyedge/image-revision
+LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
+      org.opencontainers.image.authors="Jisoo Song <jeesoo9595@snu.ac.kr>" \
+      org.opencontainers.image.documentation="https://heavyedge.github.io/feature-models/" \
+      org.opencontainers.image.source="https://github.com/jisoosong/heavyedge/feature-models" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.title="HeavyEdge Feature Models" \
+      org.opencontainers.image.description="Image for evaluating heavyedge/feature-models. Includes models in '/model' directory. Does not include source code."

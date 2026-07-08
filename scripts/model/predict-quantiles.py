@@ -3,14 +3,7 @@ import importlib
 import pathlib
 import sys
 
-import numpy as np
-import torch
-
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
-
-torch.manual_seed(42)
 
 parser = argparse.ArgumentParser("Predict quantiles from a trained model.")
 parser.add_argument("X", type=pathlib.Path, help="Input npy file, shape: (*B, N, D).")
@@ -32,6 +25,33 @@ parser.add_argument(
     "-o", "--out", type=pathlib.Path, required=True, help="Output npy file."
 )
 args = parser.parse_args()
+
+try:
+    import numpy as np
+    import torch
+except ImportError:
+    import shutil
+    import subprocess
+
+    requirements = str(MODEL_MODULE_PATH / "requirements.txt")
+    uv = shutil.which("uv")
+    if uv is not None:
+        subprocess.check_call(
+            [uv, "pip", "install", "--python", sys.executable, "-r", requirements]
+        )
+    else:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "-r", requirements]
+        )
+
+    import numpy as np
+    import torch
+
+sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
+
+torch.manual_seed(42)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
