@@ -66,22 +66,6 @@ git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
 ```
 
-### Building models using Docker
-
-Store Huggingface token in `HF_TOKEN` environment variable and run the following command:
-
-```
-docker build --secret id=hf_token,env=HF_TOKEN --target models --output type=local,dest=./model .
-```
-
-### Building notebooks using Docker
-
-Store Huggingface token in `HF_TOKEN` environment variable and run the following command:
-
-```
-docker build --secret id=hf_token,env=HF_TOKEN --target notebooks --output type=local,dest=./notebooks .
-```
-
 ## Versioning policy
 
 This repository follows semantic versioning with [Python version specifiers](https://packaging.python.org/en/latest/specifications/version-specifiers/):

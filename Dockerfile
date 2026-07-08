@@ -21,58 +21,6 @@ RUN --mount=type=secret,id=hf_token,required=false \
     && ./setup.sh
 
 
-FROM python:slim AS build-models
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-WORKDIR /workspace
-COPY --from=uv /uv /uvx /usr/local/bin/
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends make \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=downloader /dataset/_data ./_data
-
-COPY requirements.txt .
-RUN uv --no-cache pip install --system -r requirements.txt
-
-COPY . .
-ARG HEAVYEDGE_TEST_MODE
-RUN env ${HEAVYEDGE_TEST_MODE:+HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE}} make models
-
-
-FROM python:slim AS build-notebooks
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-WORKDIR /workspace
-COPY --from=uv /uv /uvx /usr/local/bin/
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends make \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=downloader /dataset/_data ./_data
-COPY --from=build-models /workspace/model ./model
-
-COPY requirements.txt .
-COPY notebooks/requirements.txt notebooks/
-RUN uv --no-cache pip install --system -r requirements.txt -r notebooks/requirements.txt
-
-COPY . .
-ARG HEAVYEDGE_TEST_MODE
-RUN env ${HEAVYEDGE_TEST_MODE:+HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE}} make notebooks
-
-
-FROM scratch AS models
-WORKDIR /
-
-COPY --from=build-models /workspace/model ./
-
-
-FROM scratch AS notebooks
-WORKDIR /
-
-COPY --from=build-notebooks /workspace/notebooks ./
-
-
 FROM python:slim AS clear-notebooks
 
 WORKDIR /src
