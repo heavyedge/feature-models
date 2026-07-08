@@ -1,32 +1,28 @@
 #!/bin/sh
 set -e
 
-job_done_file="${POSTFIX_DONE_FILE:-/var/run/heavyedge/deploy-complete}"
-github_check_run_result_file="${GITHUB_CHECK_RUN_RESULT_FILE:-/var/run/heavyedge/github-check-run-result}"
-
-notify_deploy() {
-  sh .github/scripts/notify-deploy.sh "$1" || true
-}
+deploy_result_file="${DEPLOY_RESULT_FILE:-/var/run/heavyedge/deploy-result}"
 
 finish_deploy() {
-  status=$?
-  mkdir -p "$(dirname "${job_done_file}")"
+  exit_code=$?
+  mkdir -p "$(dirname "${deploy_result_file}")"
 
-  if [ "${status}" -eq 0 ]; then
-    printf '%s\n' succeeded > "${github_check_run_result_file}"
-    notify_deploy succeeded
+  if [ "${exit_code}" -eq 0 ]; then
+    result_status=succeeded
   else
-    printf '%s\n' failed > "${github_check_run_result_file}"
-    notify_deploy failed
+    result_status=failed
   fi
 
-  touch "${job_done_file}"
-  exit "${status}"
+  result_file_tmp="${deploy_result_file}.$$"
+  {
+    printf 'status=%s\n' "${result_status}"
+    printf 'exit_code=%s\n' "${exit_code}"
+  } > "${result_file_tmp}"
+  mv "${result_file_tmp}" "${deploy_result_file}"
+  exit "${exit_code}"
 }
 
 trap finish_deploy EXIT
-
-notify_deploy started
 
 # Check revision
 if [ ! -r /etc/heavyedge/image-revision ]; then
