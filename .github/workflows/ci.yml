@@ -179,6 +179,35 @@ jobs:
         - name: test models in inference environment
           run: make test
 
+  docker:
+
+      needs: train-model
+
+      runs-on: ubuntu-latest
+
+      steps:
+
+        - name: Checkout
+          uses: actions/checkout@v4
+
+        - uses: actions/download-artifact@v4
+          with:
+            name: trained-models
+            path: model
+
+        - name: Set up Docker Buildx
+          uses: docker/setup-buildx-action@v3
+
+        - name: Build Docker image
+          uses: docker/build-push-action@v6
+          with:
+            context: .
+            load: true
+            push: false
+            cache-from: type=gha,scope=feature-models
+            cache-to: type=gha,mode=max,scope=feature-models
+            tags: heavyedge-feature-models:ci
+
   docker-dev:
 
     runs-on: ubuntu-latest

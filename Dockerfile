@@ -60,3 +60,30 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.title="HeavyEdge Feature Models (dev)" \
       org.opencontainers.image.description="Image for developing heavyedge/feature-models. Includes source in '/src' directory. Does not include trained models."
+
+
+FROM python:slim
+
+WORKDIR /model
+COPY --from=uv /uv /uvx /usr/local/bin/
+
+COPY model .
+RUN uv --no-cache pip install --system -r model/requirements.txt
+
+ARG IMAGE_CREATED
+ARG IMAGE_VERSION
+ARG IMAGE_REVISION
+ARG IMAGE_TITLE
+ARG IMAGE_DESCRIPTION
+RUN mkdir -p /etc/heavyedge \
+    && echo "${IMAGE_VERSION}" > /etc/heavyedge/image-version \
+    && echo "${IMAGE_REVISION}" > /etc/heavyedge/image-revision
+LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
+      org.opencontainers.image.authors="Jisoo Song <jeesoo9595@snu.ac.kr>" \
+      org.opencontainers.image.documentation="https://heavyedge.github.io/feature-models/" \
+      org.opencontainers.image.source="https://github.com/jisoosong/heavyedge/feature-models" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.title="HeavyEdge Feature Models" \
+      org.opencontainers.image.description="Image for evaluating heavyedge/feature-models. Includes models in '/model' directory. Does not include source code."
