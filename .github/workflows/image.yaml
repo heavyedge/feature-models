@@ -5,6 +5,9 @@ on:
     types:
       - GPU-completed
 
+permissions:
+  contents: read
+
 jobs:
 
   build-image:
@@ -12,3 +15,37 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Check dispatch payload
+        id: payload
+        shell: bash
+        env:
+          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_OUTPUT"
+          import json
+          import os
+
+          payload = json.loads(os.environ["CLIENT_PAYLOAD"])
+          model = payload.get("model") or {}
+
+          model_url = model.get("url") or ""
+          model_revision = model.get("revision") or ""
+          has_model = bool(model_url and model_revision)
+
+          print(f"model_url={model_url}")
+          print(f"model_revision={model_revision}")
+          print(f"has_model={str(has_model).lower()}")
+          PY
+
+      - name: Download pushed model
+        if: steps.payload.outputs.has_model == 'true'
+        shell: bash
+        run: |
+            curl -LsSf https://hf.co/cli/install.sh | bash
+            hf auth login --token $HUGGINGFACE_TOKEN
+            hf download "$MODEL_REPO_URL" --repo-type model --revision "$MODEL_REVISION" --local-dir model
+        env:
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          MODEL_REPO_URL: ${{ steps.payload.outputs.model_url }}
+          MODEL_REVISION: ${{ steps.payload.outputs.model_revision }}

@@ -29,7 +29,11 @@ if [ "${UPLOAD_TO_HUGGINGFACE}" = "1" ]; then
     exit 1
   fi
   uv pip install --system huggingface_hub
-  python upload.py "${TAG_NAME}"
+  if [ -n "${DEPLOY_OUTPUT_TMP_FILE:-}" ]; then
+    python upload.py "${TAG_NAME}" --metadata-file "${DEPLOY_OUTPUT_TMP_FILE}"
+  else
+    python upload.py "${TAG_NAME}"
+  fi
 fi
 
 # Deploy notebooks

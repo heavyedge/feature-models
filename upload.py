@@ -1,5 +1,6 @@
 import argparse
 import importlib
+import json
 import os
 import re
 import shutil
@@ -7,11 +8,15 @@ import sys
 
 parser = argparse.ArgumentParser(description="Upload model to Hugging Face Hub")
 parser.add_argument("tag", help="Model version tag (e.g., v1.0.0)")
+parser.add_argument(
+    "--metadata-file",
+    help="Write uploaded model metadata as JSON after a successful upload",
+)
 args = parser.parse_args()
 
 if re.search(r"\.post\d*$", args.tag):
     print(f"Skipping Hugging Face upload for post release tag: {args.tag}")
-    sys.exit(0)
+    sys.exit(1)
 
 HfApi = importlib.import_module("huggingface_hub").HfApi
 api = HfApi(token=os.getenv("HUGGINGFACE_TOKEN"))
@@ -37,3 +42,12 @@ api.create_tag(
     repo_id=REPO,
     tag=MODEL_VERSION,
 )
+
+if args.metadata_file:
+    metadata = {
+        "model_url": f"https://huggingface.co/{REPO}",
+        "model_revision": MODEL_VERSION,
+    }
+    with open(args.metadata_file, "w", encoding="utf-8") as file:
+        json.dump(metadata, file, sort_keys=True)
+        file.write("\n")
