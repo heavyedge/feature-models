@@ -54,6 +54,59 @@ github_app_get_installation_id() {
   printf '%s' "${installation_response}" | python -c 'import json, sys; print(json.load(sys.stdin)["id"])'
 }
 
+github_app_api() {
+  method="$1"
+  url="$2"
+  body="${3:-}"
+  response_file="$(mktemp)"
+  status_file="$(mktemp)"
+
+  if [ -n "${body}" ]; then
+    curl -sS \
+      -o "${response_file}" \
+      -w "%{http_code}" \
+      -X "${method}" \
+      -H "Accept: application/vnd.github+json" \
+      -H "Authorization: Bearer ${github_app_jwt}" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      -d "${body}" \
+      "${url}" > "${status_file}"
+  else
+    curl -sS \
+      -o "${response_file}" \
+      -w "%{http_code}" \
+      -X "${method}" \
+      -H "Accept: application/vnd.github+json" \
+      -H "Authorization: Bearer ${github_app_jwt}" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      "${url}" > "${status_file}"
+  fi
+
+  curl_status=$?
+  if [ "${curl_status}" -ne 0 ]; then
+    echo "GitHub App API request failed before receiving an HTTP response: curl exit ${curl_status}" >&2
+    rm -f "${response_file}" "${status_file}"
+    return "${curl_status}"
+  fi
+
+  http_status="$(cat "${status_file}")"
+  if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
+    echo "GitHub App API request failed: ${method} ${url} returned HTTP ${http_status}" >&2
+    echo "Response body:" >&2
+    cat "${response_file}" >&2
+    echo >&2
+    if [ -n "${body}" ]; then
+      echo "Request body:" >&2
+      printf '%s\n' "${body}" >&2
+    fi
+    rm -f "${response_file}" "${status_file}"
+    return 1
+  fi
+
+  cat "${response_file}"
+  rm -f "${response_file}" "${status_file}"
+}
+
 github_app_create_installation_token() {
   if [ "$#" -gt 0 ]; then
     permissions_json="$1"
@@ -63,13 +116,11 @@ github_app_create_installation_token() {
 
   github_app_jwt="$(github_app_create_jwt)"
   installation_id="$(github_app_get_installation_id "${github_app_jwt}")"
-  token_response="$(curl -fsS \
-    -X POST \
-    -H "Accept: application/vnd.github+json" \
-    -H "Authorization: Bearer ${github_app_jwt}" \
-    -H "X-GitHub-Api-Version: 2022-11-28" \
-    -d "$(printf '{"permissions":%s}' "${permissions_json}")" \
-    "https://api.github.com/app/installations/${installation_id}/access_tokens")"
+  token_request_body="$(printf '{"permissions":%s}' "${permissions_json}")"
+  token_response="$(github_app_api \
+    POST \
+    "https://api.github.com/app/installations/${installation_id}/access_tokens" \
+    "${token_request_body}")"
 
   printf '%s' "${token_response}" | python -c 'import json, sys; print(json.load(sys.stdin)["token"])'
 }

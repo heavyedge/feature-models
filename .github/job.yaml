@@ -69,6 +69,44 @@ spec:
               value: "${GIT_AUTHOR_NAME}"
             - name: GIT_AUTHOR_EMAIL
               value: "${GIT_AUTHOR_EMAIL}"
+            - name: HUGGINGFACE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface-token
+                  key: HUGGINGFACE_TOKEN
+                  optional: true
+        - name: email-notify
+          image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:${DOCKER_TAG}
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          command: ["sh", ".github/scripts/notify-deploy-sidecar.sh"]
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+          env:
+            - name: JOB_NAME
+              value: "${JOB_NAME}"
+            - name: GIT_SHA
+              value: "${GIT_SHA}"
+            - name: GITHUB_REPOSITORY
+              value: "${GITHUB_REPOSITORY}"
+            - name: GITHUB_RUN_URL
+              value: "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            - name: TAG_NAME
+              value: "${RELEASE_TAG_NAME}"
+            - name: EVENT_NAME
+              value: "${EVENT_NAME}"
+            - name: HEAVYEDGE_TEST_MODE
+              value: "${HEAVYEDGE_TEST_MODE}"
+            - name: UPLOAD_TO_HUGGINGFACE
+              value: "${UPLOAD_TO_HUGGINGFACE}"
+            - name: PUSH_DOC
+              value: "${PUSH_DOC}"
             - name: SMTP_HOST
               value: "127.0.0.1"
             - name: SMTP_PORT
@@ -80,12 +118,30 @@ spec:
                 secretKeyRef:
                   name: gmail-smtp-relay
                   key: GMAIL_USERNAME
-            - name: HUGGINGFACE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: huggingface-token
-                  key: HUGGINGFACE_TOKEN
-                  optional: true
+        - name: github-check-run
+          image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:${DOCKER_TAG}
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          command: ["sh", ".github/scripts/github-check-run-sidecar.sh"]
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+          env:
+            - name: JOB_NAME
+              value: "${JOB_NAME}"
+            - name: GIT_SHA
+              value: "${GIT_SHA}"
+            - name: GITHUB_REPOSITORY
+              value: "${GITHUB_REPOSITORY}"
+            - name: GITHUB_RUN_URL
+              value: "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            - name: GITHUB_CHECK_RUN_ID
+              value: "${GITHUB_CHECK_RUN_ID}"
             - name: GH_APP_ID
               valueFrom:
                 secretKeyRef:
@@ -121,7 +177,7 @@ spec:
             - |
               /scripts/run.sh &
               postfix_pid=$!
-              while [ ! -f /var/run/heavyedge/deploy-complete ]; do
+              while [ ! -f /var/run/heavyedge/notify-deploy-complete ]; do
                 if ! kill -0 "${postfix_pid}" 2>/dev/null; then
                   wait "${postfix_pid}"
                   exit $?
