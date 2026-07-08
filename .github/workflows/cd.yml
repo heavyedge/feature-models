@@ -12,6 +12,7 @@ on:
 
 permissions:
   actions: write
+  checks: write
   contents: read
 
 jobs:
@@ -65,20 +66,29 @@ jobs:
 
       - name: Create GPU run check
         id: gpu-run-check
-        shell: bash
+        uses: actions/github-script@v9
         env:
-          GH_APP_ID: ${{ secrets.GH_APP_ID }}
-          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           JOB_NAME: ${{ steps.k8s-job.outputs.job_name }}
-        run: |
-          check_run_id_file="$(mktemp)"
-          GITHUB_CHECK_RUN_ID_FILE="$check_run_id_file" sh .github/scripts/github-check-run.sh started
-          check_run_id="$(cat "$check_run_id_file")"
-          echo "check-run-id=${check_run_id}" >> "$GITHUB_OUTPUT"
+        with:
+          script: |
+            const checkName = 'GPU run';
+            const response = await github.rest.checks.create({
+              ...context.repo,
+              name: checkName,
+              head_sha: process.env.GIT_SHA,
+              external_id: process.env.JOB_NAME,
+              status: 'in_progress',
+              started_at: new Date().toISOString(),
+              details_url: process.env.GITHUB_RUN_URL,
+              output: {
+                title: checkName,
+                summary: 'Kubernetes GPU job started.',
+              },
+            });
+
+            core.setOutput('check-run-id', String(response.data.id));
 
   publish-image:
 
@@ -323,18 +333,25 @@ jobs:
 
       - name: Fail GPU run check when job startup fails
         if: ${{ failure() && needs.gpu-run-check-bootstrap.outputs.check-run-id != '' && steps.run-job.outcome == 'failure' }}
-        shell: bash
+        uses: actions/github-script@v9
         env:
-          GH_APP_ID: ${{ secrets.GH_APP_ID }}
-          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GIT_SHA: ${{ github.sha }}
-          JOB_NAME: ${{ needs.gpu-run-check-bootstrap.outputs.job-name }}
           GITHUB_CHECK_RUN_ID: ${{ needs.gpu-run-check-bootstrap.outputs.check-run-id }}
-        run: |
-          sh .github/scripts/github-check-run.sh failed
+        with:
+          script: |
+            const checkName = 'GPU run';
+            await github.rest.checks.update({
+              ...context.repo,
+              check_run_id: Number(process.env.GITHUB_CHECK_RUN_ID),
+              status: 'completed',
+              conclusion: 'failure',
+              completed_at: new Date().toISOString(),
+              details_url: process.env.GITHUB_RUN_URL,
+              output: {
+                title: checkName,
+                summary: 'Kubernetes GPU job failed.',
+              },
+            });
 
       - name: Delete temporary Docker image when job startup fails
         if: ${{ failure() && github.event_name != 'release' && steps.run-job.outcome == 'failure' }}
@@ -365,18 +382,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Fail GPU run check
-        shell: bash
+        uses: actions/github-script@v9
         env:
-          GH_APP_ID: ${{ secrets.GH_APP_ID }}
-          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GIT_SHA: ${{ github.sha }}
-          JOB_NAME: ${{ needs.gpu-run-check-bootstrap.outputs.job-name }}
           GITHUB_CHECK_RUN_ID: ${{ needs.gpu-run-check-bootstrap.outputs.check-run-id }}
-        run: |
-          sh .github/scripts/github-check-run.sh failed
+        with:
+          script: |
+            const checkName = 'GPU run';
+            await github.rest.checks.update({
+              ...context.repo,
+              check_run_id: Number(process.env.GITHUB_CHECK_RUN_ID),
+              status: 'completed',
+              conclusion: 'failure',
+              completed_at: new Date().toISOString(),
+              details_url: process.env.GITHUB_RUN_URL,
+              output: {
+                title: checkName,
+                summary: 'Kubernetes GPU job failed.',
+              },
+            });
 
       - name: Delete temporary Docker image
         if: ${{ github.event_name != 'release' }}
