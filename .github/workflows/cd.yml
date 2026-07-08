@@ -434,7 +434,7 @@ jobs:
           DOCKER_REPOSITORY: ${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models
           DOCKER_TAG: ${{ needs.create-check.outputs.docker-tag }}
         run: |
-          sh .github/scripts/delete-registry-tag.sh
+          sh .github/scripts/delete-image.sh
 
   post-fail-deploy:
 
@@ -492,4 +492,4 @@ jobs:
           DOCKER_REPOSITORY: ${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models
           DOCKER_TAG: ${{ needs.create-check.outputs.docker-tag }}
         run: |
-          sh .github/scripts/delete-registry-tag.sh
+          sh .github/scripts/delete-image.sh

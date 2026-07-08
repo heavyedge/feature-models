@@ -13,14 +13,6 @@ finish_deploy() {
     result_status=failed
   fi
 
-  set +e
-  sh .github/scripts/delete-registry-tag.sh
-  cleanup_exit_code=$?
-  set -e
-  if [ "${cleanup_exit_code}" -ne 0 ]; then
-    echo "Temporary Docker image cleanup failed with exit code ${cleanup_exit_code}." >&2
-  fi
-
   result_file_tmp="${deploy_result_file}.$$"
   {
     printf 'status=%s\n' "${result_status}"
