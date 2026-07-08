@@ -17,91 +17,6 @@ permissions:
 
 jobs:
 
-  create-check:
-
-    runs-on: ubuntu-latest
-
-    outputs:
-      check-run-id: ${{ steps.gpu-check.outputs.check-run-id }}
-      docker-tag: ${{ steps.k8s-job.outputs.docker_tag }}
-      temp-docker-tag: ${{ steps.k8s-job.outputs.temp_docker_tag }}
-      job-name: ${{ steps.k8s-job.outputs.job_name }}
-      cpu-request: ${{ steps.k8s-job.outputs.cpu_request }}
-      gpu-request: ${{ steps.k8s-job.outputs.gpu_request }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve Kubernetes job metadata
-        id: k8s-job
-        shell: bash
-        env:
-          GIT_SHA: ${{ github.sha }}
-          EVENT_NAME: ${{ github.event_name }}
-          HEAVYEDGE_TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          temp_docker_tag="${GIT_SHA::7}-dev"
-          docker_tag="${temp_docker_tag}"
-
-          if [ "$EVENT_NAME" = "release" ]; then
-            job_name="heavyedge-feature-models-release-${GIT_SHA::7}"
-          else
-            job_name="heavyedge-feature-models-cd-${GIT_SHA::7}"
-          fi
-
-          if [ "$HEAVYEDGE_TEST_MODE" = "1" ]; then
-            cpu_request="1"
-            gpu_request="1"
-          else
-            cpu_request="2"
-            gpu_request="4"
-          fi
-
-          {
-            echo "docker_tag=${docker_tag}"
-            echo "temp_docker_tag=${temp_docker_tag}"
-            echo "job_name=${job_name}"
-            echo "cpu_request=${cpu_request}"
-            echo "gpu_request=${gpu_request}"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub App token for GPU check
-        id: gpu-check-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          permission-checks: write
-
-      - name: Create GPU check
-        id: gpu-check
-        uses: actions/github-script@v9
-        env:
-          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          JOB_NAME: ${{ steps.k8s-job.outputs.job_name }}
-        with:
-          github-token: ${{ steps.gpu-check-token.outputs.token }}
-          script: |
-            const checkName = 'GPU';
-            const response = await github.rest.checks.create({
-              ...context.repo,
-              name: checkName,
-              head_sha: process.env.GIT_SHA,
-              external_id: process.env.JOB_NAME,
-              status: 'in_progress',
-              started_at: new Date().toISOString(),
-              details_url: process.env.GITHUB_RUN_URL,
-              output: {
-                title: checkName,
-                summary: 'Kubernetes GPU job started.',
-              },
-            });
-
-            core.setOutput('check-run-id', String(response.data.id));
-
   publish-image:
 
     runs-on: ubuntu-latest
@@ -191,11 +106,98 @@ jobs:
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           tags: ${{ steps.docker-tags.outputs.latest_tag }}
 
+  create-check:
+
+    needs:
+      - publish-image
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      check-run-id: ${{ steps.gpu-check.outputs.check-run-id }}
+      docker-tag: ${{ steps.k8s-job.outputs.docker_tag }}
+      temp-docker-tag: ${{ steps.k8s-job.outputs.temp_docker_tag }}
+      job-name: ${{ steps.k8s-job.outputs.job_name }}
+      cpu-request: ${{ steps.k8s-job.outputs.cpu_request }}
+      gpu-request: ${{ steps.k8s-job.outputs.gpu_request }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve Kubernetes job metadata
+        id: k8s-job
+        shell: bash
+        env:
+          GIT_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAVYEDGE_TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          temp_docker_tag="${GIT_SHA::7}-dev"
+          docker_tag="${temp_docker_tag}"
+
+          if [ "$EVENT_NAME" = "release" ]; then
+            job_name="heavyedge-feature-models-release-${GIT_SHA::7}"
+          else
+            job_name="heavyedge-feature-models-cd-${GIT_SHA::7}"
+          fi
+
+          if [ "$HEAVYEDGE_TEST_MODE" = "1" ]; then
+            cpu_request="1"
+            gpu_request="1"
+          else
+            cpu_request="2"
+            gpu_request="4"
+          fi
+
+          {
+            echo "docker_tag=${docker_tag}"
+            echo "temp_docker_tag=${temp_docker_tag}"
+            echo "job_name=${job_name}"
+            echo "cpu_request=${cpu_request}"
+            echo "gpu_request=${gpu_request}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub App token for GPU check
+        id: gpu-check-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Create GPU check
+        id: gpu-check
+        uses: actions/github-script@v9
+        env:
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          JOB_NAME: ${{ steps.k8s-job.outputs.job_name }}
+        with:
+          github-token: ${{ steps.gpu-check-token.outputs.token }}
+          script: |
+            const checkName = 'GPU';
+            const response = await github.rest.checks.create({
+              ...context.repo,
+              name: checkName,
+              head_sha: process.env.GIT_SHA,
+              external_id: process.env.JOB_NAME,
+              status: 'in_progress',
+              started_at: new Date().toISOString(),
+              details_url: process.env.GITHUB_RUN_URL,
+              output: {
+                title: checkName,
+                summary: 'Kubernetes GPU job started.',
+              },
+            });
+
+            core.setOutput('check-run-id', String(response.data.id));
+
   deploy-GPU:
 
     needs:
       - create-check
-      - publish-image
 
     runs-on: ubuntu-latest
 
