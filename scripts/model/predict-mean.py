@@ -37,6 +37,9 @@ except ImportError:
             [sys.executable, "-m", "pip", "install", "-r", requirements]
         )
 
+    import numpy as np
+    import torch
+
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
 
