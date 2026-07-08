@@ -63,6 +63,7 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
 
 
 FROM python:slim
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /model
 COPY model .
