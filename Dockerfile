@@ -65,10 +65,7 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
 FROM python:slim
 
 WORKDIR /model
-COPY --from=uv /uv /uvx /usr/local/bin/
-
 COPY model .
-RUN uv --no-cache pip install --system -r ./requirements.txt
 
 WORKDIR /app
 
