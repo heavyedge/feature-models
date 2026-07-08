@@ -96,15 +96,133 @@ spec:
                   key: DOCKER_PASSWORD
                   optional: true
         - name: email-notify
-          image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:${DOCKER_TAG}
-          imagePullPolicy: Always
+          image: curlimages/curl:8.21.0
+          imagePullPolicy: IfNotPresent
           resources:
             requests:
               memory: "128Mi"
               cpu: "100m"
             limits:
               memory: "256Mi"
-          command: ["sh", ".github/scripts/notify-deploy-sidecar.sh"]
+          securityContext:
+            runAsUser: 0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              set -f
+
+              state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
+              result_file="${DEPLOY_RESULT_FILE:-${state_dir}/deploy-result}"
+              notify_done_file="${NOTIFY_DEPLOY_DONE_FILE:-${state_dir}/notify-deploy-complete}"
+
+              finish_notify() {
+                mkdir -p "$(dirname "${notify_done_file}")"
+                touch "${notify_done_file}"
+              }
+
+              trap finish_notify EXIT
+
+              build_message() {
+                printf 'From: %s\r\n' "${mail_from}"
+                printf 'To: %s\r\n' "${SMTP_NOTIFY_TO}"
+                printf 'Subject: [%s] %s\r\n' "${subject_status}" "${JOB_NAME:-heavyedge-feature-models}"
+                printf 'Content-Type: text/plain; charset=UTF-8\r\n'
+                printf 'Content-Transfer-Encoding: 8bit\r\n'
+                printf '\r\n'
+                printf 'heavyedge-feature-models %s.\r\n' "${subject_status}"
+                printf '\r\n'
+                printf 'Job: %s\r\n' "${JOB_NAME:-heavyedge-feature-models}"
+                printf 'Repository: %s\r\n' "${GITHUB_REPOSITORY:-unknown repository}"
+                printf 'Git SHA: %s\r\n' "${GIT_SHA:-unknown}"
+                printf 'Event: %s\r\n' "${EVENT_NAME:-unknown}"
+                if [ -n "${TAG_NAME:-}" ]; then
+                  printf 'Tag: %s\r\n' "${TAG_NAME}"
+                fi
+                if [ -n "${GITHUB_RUN_URL:-}" ]; then
+                  printf 'GitHub Actions run: %s\r\n' "${GITHUB_RUN_URL}"
+                fi
+                printf '\r\n'
+                printf 'HEAVYEDGE_TEST_MODE=%s\r\n' "${HEAVYEDGE_TEST_MODE:-}"
+                printf 'UPLOAD_TO_HUGGINGFACE=%s\r\n' "${UPLOAD_TO_HUGGINGFACE:-}"
+                printf 'PUSH_DOC=%s\r\n' "${PUSH_DOC:-}"
+              }
+
+              send_mail() {
+                subject_status="$1"
+
+                if [ -z "${SMTP_NOTIFY_TO:-}" ]; then
+                  echo "SMTP_NOTIFY_TO is empty; skipping ${subject_status} notification."
+                  return 0
+                fi
+
+                mail_from="${SMTP_MAIL_FROM:-heavyedge-feature-models@localhost}"
+                smtp_host="${SMTP_HOST:-127.0.0.1}"
+                smtp_port="${SMTP_PORT:-587}"
+                retries="${SMTP_NOTIFY_RETRIES:-12}"
+                delay="${SMTP_NOTIFY_RETRY_DELAY:-5}"
+
+                set -- \
+                  --fail \
+                  --show-error \
+                  --silent \
+                  --connect-timeout 10 \
+                  --max-time 30 \
+                  --url "smtp://${smtp_host}:${smtp_port}" \
+                  --mail-from "${mail_from}" \
+                  --upload-file -
+
+                rcpt_count=0
+                old_ifs="${IFS}"
+                IFS=', '
+                for recipient in ${SMTP_NOTIFY_TO}; do
+                  if [ -n "${recipient}" ]; then
+                    set -- "$@" --mail-rcpt "${recipient}"
+                    rcpt_count=$((rcpt_count + 1))
+                  fi
+                done
+                IFS="${old_ifs}"
+
+                if [ "${rcpt_count}" -eq 0 ]; then
+                  echo "SMTP_NOTIFY_TO has no recipients; skipping ${subject_status} notification."
+                  return 0
+                fi
+
+                attempt=1
+                while [ "${attempt}" -le "${retries}" ]; do
+                  if build_message | curl "$@"; then
+                    echo "Sent ${subject_status} notification to ${SMTP_NOTIFY_TO}."
+                    return 0
+                  fi
+
+                  echo "Notification attempt ${attempt}/${retries} failed." >&2
+                  if [ "${attempt}" -lt "${retries}" ]; then
+                    sleep "${delay}"
+                  fi
+                  attempt=$((attempt + 1))
+                done
+
+                echo "Failed to send ${subject_status} notification." >&2
+                return 1
+              }
+
+              send_mail started || true
+
+              while [ ! -f "${result_file}" ]; do
+                sleep 5
+              done
+
+              . "${result_file}"
+
+              case "${status:-}" in
+                succeeded|failed)
+                  send_mail "${status}" || true
+                  ;;
+                *)
+                  echo "Unknown deploy result status '${status:-}'; sending failure notification." >&2
+                  send_mail failed || true
+                  ;;
+              esac
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
