@@ -190,6 +190,14 @@ jobs:
         - name: Checkout
           uses: actions/checkout@v4
 
+        - name: set up Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: "3.12"
+
+        - name: set up uv
+          uses: astral-sh/setup-uv@v5
+
         - uses: actions/download-artifact@v4
           with:
             name: trained-models
@@ -207,6 +215,20 @@ jobs:
             cache-from: type=gha,scope=feature-models
             cache-to: type=gha,mode=max,scope=feature-models
             tags: heavyedge-feature-models:ci
+
+        - name: Download feature dataset
+          run: |
+            curl -LsSf https://hf.co/cli/install.sh | bash
+            hf auth login --token $HUGGINGFACE_TOKEN
+            ./setup.sh
+          env:
+            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+
+        - name: Prepare test input
+          run: |
+            uv pip install --system numpy pandas
+            make _temp/X.npy
+            python3 -c "import numpy as np; np.save('_temp/X.npy', np.load('_temp/X.npy')[:1])"
 
   docker-dev:
 
