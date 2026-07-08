@@ -44,7 +44,7 @@ jobs:
             docker_tag="latest-dev"
             job_name="heavyedge-feature-models-release-${GIT_SHA::7}"
           else
-            docker_tag="${RELEASE_TAG_NAME}+sha-${GIT_SHA::7}-dev"
+            docker_tag="${RELEASE_TAG_NAME}-${GIT_SHA::7}-dev"
             job_name="heavyedge-feature-models-cd-${GIT_SHA::7}"
           fi
 
@@ -132,7 +132,7 @@ jobs:
             if [ "$EVENT_NAME" = "release" ]; then
               echo "${image}:latest-dev"
             else
-              echo "${image}:${REF_NAME}+sha-${GIT_SHA::7}-dev"
+              echo "${image}:${REF_NAME}-${GIT_SHA::7}-dev"
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
