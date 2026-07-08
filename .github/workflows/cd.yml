@@ -41,10 +41,10 @@ jobs:
           RELEASE_TAG_NAME: ${{ github.ref_name }}
         run: |
           if [ "$EVENT_NAME" = "release" ]; then
-            docker_tag="dev-${RELEASE_TAG_NAME}"
+            docker_tag="latest-dev"
             job_name="heavyedge-feature-models-release-${GIT_SHA::7}"
           else
-            docker_tag="dev-${GIT_SHA}-cd"
+            docker_tag="${RELEASE_TAG_NAME}+sha-${GIT_SHA::7}-dev"
             job_name="heavyedge-feature-models-cd-${GIT_SHA::7}"
           fi
 
@@ -130,10 +130,9 @@ jobs:
           {
             echo 'tags<<EOF'
             if [ "$EVENT_NAME" = "release" ]; then
-              echo "${image}:dev-${REF_NAME}"
-              echo "${image}:dev-latest"
+              echo "${image}:latest-dev"
             else
-              echo "${image}:dev-${GIT_SHA}-cd"
+              echo "${image}:${REF_NAME}+sha-${GIT_SHA::7}-dev"
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
