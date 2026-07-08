@@ -69,11 +69,31 @@ spec:
               value: "${GIT_AUTHOR_NAME}"
             - name: GIT_AUTHOR_EMAIL
               value: "${GIT_AUTHOR_EMAIL}"
+            - name: DOCKER_REGISTRY
+              value: "${DOCKER_REGISTRY}"
+            - name: DOCKER_REPOSITORY
+              value: "${DOCKER_USERNAME}/heavyedge/feature-models"
+            - name: DOCKER_TAG
+              value: "${DOCKER_TAG}"
+            - name: DELETE_TEMP_DOCKER_TAG
+              value: "${DELETE_TEMP_DOCKER_TAG}"
             - name: HUGGINGFACE_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
+                  optional: true
+            - name: DOCKER_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: docker-registry-cleanup
+                  key: DOCKER_USERNAME
+                  optional: true
+            - name: DOCKER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: docker-registry-cleanup
+                  key: DOCKER_PASSWORD
                   optional: true
         - name: email-notify
           image: ${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models:${DOCKER_TAG}
@@ -142,16 +162,6 @@ spec:
               value: "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             - name: GITHUB_CHECK_RUN_ID
               value: "${GITHUB_CHECK_RUN_ID}"
-            - name: EVENT_NAME
-              value: "${EVENT_NAME}"
-            - name: DOCKER_REGISTRY
-              value: "${DOCKER_REGISTRY}"
-            - name: DOCKER_REPOSITORY
-              value: "${DOCKER_USERNAME}/heavyedge/feature-models"
-            - name: DOCKER_TAG
-              value: "${DOCKER_TAG}"
-            - name: DELETE_TEMP_DOCKER_TAG
-              value: "${DELETE_TEMP_DOCKER_TAG}"
             - name: GH_APP_ID
               valueFrom:
                 secretKeyRef:
@@ -169,18 +179,6 @@ spec:
                 secretKeyRef:
                   name: github-app
                   key: GH_APP_INSTALLATION_ID
-                  optional: true
-            - name: DOCKER_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: docker-registry-cleanup
-                  key: DOCKER_USERNAME
-                  optional: true
-            - name: DOCKER_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: docker-registry-cleanup
-                  key: DOCKER_PASSWORD
                   optional: true
         - name: postfix
           image: boky/postfix:latest

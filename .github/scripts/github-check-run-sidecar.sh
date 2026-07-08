@@ -16,11 +16,9 @@ done
 case "${status:-}" in
   succeeded|failed)
     sh .github/scripts/github-check-run.sh "${status}" || true
-    sh .github/scripts/delete-registry-tag.sh || true
     ;;
   *)
     echo "Unknown deploy result status '${status:-}'; reporting failure." >&2
     sh .github/scripts/github-check-run.sh failed || true
-    sh .github/scripts/delete-registry-tag.sh || true
     ;;
 esac
