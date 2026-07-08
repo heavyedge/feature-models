@@ -1,29 +1,6 @@
 #!/bin/sh
 set -e
 
-deploy_result_file="${DEPLOY_RESULT_FILE:-/var/run/heavyedge/deploy-result}"
-
-finish_deploy() {
-  exit_code=$?
-  mkdir -p "$(dirname "${deploy_result_file}")"
-
-  if [ "${exit_code}" -eq 0 ]; then
-    result_status=succeeded
-  else
-    result_status=failed
-  fi
-
-  result_file_tmp="${deploy_result_file}.$$"
-  {
-    printf 'status=%s\n' "${result_status}"
-    printf 'exit_code=%s\n' "${exit_code}"
-  } > "${result_file_tmp}"
-  mv "${result_file_tmp}" "${deploy_result_file}"
-  exit "${exit_code}"
-}
-
-trap finish_deploy EXIT
-
 # Check revision
 if [ ! -r /etc/heavyedge/image-revision ]; then
   echo "Missing image revision file: /etc/heavyedge/image-revision" >&2

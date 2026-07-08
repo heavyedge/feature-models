@@ -45,7 +45,27 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              exec sh .github/scripts/deploy.sh
+              state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
+              result_file="${DEPLOY_RESULT_FILE:-${state_dir}/deploy-result}"
+
+              sh .github/scripts/deploy.sh
+              exit_code=$?
+
+              mkdir -p "$(dirname "${result_file}")"
+
+              if [ "${exit_code}" -eq 0 ]; then
+                result_status=succeeded
+              else
+                result_status=failed
+              fi
+
+              result_file_tmp="${result_file}.$$"
+              {
+                printf 'status=%s\n' "${result_status}"
+                printf 'exit_code=%s\n' "${exit_code}"
+              } > "${result_file_tmp}"
+              mv "${result_file_tmp}" "${result_file}"
+              exit "${exit_code}"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
