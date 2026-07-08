@@ -46,7 +46,7 @@ jobs:
             job_name="heavyedge-feature-models-release-${git_sha_short}"
           else
             docker_tag="dev-latest"
-            job_name="heavyedge-feature-models-${git_sha_short}"
+            job_name="heavyedge-feature-models-cd-${git_sha_short}"
           fi
 
           if [ "$HEAVYEDGE_TEST_MODE" = "1" ]; then
@@ -300,7 +300,7 @@ jobs:
           GPU_REQUEST: ${{ needs.gpu-run-check-bootstrap.outputs.gpu-request }}
         run: |
           template_vars='$JOB_NAME $KUBE_NAMESPACE $KUBE_USERNAME $GIT_SHA $EVENT_NAME $MLXP_ZONE $DOCKER_REGISTRY $DOCKER_USERNAME $DOCKER_TAG $CPU_REQUEST $GPU_REQUEST $GITHUB_REPOSITORY $GITHUB_RUN_ID $GITHUB_CHECK_RUN_ID $RELEASE_TAG_NAME $HEAVYEDGE_TEST_MODE $UPLOAD_TO_HUGGINGFACE $PUSH_DOC $GIT_AUTHOR_NAME $GIT_AUTHOR_EMAIL $SMTP_NOTIFY_TO'
-          envsubst "$template_vars" < .github/job.yaml | kubectl apply -f -
+          envsubst "$template_vars" < .github/job-cd.yaml | kubectl apply -f -
           kubectl wait \
             --namespace="$KUBE_NAMESPACE" \
             --for=create \
