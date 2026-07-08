@@ -361,7 +361,7 @@ spec:
 
               def atomic_write(path, body)
                 FileUtils.mkdir_p(File.dirname(path))
-                tmp_path = "#{path}.#{$$}.tmp"
+                tmp_path = "#{path}.#{Process.pid}.tmp"
                 File.write(tmp_path, body)
                 File.rename(tmp_path, path)
               end
