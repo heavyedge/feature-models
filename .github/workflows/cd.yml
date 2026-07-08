@@ -69,7 +69,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GIT_SHA: ${{ github.sha }}
           JOB_NAME: ${{ steps.k8s-job.outputs.job_name }}
         with:
           script: |
