@@ -123,6 +123,11 @@ spec:
 
               trap finish_notify EXIT
 
+              if [ -z "${SMTP_NOTIFY_TO:-}" ]; then
+                echo "SMTP_NOTIFY_TO is empty; disabling deploy email notification sidecar."
+                exit 0
+              fi
+
               build_message() {
                 printf 'From: %s\r\n' "${mail_from}"
                 printf 'To: %s\r\n' "${SMTP_NOTIFY_TO}"
@@ -729,6 +734,11 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
+              if [ -z "${SMTP_NOTIFY_TO:-}" ]; then
+                echo "SMTP_NOTIFY_TO is empty; disabling postfix sidecar."
+                exit 0
+              fi
+
               /scripts/run.sh &
               postfix_pid=$!
               while [ ! -f /var/run/heavyedge/notify-deploy-complete ]; do
@@ -742,6 +752,8 @@ spec:
               kill "${postfix_pid}" 2>/dev/null || true
               wait "${postfix_pid}" 2>/dev/null || true
           env:
+            - name: SMTP_NOTIFY_TO
+              value: "${SMTP_NOTIFY_TO}"
             - name: RELAYHOST
               value: "[smtp.gmail.com]:587"
             - name: RELAYHOST_USERNAME

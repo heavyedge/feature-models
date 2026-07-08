@@ -197,14 +197,65 @@ jobs:
 
       - name: Resolve notification recipient
         id: notification-recipient
-        shell: bash
-        run: |
-          author_email="$(git log -1 --format=%ae)"
-          if [ -z "$author_email" ]; then
-            echo "::error::Could not resolve the latest commit author email."
-            exit 1
-          fi
-          echo "email=$author_email" >> "$GITHUB_OUTPUT"
+        uses: actions/github-script@v9
+        env:
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NOTIFY_EMAIL_MAP: ${{ vars.SMTP_NOTIFY_EMAIL_MAP }}
+        with:
+          script: |
+            const noreplyPattern = /(^|@)(users\.)?noreply\.github\.com$/i;
+            const usableEmail = (email) => email && !noreplyPattern.test(email);
+
+            let emailMap = {};
+            if (process.env.NOTIFY_EMAIL_MAP) {
+              try {
+                emailMap = JSON.parse(process.env.NOTIFY_EMAIL_MAP);
+              } catch (error) {
+                core.warning(`Ignoring invalid SMTP_NOTIFY_EMAIL_MAP JSON: ${error.message}`);
+              }
+            }
+
+            const { data: commit } = await github.rest.repos.getCommit({
+              ...context.repo,
+              ref: process.env.GIT_SHA,
+            });
+
+            const candidates = [
+              context.payload.pull_request?.user?.login,
+              context.payload.release?.author?.login,
+              commit.author?.login,
+              commit.committer?.login,
+              context.actor,
+            ].filter(Boolean);
+            const login = [...new Set(candidates)][0];
+
+            if (login && emailMap[login]) {
+              core.setOutput('email', emailMap[login]);
+              return;
+            }
+
+            if (login) {
+              const { data: user } = await github.rest.users.getByUsername({ username: login });
+              if (usableEmail(user.email)) {
+                core.setOutput('email', user.email);
+                return;
+              }
+            }
+
+            const commitEmails = [
+              commit.commit.author?.email,
+              commit.commit.committer?.email,
+            ];
+            const commitEmail = commitEmails.find(usableEmail);
+            if (commitEmail) {
+              core.setOutput('email', commitEmail);
+              return;
+            }
+
+            core.warning(
+              `Could not resolve a public notification email for ${login || 'the commit author'}; deployment email notification will be skipped.`
+            );
+            core.setOutput('email', '');
 
       - name: Create image pull secret
         env:
