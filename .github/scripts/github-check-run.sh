@@ -23,18 +23,55 @@ repo="${GITHUB_REPOSITORY#*/}"
 token="$(github_app_create_installation_token '{"checks":"write"}')"
 api_url="https://api.github.com/repos/${owner}/${repo}/check-runs"
 
+github_get_commit() {
+  curl -sS \
+    -o /dev/null \
+    -w "%{http_code}" \
+    -H "Accept: application/vnd.github+json" \
+    -H "Authorization: Bearer ${token}" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "https://api.github.com/repos/${owner}/${repo}/commits/${GIT_SHA}"
+}
+
 github_api() {
   method="$1"
   url="$2"
   payload_file="$3"
+  response_file="$(mktemp)"
 
-  curl --fail-with-body -sS \
+  if curl -sS \
+    -o "${response_file}" \
+    -w "%{http_code}" \
     -X "${method}" \
     -H "Accept: application/vnd.github+json" \
     -H "Authorization: Bearer ${token}" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     -d "@${payload_file}" \
-    "${url}"
+    "${url}" > "${response_file}.status"; then
+    http_status="$(cat "${response_file}.status")"
+  else
+    curl_status=$?
+    echo "GitHub API request failed before receiving an HTTP response: curl exit ${curl_status}" >&2
+    echo "Request payload:" >&2
+    cat "${payload_file}" >&2
+    rm -f "${response_file}" "${response_file}.status"
+    return "${curl_status}"
+  fi
+
+  if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
+    echo "GitHub API request failed: ${method} ${url} returned HTTP ${http_status}" >&2
+    echo "Response body:" >&2
+    cat "${response_file}" >&2
+    echo >&2
+    echo "Request payload:" >&2
+    cat "${payload_file}" >&2
+    echo >&2
+    rm -f "${response_file}" "${response_file}.status"
+    return 1
+  fi
+
+  cat "${response_file}"
+  rm -f "${response_file}" "${response_file}.status"
 }
 
 write_payload() {
@@ -59,6 +96,11 @@ if [ "${action}" = "started" ]; then
     write_payload "${payload_file}" update
     github_api PATCH "${api_url}/${GITHUB_CHECK_RUN_ID}" "${payload_file}" >/dev/null
   else
+    commit_status="$(github_get_commit)"
+    if [ "${commit_status}" != "200" ]; then
+      echo "Commit ${GIT_SHA} was not found in ${GITHUB_REPOSITORY}; GitHub returned HTTP ${commit_status}." >&2
+      echo "The Checks API can only create a check run for a commit visible in the target repository." >&2
+    fi
     write_payload "${payload_file}" create
     response="$(github_api POST "${api_url}" "${payload_file}")"
     printf '%s' "${response}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' > "${check_id_file}"
