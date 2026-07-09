@@ -6,6 +6,7 @@ required_vars="
 GITHUB_APP_TOKEN
 GITHUB_REPOSITORY
 GPU_BUILD_CHECK_RUN_ID
+CD_CLEANUP_CHECK_RUN_ID
 IMAGE_TAG
 "
 
@@ -23,6 +24,7 @@ payload="$(
     --arg gpu_build_check_run_id "${GPU_BUILD_CHECK_RUN_ID}" \
     --arg upload_model_check_run_id "${UPLOAD_MODEL_CHECK_RUN_ID:-}" \
     --arg upload_doc_check_run_id "${UPLOAD_DOC_CHECK_RUN_ID:-}" \
+    --arg cd_cleanup_check_run_id "${CD_CLEANUP_CHECK_RUN_ID}" \
     --arg image_tag "${IMAGE_TAG}" \
     '{
       event_type: $event_type,
@@ -30,6 +32,7 @@ payload="$(
         gpu_build_check_run_id: $gpu_build_check_run_id,
         upload_model_check_run_id: $upload_model_check_run_id,
         upload_doc_check_run_id: $upload_doc_check_run_id,
+        cd_cleanup_check_run_id: $cd_cleanup_check_run_id,
         image_tag: $image_tag
       }
     }'
