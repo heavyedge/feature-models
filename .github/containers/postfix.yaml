@@ -1,0 +1,58 @@
+        - name: postfix
+          image: boky/postfix:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          ports:
+            - name: smtp
+              containerPort: 587
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              if [ -z "${SMTP_NOTIFY_TO:-}" ]; then
+                echo "SMTP_NOTIFY_TO is empty; disabling postfix sidecar."
+                exit 0
+              fi
+
+              /scripts/run.sh &
+              postfix_pid=$!
+              while [ ! -f /var/run/heavyedge/notify-deploy-complete ]; do
+                if ! kill -0 "${postfix_pid}" 2>/dev/null; then
+                  wait "${postfix_pid}"
+                  exit $?
+                fi
+                sleep 5
+              done
+              postfix stop || true
+              kill "${postfix_pid}" 2>/dev/null || true
+              wait "${postfix_pid}" 2>/dev/null || true
+          env:
+            - name: SMTP_NOTIFY_TO
+              value: "${SMTP_NOTIFY_TO}"
+            - name: RELAYHOST
+              value: "[smtp.gmail.com]:587"
+            - name: RELAYHOST_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: gmail-smtp-relay
+                  key: GMAIL_USERNAME
+            - name: RELAYHOST_PASSWORD_FILE
+              value: "/run/secrets/gmail/GMAIL_APP_PASSWORD"
+            - name: POSTFIX_smtp_tls_security_level
+              value: "encrypt"
+            - name: POSTFIX_mynetworks
+              value: "127.0.0.0/8 [::1]/128"
+            - name: ALLOW_EMPTY_SENDER_DOMAINS
+              value: "true"
+            - name: LOG_FORMAT
+              value: "json"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+            - name: gmail-smtp-relay
+              mountPath: /run/secrets/gmail
+              readOnly: true
