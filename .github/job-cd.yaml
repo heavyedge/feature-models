@@ -979,7 +979,7 @@ spec:
               end
 
               payload = {
-                "event_type" => ENV["IMAGE_WORKFLOW_EVENT_TYPE"].to_s.empty? ? "GPU-completed" : ENV["IMAGE_WORKFLOW_EVENT_TYPE"],
+                "event_type" => ENV["IMAGE_WORKFLOW_EVENT_TYPE"].to_s.empty? ? "build image" : ENV["IMAGE_WORKFLOW_EVENT_TYPE"],
                 "client_payload" => {
                   "model" => {
                     "repo" => deploy_state["model_repo"].to_s,
@@ -1039,7 +1039,7 @@ spec:
             - name: DEPLOY_STATE_FILE
               value: "/var/run/heavyedge/deploy-state.json"
             - name: IMAGE_WORKFLOW_EVENT_TYPE
-              value: "GPU-completed"
+              value: "build image"
         - name: postfix
           image: boky/postfix:latest
           imagePullPolicy: IfNotPresent
