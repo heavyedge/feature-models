@@ -1,9 +1,10 @@
 #!/bin/sh
 set -eu
 
-template_file="${1:-.github/job-cd.yaml}"
-containers_dir="${2:-.github/containers}"
-tmp_file="$(mktemp "${TMPDIR:-/tmp}/job-cd.XXXXXX")"
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+template_file="${1:-${script_dir}/job.yaml}"
+containers_dir="${2:-${script_dir}/containers}"
+tmp_file="$(mktemp "${TMPDIR:-/tmp}/job.XXXXXX")"
 container_files='
 build.yaml
 watch-build.yaml

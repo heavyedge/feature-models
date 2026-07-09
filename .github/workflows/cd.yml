@@ -395,8 +395,8 @@ jobs:
         run: |
           DELETE_IMAGE_SCRIPT_BASE64="$(base64 -w 0 .github/scripts/delete-image.sh)"
           export DELETE_IMAGE_SCRIPT_BASE64
-          rendered_job="${RUNNER_TEMP:-/tmp}/job-cd.yaml"
-          sh .github/scripts/render-job-cd.sh > "$rendered_job"
+          rendered_job="${RUNNER_TEMP:-/tmp}/job.yaml"
+          sh .github/k8s/render-job.sh > "$rendered_job"
           kubectl apply -f "$rendered_job"
           kubectl wait \
             --namespace="$KUBE_NAMESPACE" \

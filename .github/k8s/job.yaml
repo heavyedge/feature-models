@@ -30,4 +30,4 @@ spec:
           secret:
             secretName: gmail-smtp-relay
       containers:
-        # Container definitions are rendered from .github/containers/*.yaml by .github/scripts/render-job-cd.sh.
+        # Container definitions are rendered from .github/k8s/containers/*.yaml by .github/k8s/render-job.sh.
