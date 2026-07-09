@@ -108,6 +108,11 @@ jobs:
             --site-dir pages-site \
             --fallback-version "${{ steps.version.outputs.version }}"
 
+      - name: Stage Pages workflow
+        run: |
+          mkdir -p pages-site/.github/workflows
+          cp .github/workflows/pages.yml pages-site/.github/workflows/pages.yml
+
       - name: Persist Pages site state
         shell: bash
         run: |
