@@ -71,6 +71,7 @@ def load_status_descriptions():
 
 STATUS_DESCRIPTIONS = load_status_descriptions()
 
+
 def parse_status(enum_class, value):
     if value is None:
         return None
