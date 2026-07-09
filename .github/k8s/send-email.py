@@ -186,7 +186,7 @@ def main():
         "--token-status", type=int, help="GitHub App token status code."
     )
     parser.add_argument(
-        "--dispatch-status", type=int, help="Cleanup dispatch status code."
+        "--dispatch-status", type=int, help="Dispatch status code."
     )
     parser.add_argument("--smtp-host", default=env("SMTP_HOST", "127.0.0.1"))
     parser.add_argument("--smtp-port", type=int, default=int(env("SMTP_PORT", "587")))

@@ -2,6 +2,31 @@
 
 set -eu
 
+github_api() {
+  response_file="$1"
+  shift
+
+  http_status=
+  http_status="$(
+    curl -sS \
+      -o "${response_file}" \
+      -w "%{http_code}" \
+      "$@"
+  )" || return 1
+
+  [ "${http_status}" -ge 200 ] && [ "${http_status}" -lt 300 ]
+}
+
+report_github_api_error() {
+  action="$1"
+  status="${http_status:-curl-failed}"
+
+  echo "::error::${action}; GitHub API returned HTTP ${status}." >&2
+  if [ -s "${response_file}" ]; then
+    sed 's/^/GitHub API response: /' "${response_file}" >&2
+  fi
+}
+
 required_vars="
 GH_APP_ID
 GH_APP_PRIVATE_KEY
@@ -54,40 +79,44 @@ jwt="${header}.${payload}.${signature}"
 
 installation_id="${GH_APP_INSTALLATION_ID:-}"
 if [ -z "${installation_id}" ]; then
-  if ! installation_response="$(
-    curl -fsS \
+  response_file="$(mktemp)"
+  if ! github_api "${response_file}" \
       -H "Accept: application/vnd.github+json" \
       -H "Authorization: Bearer ${jwt}" \
       -H "X-GitHub-Api-Version: 2022-11-28" \
-      "https://api.github.com/repos/${GITHUB_REPOSITORY}/installation"
-  )"; then
-    echo "::error::Failed to fetch GitHub App installation." >&2
+      "https://api.github.com/repos/${GITHUB_REPOSITORY}/installation"; then
+    report_github_api_error "Failed to fetch GitHub App installation for ${GITHUB_REPOSITORY}"
+    rm -f "${response_file}"
     exit 4
   fi
   if ! installation_id="$(
-    printf '%s' "${installation_response}" \
+    cat "${response_file}" \
       | python -c 'import json,sys; print(json.load(sys.stdin)["id"])'
   )"; then
     echo "::error::Failed to parse GitHub App installation ID." >&2
+    rm -f "${response_file}"
     exit 5
   fi
+  rm -f "${response_file}"
 fi
 
-if ! token_response="$(
-  curl -fsS \
+response_file="$(mktemp)"
+if ! github_api "${response_file}" \
     -X POST \
     -H "Accept: application/vnd.github+json" \
     -H "Authorization: Bearer ${jwt}" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     "https://api.github.com/app/installations/${installation_id}/access_tokens" \
-    -d '{"permissions":{"actions":"write","contents":"write"}}'
-)"; then
-  echo "::error::Failed to create GitHub App installation token." >&2
+    -d '{"permissions":{"actions":"write","contents":"write"}}'; then
+  report_github_api_error "Failed to create GitHub App installation token for installation ${installation_id}"
+  rm -f "${response_file}"
   exit 6
 fi
 
-if ! printf '%s' "${token_response}" \
+if ! cat "${response_file}" \
   | python -c 'import json,sys; print(json.load(sys.stdin)["token"])'; then
   echo "::error::Failed to parse GitHub App installation token." >&2
+  rm -f "${response_file}"
   exit 7
 fi
+rm -f "${response_file}"

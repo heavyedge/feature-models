@@ -2,6 +2,35 @@
 
 set -eu
 
+dispatch_workflow() {
+  workflow_file="$1"
+  payload="$2"
+  url="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/dispatches"
+  response_file="$(mktemp)"
+
+  if http_status="$(
+    curl -sS \
+      -o "${response_file}" \
+      -w "%{http_code}" \
+      -X POST \
+      -H "Accept: application/vnd.github+json" \
+      -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      "${url}" \
+      -d "${payload}"
+  )" && [ "${http_status}" -ge 200 ] && [ "${http_status}" -lt 300 ]; then
+    rm -f "${response_file}"
+    return 0
+  fi
+
+  echo "::error::Failed to dispatch ${workflow_file} on ref ${GITHUB_DISPATCH_REF}; GitHub API returned HTTP ${http_status:-curl-failed} for ${url}." >&2
+  if [ -s "${response_file}" ]; then
+    sed 's/^/GitHub API response: /' "${response_file}" >&2
+  fi
+  rm -f "${response_file}"
+  return 1
+}
+
 required_vars="
 GITHUB_APP_TOKEN
 GITHUB_REPOSITORY
@@ -64,23 +93,11 @@ if ! image_payload="$(
   exit 2
 fi
 
-if ! curl -fsS \
-  -X POST \
-  -H "Accept: application/vnd.github+json" \
-  -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/cd-cleanup.yml/dispatches" \
-  -d "${cleanup_payload}"; then
+if ! dispatch_workflow "cd-cleanup.yml" "${cleanup_payload}"; then
   exit 3
 fi
 
-if ! curl -fsS \
-  -X POST \
-  -H "Accept: application/vnd.github+json" \
-  -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/image.yml/dispatches" \
-  -d "${image_payload}"; then
+if ! dispatch_workflow "image.yml" "${image_payload}"; then
   exit 3
 fi
 

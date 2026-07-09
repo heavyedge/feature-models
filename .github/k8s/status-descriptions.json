@@ -23,9 +23,9 @@
     "7": "GitHub App installation token parsing failed."
   },
   "dispatch": {
-    "0": "Cleanup workflow dispatch completed successfully.",
-    "1": "Cleanup dispatch configuration is incomplete.",
-    "2": "Cleanup dispatch payload generation failed.",
-    "3": "Cleanup workflow dispatch request failed."
+    "0": "Workflow dispatch completed successfully.",
+    "1": "Dispatch configuration is incomplete.",
+    "2": "Dispatch payload generation failed.",
+    "3": "Workflow dispatch request failed."
   }
 }
