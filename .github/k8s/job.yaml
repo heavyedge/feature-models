@@ -55,6 +55,7 @@ spec:
                 python .github/k8s/send-email.py --status "Failed" || true
               fi
 
+              sleep 10
               touch /var/run/heavyedge/deploy.done
               exit "$status"
           env:
@@ -113,14 +114,21 @@ spec:
 
               while kill -0 "$postfix_pid" 2>/dev/null; do
                 if [ -f /var/run/heavyedge/deploy.done ]; then
-                  postfix stop || true
-                  wait "$postfix_pid"
+                  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+                    postqueue -f || true
+                    if postqueue -p 2>/dev/null | grep -q "Mail queue is empty"; then
+                      break
+                    fi
+                    sleep 2
+                  done
+                  kill "$postfix_pid" 2>/dev/null || true
+                  wait "$postfix_pid" || true
                   exit 0
                 fi
                 sleep 2
               done
 
-              wait "$postfix_pid"
+              wait "$postfix_pid" || true
           env:
             - name: RELAYHOST
               value: "[smtp.gmail.com]:587"
