@@ -9,12 +9,22 @@ if [ -z "${TAG_NAME}" ]; then
   echo "Missing TAG_NAME for pushing built notebooks" >&2
   exit 1
 fi
+if [ "${PUSH_DOC:-0}" != "1" ] && [ -z "${GITHUB_SHA:-}" ]; then
+  echo "Missing GITHUB_SHA for pushing test built notebooks" >&2
+  exit 1
+fi
 if [ -z "${GITHUB_APP_TOKEN}" ]; then
   echo "Missing GITHUB_APP_TOKEN for pushing built notebooks" >&2
   exit 1
 fi
 
-doc_branch="${TAG_NAME}-doc"
+if [ "${PUSH_DOC:-0}" = "1" ]; then
+  doc_branch="${TAG_NAME}-doc"
+  fetch_ref="refs/tags/${TAG_NAME}"
+else
+  doc_branch="${GITHUB_REF_NAME}-doc-test"
+  fetch_ref="${GITHUB_SHA}"
+fi
 doc_repo="/tmp/heavyedge-doc-repo-$$"
 remote_url="https://github.com/${GITHUB_REPOSITORY}.git"
 git_author_name="${GIT_AUTHOR_NAME:-heavyedge-bot}"
@@ -31,7 +41,7 @@ git init "${doc_repo}"
 git -C "${doc_repo}" remote add origin "${remote_url}"
 git -C "${doc_repo}" \
   -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
-  fetch --depth=1 origin "refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}"
+  fetch --depth=1 origin "${fetch_ref}"
 base_commit="$(git -C "${doc_repo}" rev-parse "FETCH_HEAD^{commit}")"
 git -C "${doc_repo}" checkout -B "${doc_branch}" "${base_commit}"
 
@@ -54,3 +64,9 @@ fi
 git -C "${doc_repo}" \
   -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
   push --force origin "HEAD:refs/heads/${doc_branch}"
+
+if [ ! "${PUSH_DOC:-0}" = "1" ]; then
+  git -C "${doc_repo}" \
+    -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+    push origin --delete "${doc_branch}"
+fi

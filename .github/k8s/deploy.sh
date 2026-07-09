@@ -17,12 +17,10 @@ if [ "${PUSH_MODEL:-0}" = "1" ]; then
   fi
 fi
 
-if [ "${PUSH_DOC:-0}" = "1" ]; then
-  if [ -z "${GITHUB_REF_NAME:-}" ]; then
-    echo "::error::Missing GITHUB_REF_NAME for doc upload." >&2
-    exit 2
-  fi
-  if ! sh .github/k8s/push-doc.sh; then
-    exit 2
-  fi
+if [ -z "${GITHUB_REF_NAME:-}" ]; then
+  echo "::error::Missing GITHUB_REF_NAME for doc upload." >&2
+  exit 2
+fi
+if ! sh .github/k8s/push-doc.sh; then
+  exit 2
 fi
