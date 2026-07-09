@@ -375,7 +375,8 @@ jobs:
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
         run: |
-          envsubst < .github/k8s/job.yaml | kubectl apply -f -
+          template_vars="$(rg -o '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
+          envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
           kubectl wait \
             --namespace="$KUBE_NAMESPACE" \
             --for=create \
