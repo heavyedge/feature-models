@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB_NAME}
+  namespace: ${KUBE_NAMESPACE}
+  annotations:
+    creator: "${KUBE_USERNAME}"
+spec:
+  ttlSecondsAfterFinished: 600
+  activeDeadlineSeconds: 21600
+  backoffLimit: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+        creator: "${KUBE_USERNAME}"
+    spec:
+      nodeSelector:
+          mlx.navercorp.com/zone: ${MLXP_ZONE}
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: regcred
+      volumes:
+        - name: postfix-state
+          emptyDir: {}
+        - name: gmail-smtp-relay
+          secret:
+            secretName: gmail-smtp-relay
+      containers:
+        - name: heavyedge-feature-models
+          image: ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "${CPU_REQUEST}"
+              nvidia.com/gpu: "${GPU_REQUEST}"
+            limits:
+              memory: "16Gi"
+              cpu: "${CPU_REQUEST}"
+              nvidia.com/gpu: "${GPU_REQUEST}"
+          command: ["sh", ".github/scripts/deploy.sh"]
+          env:
+            - name: GH_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: github-app
+                  key: GH_APP_ID
+            - name: GH_APP_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: github-app
+                  key: GH_APP_PRIVATE_KEY
+            - name: GH_APP_INSTALLATION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: github-app
+                  key: GH_APP_INSTALLATION_ID
+                  optional: true
+            - name: GITHUB_REPOSITORY
+              value: "${GITHUB_REPOSITORY}"
+            - name: GPU_BUILD_CHECK_RUN_ID
+              value: "${GPU_BUILD_CHECK_RUN_ID}"
+            - name: UPLOAD_MODEL_CHECK_RUN_ID
+              value: "${UPLOAD_MODEL_CHECK_RUN_ID}"
+            - name: UPLOAD_DOC_CHECK_RUN_ID
+              value: "${UPLOAD_DOC_CHECK_RUN_ID}"
+            - name: IMAGE_TAG
+              value: "${IMAGE_TAG}"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge

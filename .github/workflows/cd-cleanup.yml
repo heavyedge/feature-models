@@ -3,11 +3,11 @@ name: CD Cleanup
 on:
   repository_dispatch:
     types:
-      - cd-cleanup
+      - post-deploy
 
 jobs:
 
-  post-deploy:
+  cleanup:
 
     runs-on: ubuntu-latest
 
@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create GitHub App token for post-deploy checks
-        id: post-deploy-check-token
+        id: app-token
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.GH_APP_ID }}
@@ -31,7 +31,7 @@ jobs:
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ github.event.client_payload.upload_model_check_run_id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ github.event.client_payload.upload_doc_check_run_id }}
         with:
-          github-token: ${{ steps.post-deploy-check-token.outputs.token }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const checkRunIds = [
               process.env.GPU_BUILD_CHECK_RUN_ID,
