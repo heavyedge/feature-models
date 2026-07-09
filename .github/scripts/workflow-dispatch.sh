@@ -75,30 +75,34 @@ if ! cleanup_payload="$(
   exit 2
 fi
 
-if ! image_payload="$(
-  jq -n \
-    --arg ref "${GITHUB_DISPATCH_REF}" \
-    --arg MODEL_UPLOADED "${MODEL_UPLOADED:-}" \
-    --arg MODEL_REVISION "${MODEL_REVISION:-}" \
-    --arg MODEL_REPO_ID "${MODEL_REPO_ID:-}" \
-    '{
-      ref: $ref,
-      inputs: {
-        model_uploaded: $MODEL_UPLOADED,
-        model_revision: $MODEL_REVISION,
-        repo_id: $MODEL_REPO_ID
-      }
-    }'
-)"; then
-  exit 2
-fi
-
 if ! dispatch_workflow "cd-cleanup.yml" "${cleanup_payload}"; then
   exit 3
 fi
 
-if ! dispatch_workflow "image.yml" "${image_payload}"; then
-  exit 3
+if [ "${MODEL_UPLOADED}" = "true" ]; then
+  if ! image_payload="$(
+    jq -n \
+      --arg ref "${GITHUB_DISPATCH_REF}" \
+      --arg MODEL_UPLOADED "${MODEL_UPLOADED}" \
+      --arg MODEL_REVISION "${MODEL_REVISION:-}" \
+      --arg MODEL_REPO_ID "${MODEL_REPO_ID:-}" \
+      '{
+        ref: $ref,
+        inputs: {
+          model_uploaded: $MODEL_UPLOADED,
+          model_revision: $MODEL_REVISION,
+          repo_id: $MODEL_REPO_ID
+        }
+      }'
+  )"; then
+    exit 2
+  fi
+
+  if ! dispatch_workflow "image.yml" "${image_payload}"; then
+    exit 3
+  fi
+else
+  echo "Skipping image.yml dispatch because no model was uploaded."
 fi
 
 echo "Dispatched post-deploy workflows for image tag ${IMAGE_TAG} on ref ${GITHUB_DISPATCH_REF}."
