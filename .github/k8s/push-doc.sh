@@ -58,7 +58,7 @@ git -C "${doc_repo}" \
 if git -C "${doc_repo}" diff --cached --quiet; then
   echo "No changes to commit for ${doc_branch}"
 else
-  git -C "${doc_repo}" commit -m "Build notebooks for ${TAG_NAME}"
+  git -C "${doc_repo}" commit -m "Build doc for ${TAG_NAME}"
 fi
 
 git -C "${doc_repo}" \
