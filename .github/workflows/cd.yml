@@ -37,8 +37,8 @@ jobs:
       - name: Login to Docker registry
         shell: bash
         env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           for attempt in 1 2; do
@@ -59,8 +59,8 @@ jobs:
         id: image-tag
         shell: bash
         env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
           EVENT_NAME: ${{ github.event_name }}
           GIT_SHA: ${{ github.sha }}
         run: |
@@ -244,6 +244,103 @@ jobs:
                 core.setOutput(outputName, String(response.data.id));
               }
 
+  deploy:
+
+    needs:
+      - publish-image
+      - resolve-variables
+      - create-checks
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create Docker secrets
+        env:
+          DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          kubectl create secret docker-registry regcred \
+            --docker-server="$DOCKER_REGISTRY" \
+            --docker-username="$DOCKER_USERNAME" \
+            --docker-password="$DOCKER_PASSWORD" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic docker-registry-cleanup \
+            --from-literal=DOCKER_USERNAME="$DOCKER_USERNAME" \
+            --from-literal=DOCKER_PASSWORD="$DOCKER_PASSWORD" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Gmail relay secret
+        env:
+          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          if [ -z "$GMAIL_USERNAME" ]; then
+            echo "::error::Missing GMAIL_USERNAME secret for SMTP relay."
+            exit 1
+          fi
+          if [ -z "$GMAIL_APP_PASSWORD" ]; then
+            echo "::error::Missing GMAIL_APP_PASSWORD secret for SMTP relay."
+            exit 1
+          fi
+
+          kubectl create secret generic gmail-smtp-relay \
+            --from-literal=GMAIL_USERNAME="$GMAIL_USERNAME" \
+            --from-literal=GMAIL_APP_PASSWORD="$GMAIL_APP_PASSWORD" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Hugging Face token secret
+        if: needs.create-checks.outputs.upload-to-huggingface == '1'
+        env:
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          kubectl create secret generic huggingface-token \
+            --from-literal=HUGGINGFACE_TOKEN="$HUGGINGFACE_TOKEN" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create GitHub app secret
+        env:
+          GH_APP_ID: ${{ secrets.GH_APP_ID }}
+          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          if [ -z "$GH_APP_ID" ]; then
+            echo "::error::Missing GH_APP_ID secret for GitHub check runs and documentation branch pushes."
+            exit 1
+          fi
+          if [ -z "$GH_APP_PRIVATE_KEY" ]; then
+            echo "::error::Missing GH_APP_PRIVATE_KEY secret for GitHub check runs and documentation branch pushes."
+            exit 1
+          fi
+
+          kubectl create secret generic github-app \
+            --from-literal=GH_APP_ID="$GH_APP_ID" \
+            --from-literal=GH_APP_PRIVATE_KEY="$GH_APP_PRIVATE_KEY" \
+            --from-literal=GH_APP_INSTALLATION_ID="$GH_APP_INSTALLATION_ID" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
   post-deploy:
 
     needs:
@@ -293,8 +390,8 @@ jobs:
       - name: Delete temporary Docker image
         shell: bash
         env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           IMAGE_TAG: ${{ needs.publish-image.outputs.image-tag }}
         run: |
