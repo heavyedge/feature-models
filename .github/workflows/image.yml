@@ -76,7 +76,6 @@ jobs:
         with:
           context: .
           push: true
-          target: dev
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha,scope=feature-models
           cache-to: type=gha,mode=max,scope=feature-models

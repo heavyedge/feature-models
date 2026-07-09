@@ -140,6 +140,8 @@ spec:
                   optional: true
             - name: GITHUB_REPOSITORY
               value: "${GITHUB_REPOSITORY}"
+            - name: GITHUB_SHA
+              value: "${GITHUB_SHA}"
             - name: GPU_BUILD_CHECK_RUN_ID
               value: "${GPU_BUILD_CHECK_RUN_ID}"
             - name: UPLOAD_MODEL_CHECK_RUN_ID
@@ -149,6 +151,8 @@ spec:
             - name: IMAGE_TAG
               value: "${IMAGE_TAG}"
             - name: GITHUB_REF_NAME
+              value: "${GITHUB_REF_NAME}"
+            - name: TAG_NAME
               value: "${GITHUB_REF_NAME}"
             - name: GITHUB_DISPATCH_REF
               value: "${GITHUB_DISPATCH_REF}"
