@@ -27,8 +27,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -87,13 +85,14 @@ jobs:
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           tags: ${{ steps.image-tag.outputs.tag }}
 
-  resolve-flags:
+  resolve-variables:
 
     runs-on: ubuntu-latest
 
     outputs:
       upload_to_huggingface: ${{ steps.flags.outputs.upload_to_huggingface }}
       push_doc: ${{ steps.flags.outputs.push_doc }}
+      email_recipient: ${{ steps.email.outputs.email }}
 
     steps:
 
@@ -122,11 +121,73 @@ jobs:
             echo "push_doc=${push_doc}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Resolve email recipient
+        id: email
+        uses: actions/github-script@v9
+        env:
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NOTIFY_EMAIL_MAP: ${{ vars.SMTP_NOTIFY_EMAIL_MAP }}
+        with:
+          script: |
+            const noreplyPattern = /(^|@)(users\.)?noreply\.github\.com$/i;
+            const usableEmail = (email) => email && !noreplyPattern.test(email);
+
+            let emailMap = {};
+            if (process.env.NOTIFY_EMAIL_MAP) {
+              try {
+                emailMap = JSON.parse(process.env.NOTIFY_EMAIL_MAP);
+              } catch (error) {
+                core.warning(`Ignoring invalid SMTP_NOTIFY_EMAIL_MAP JSON: ${error.message}`);
+              }
+            }
+
+            const { data: commit } = await github.rest.repos.getCommit({
+              ...context.repo,
+              ref: process.env.GIT_SHA,
+            });
+
+            const candidates = [
+              context.payload.pull_request?.user?.login,
+              context.payload.release?.author?.login,
+              commit.author?.login,
+              commit.committer?.login,
+              context.actor,
+            ].filter(Boolean);
+            const login = [...new Set(candidates)][0];
+
+            if (login && emailMap[login]) {
+              core.setOutput('email', emailMap[login]);
+              return;
+            }
+
+            if (login) {
+              const { data: user } = await github.rest.users.getByUsername({ username: login });
+              if (usableEmail(user.email)) {
+                core.setOutput('email', user.email);
+                return;
+              }
+            }
+
+            const commitEmails = [
+              commit.commit.author?.email,
+              commit.commit.committer?.email,
+            ];
+            const commitEmail = commitEmails.find(usableEmail);
+            if (commitEmail) {
+              core.setOutput('email', commitEmail);
+              return;
+            }
+
+            core.warning(
+              `Could not resolve a public notification email for ${login || 'the commit author'}; deployment email notification will be skipped.`
+            );
+            core.setOutput('email', '');
+
   create-checks:
 
     needs:
       - publish-image
-      - resolve-flags
+      - resolve-variables
 
     outputs:
       gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
@@ -151,8 +212,8 @@ jobs:
         env:
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          UPLOAD_TO_HUGGINGFACE: ${{ needs.resolve-flags.outputs.upload_to_huggingface }}
-          PUSH_DOC: ${{ needs.resolve-flags.outputs.push_doc }}
+          UPLOAD_TO_HUGGINGFACE: ${{ needs.resolve-variables.outputs.upload_to_huggingface }}
+          PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
         with:
           github-token: ${{ steps.deploy-check-token.outputs.token }}
           script: |
@@ -192,6 +253,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Create GitHub App token for post-deploy checks
         id: post-deploy-check-token
