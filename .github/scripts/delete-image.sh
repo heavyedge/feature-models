@@ -2,18 +2,23 @@
 
 set -eu
 
-if [ -z "${DOCKER_REGISTRY:-}" ] || [ -z "${DOCKER_REPOSITORY:-}" ] || [ -z "${TEMP_DOCKER_TAG:-}" ]; then
-  echo "Docker registry cleanup environment is incomplete; skipping ${TEMP_DOCKER_TAG:-unknown} deletion." >&2
+if [ -z "${DOCKER_REGISTRY:-}" ] ||
+  [ -z "${DOCKER_NAMESPACE:-}" ] ||
+  [ -z "${IMAGE_NAME:-}" ] ||
+  [ -z "${IMAGE_TAG:-}" ]; then
+  echo "Docker registry cleanup environment is incomplete; skipping ${IMAGE_TAG:-unknown} deletion." >&2
   exit 0
 fi
 
 if [ -z "${DOCKER_USERNAME:-}" ] || [ -z "${DOCKER_PASSWORD:-}" ]; then
-  echo "Docker registry cleanup credentials are incomplete; skipping ${TEMP_DOCKER_TAG} deletion." >&2
+  echo "Docker registry cleanup credentials are incomplete; skipping ${IMAGE_TAG} deletion." >&2
   exit 0
 fi
 
+docker_repository="${DOCKER_NAMESPACE}/${IMAGE_NAME}"
+
 case "${DOCKER_REGISTRY}" in
-  http://*|https://*)
+  http://* | https://*)
     registry_url="${DOCKER_REGISTRY%/}"
     ;;
   *)
@@ -21,7 +26,7 @@ case "${DOCKER_REGISTRY}" in
     ;;
 esac
 
-manifest_url="${registry_url}/v2/${DOCKER_REPOSITORY}/manifests/${TEMP_DOCKER_TAG}"
+manifest_url="${registry_url}/v2/${docker_repository}/manifests/${IMAGE_TAG}"
 headers_file="$(mktemp)"
 trap 'rm -f "${headers_file}"' EXIT
 
@@ -39,12 +44,12 @@ http_status="$(
 )"
 
 if [ "${http_status}" = "404" ]; then
-  echo "Docker image tag ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG} is already absent."
+  echo "Docker image tag ${docker_repository}:${IMAGE_TAG} is already absent."
   exit 0
 fi
 
 if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
-  echo "Could not inspect Docker image tag ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG}; registry returned HTTP ${http_status}." >&2
+  echo "Could not inspect Docker image tag ${docker_repository}:${IMAGE_TAG}; registry returned HTTP ${http_status}." >&2
   exit 1
 fi
 
@@ -53,11 +58,11 @@ digest="$(
 )"
 
 if [ -z "${digest}" ]; then
-  echo "Registry did not return Docker-Content-Digest for ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG}." >&2
+  echo "Registry did not return Docker-Content-Digest for ${docker_repository}:${IMAGE_TAG}." >&2
   exit 1
 fi
 
-delete_url="${registry_url}/v2/${DOCKER_REPOSITORY}/manifests/${digest}"
+delete_url="${registry_url}/v2/${docker_repository}/manifests/${digest}"
 delete_status="$(
   curl -sS \
     -o /dev/null \
@@ -68,9 +73,9 @@ delete_status="$(
 )"
 
 if [ "${delete_status}" = "404" ] || [ "${delete_status}" = "202" ]; then
-  echo "Deleted Docker image tag ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG}."
+  echo "Deleted Docker image tag ${docker_repository}:${IMAGE_TAG}."
   exit 0
 fi
 
-echo "Could not delete Docker image tag ${DOCKER_REPOSITORY}:${TEMP_DOCKER_TAG}; registry returned HTTP ${delete_status}." >&2
+echo "Could not delete Docker image tag ${docker_repository}:${IMAGE_TAG}; registry returned HTTP ${delete_status}." >&2
 exit 1

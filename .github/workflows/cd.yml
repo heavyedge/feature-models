@@ -21,6 +21,9 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    outputs:
+      tag: ${{ steps.image-metadata.outputs.tag }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,23 +55,15 @@ jobs:
           echo "Docker login failed after 2 attempts."
           exit 1
 
-      - name: Set Docker image tags
-        id: docker-tags
+      - name: Set Docker image metadata
+        id: image-metadata
         shell: bash
         env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          EVENT_NAME: ${{ github.event_name }}
-          REF_NAME: ${{ github.ref_name }}
           GIT_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          image="${DOCKER_REGISTRY}/${DOCKER_USERNAME}/heavyedge/feature-models"
-          temp_tag="${GIT_SHA::7}-dev"
-
-          {
-            echo "temp_tag=${image}:${temp_tag}"
-            echo "temp_tag_name=${temp_tag}"
-          } >> "$GITHUB_OUTPUT"
+          echo "tag=${GIT_SHA::7}-${EVENT_NAME}-dev" >> "$GITHUB_OUTPUT"
+          echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
       - name: Build and push temporary Docker image
         uses: docker/build-push-action@v6
@@ -80,61 +75,30 @@ jobs:
           cache-from: type=gha,scope=feature-models-dev
           cache-to: type=gha,mode=max,scope=feature-models-dev
           build-args: |
-            IMAGE_CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-            IMAGE_VERSION=${{ steps.docker-tags.outputs.temp_tag_name }}
+            IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
             IMAGE_REVISION=${{ github.sha }}
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: ${{ steps.docker-tags.outputs.temp_tag }}
+          tags: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}
 
-  create-checks:
-
-    needs:
-      - publish-image
+  resolve-variables:
 
     runs-on: ubuntu-latest
 
     outputs:
-      gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
-      upload-model-check-run-id: ${{ steps.deploy-checks.outputs.upload-model-check-run-id }}
-      upload-doc-check-run-id: ${{ steps.deploy-checks.outputs.upload-doc-check-run-id }}
-      docker-tag: ${{ steps.k8s-job.outputs.docker_tag }}
-      temp-docker-tag: ${{ steps.k8s-job.outputs.temp_docker_tag }}
-      job-name: ${{ steps.k8s-job.outputs.job_name }}
-      cpu-request: ${{ steps.k8s-job.outputs.cpu_request }}
-      gpu-request: ${{ steps.k8s-job.outputs.gpu_request }}
-      upload-to-huggingface: ${{ steps.k8s-job.outputs.upload_to_huggingface }}
-      push-doc: ${{ steps.k8s-job.outputs.push_doc }}
+      upload_to_huggingface: ${{ steps.flags.outputs.upload_to_huggingface }}
+      push_doc: ${{ steps.flags.outputs.push_doc }}
+      email_recipient: ${{ steps.email.outputs.email }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Resolve Kubernetes job metadata
-        id: k8s-job
-        shell: bash
+      - name: Resolve CD flags
+        id: flags
         env:
-          GIT_SHA: ${{ github.sha }}
           EVENT_NAME: ${{ github.event_name }}
-          HEAVYEDGE_TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
           REF_NAME: ${{ github.ref_name }}
+        shell: bash
         run: |
-          temp_docker_tag="${GIT_SHA::7}-dev"
-          docker_tag="${temp_docker_tag}"
-
-          if [ "$EVENT_NAME" = "release" ]; then
-            job_name="heavyedge-feature-models-release-${GIT_SHA::7}"
-          else
-            job_name="heavyedge-feature-models-cd-${GIT_SHA::7}"
-          fi
-
-          if [ "$HEAVYEDGE_TEST_MODE" = "1" ]; then
-            cpu_request="1"
-            gpu_request="1"
-          else
-            cpu_request="1"
-            gpu_request="${{ vars.GPU_REQUEST }}"
-          fi
 
           upload_to_huggingface=0
           if [ "$EVENT_NAME" = "release" ]; then
@@ -149,86 +113,12 @@ jobs:
           fi
 
           {
-            echo "docker_tag=${docker_tag}"
-            echo "temp_docker_tag=${temp_docker_tag}"
-            echo "job_name=${job_name}"
-            echo "cpu_request=${cpu_request}"
-            echo "gpu_request=${gpu_request}"
             echo "upload_to_huggingface=${upload_to_huggingface}"
             echo "push_doc=${push_doc}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub App token for deploy checks
-        id: deploy-check-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          permission-checks: write
-
-      - name: Create deploy checks
-        id: deploy-checks
-        uses: actions/github-script@v9
-        env:
-          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          JOB_NAME: ${{ steps.k8s-job.outputs.job_name }}
-          UPLOAD_TO_HUGGINGFACE: ${{ steps.k8s-job.outputs.upload_to_huggingface }}
-          PUSH_DOC: ${{ steps.k8s-job.outputs.push_doc }}
-        with:
-          github-token: ${{ steps.deploy-check-token.outputs.token }}
-          script: |
-            const checks = [
-              ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
-            ];
-            if (process.env.UPLOAD_TO_HUGGINGFACE === '1') {
-              checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
-            }
-            if (process.env.PUSH_DOC === '1') {
-              checks.push(['upload-doc-check-run-id', 'Upload document', 'Document upload is queued.']);
-            }
-
-            for (const [outputName, checkName, summary] of checks) {
-              const response = await github.rest.checks.create({
-                ...context.repo,
-                name: checkName,
-                head_sha: process.env.GIT_SHA,
-                external_id: `${process.env.JOB_NAME}:${outputName}`,
-                status: 'in_progress',
-                started_at: new Date().toISOString(),
-                details_url: process.env.GITHUB_RUN_URL,
-                output: {
-                  title: checkName,
-                  summary,
-                },
-              });
-
-              core.setOutput(outputName, String(response.data.id));
-            }
-
-  deploy-GPU:
-
-    needs:
-      - create-checks
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
-
-      - name: Resolve notification recipient
-        id: notification-recipient
+      - name: Resolve email recipient
+        id: email
         uses: actions/github-script@v9
         env:
           GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -289,28 +179,101 @@ jobs:
             );
             core.setOutput('email', '');
 
-      - name: Create image pull secret
+  create-checks:
+
+    needs:
+      - publish-image
+      - resolve-variables
+
+    outputs:
+      gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
+      upload-model-check-run-id: ${{ steps.deploy-checks.outputs.upload-model-check-run-id }}
+      upload-doc-check-run-id: ${{ steps.deploy-checks.outputs.upload-doc-check-run-id }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Create GitHub App token for deploy checks
+        id: deploy-check-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Create deploy checks
+        id: deploy-checks
+        uses: actions/github-script@v9
+        env:
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          UPLOAD_TO_HUGGINGFACE: ${{ needs.resolve-variables.outputs.upload_to_huggingface }}
+          PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
+        with:
+          github-token: ${{ steps.deploy-check-token.outputs.token }}
+          script: |
+              const checks = [
+                ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
+              ];
+              if (process.env.UPLOAD_TO_HUGGINGFACE === '1') {
+                checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
+              }
+              if (process.env.PUSH_DOC === '1') {
+                checks.push(['upload-doc-check-run-id', 'Upload document', 'Document upload is queued.']);
+              }
+
+              for (const [outputName, checkName, summary] of checks) {
+                const response = await github.rest.checks.create({
+                  ...context.repo,
+                  name: checkName,
+                  head_sha: process.env.GIT_SHA,
+                  status: 'in_progress',
+                  started_at: new Date().toISOString(),
+                  details_url: process.env.GITHUB_RUN_URL,
+                  output: {
+                    title: checkName,
+                    summary,
+                  },
+                });
+
+                core.setOutput(outputName, String(response.data.id));
+              }
+
+  deploy:
+
+    needs:
+      - publish-image
+      - resolve-variables
+      - create-checks
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create Docker secrets
         env:
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
         run: |
           kubectl create secret docker-registry regcred \
             --docker-server="$DOCKER_REGISTRY" \
             --docker-username="$DOCKER_USERNAME" \
             --docker-password="$DOCKER_PASSWORD" \
-            --namespace=${{ secrets.KUBE_NAMESPACE }} \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Create Docker registry cleanup secret
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
-        run: |
-          kubectl create secret generic docker-registry-cleanup \
-            --from-literal=DOCKER_USERNAME="$DOCKER_USERNAME" \
-            --from-literal=DOCKER_PASSWORD="$DOCKER_PASSWORD" \
             --namespace="$KUBE_NAMESPACE" \
             --dry-run=client -o yaml | kubectl apply -f -
 
@@ -369,166 +332,59 @@ jobs:
             --namespace="$KUBE_NAMESPACE" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Run job
-        id: run-job
+      - name: Set Kubernetes variables
+        id: k8s-variables
         env:
           GIT_SHA: ${{ github.sha }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
-          HEAVYEDGE_TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
-          UPLOAD_TO_HUGGINGFACE: ${{ needs.create-checks.outputs.upload-to-huggingface }}
-          PUSH_DOC: ${{ needs.create-checks.outputs.push-doc }}
-          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
-          KUBE_USERNAME: ${{ secrets.KUBE_USERNAME }}
-          MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
-          GITHUB_UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
-          GITHUB_UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
-          SMTP_NOTIFY_TO: ${{ steps.notification-recipient.outputs.email }}
-          RELEASE_TAG_NAME: ${{ github.ref_name }}
-          GIT_AUTHOR_NAME: heavyedge-bot
-          GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
-          DOCKER_TAG: ${{ needs.create-checks.outputs.docker-tag }}
-          TEMP_DOCKER_TAG: ${{ needs.create-checks.outputs.temp-docker-tag }}
-          JOB_NAME: ${{ needs.create-checks.outputs.job-name }}
-          CPU_REQUEST: ${{ needs.create-checks.outputs.cpu-request }}
-          GPU_REQUEST: ${{ needs.create-checks.outputs.gpu-request }}
+          TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          DELETE_IMAGE_SCRIPT_BASE64="$(base64 -w 0 .github/scripts/delete-image.sh)"
-          export DELETE_IMAGE_SCRIPT_BASE64
-          rendered_job="${RUNNER_TEMP:-/tmp}/job.yaml"
-          sh .github/k8s/render-job.sh > "$rendered_job"
-          kubectl apply -f "$rendered_job"
-          kubectl wait \
-            --namespace="$KUBE_NAMESPACE" \
-            --for=create \
-            "pod" \
-            --selector="job-name=${JOB_NAME}" \
-            --timeout=120s
+          job_name="heavyedge-feature-models-${GIT_SHA::7}-${EVENT_NAME}"
 
-      - name: Create GitHub App token for deploy check failure
-        if: ${{ failure() && needs.create-checks.outputs.gpu-build-check-run-id != '' && steps.run-job.outcome == 'failure' }}
-        id: deploy-check-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          permission-checks: write
+          if [ "$TEST_MODE" = "1" ]; then
+            cpu_request="1"
+            gpu_request="1"
+          else
+            cpu_request="2"
+            gpu_request="2"
+          fi
 
-      - name: Fail deploy checks when job startup fails
-        if: ${{ failure() && needs.create-checks.outputs.gpu-build-check-run-id != '' && steps.run-job.outcome == 'failure' }}
-        uses: actions/github-script@v9
-        env:
-          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GITHUB_GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
-          GITHUB_UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
-          GITHUB_UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
-        with:
-          github-token: ${{ steps.deploy-check-token.outputs.token }}
-          script: |
-            const checks = [
-              ['GITHUB_GPU_BUILD_CHECK_RUN_ID', 'GPU build'],
-              ['GITHUB_UPLOAD_MODEL_CHECK_RUN_ID', 'Upload model'],
-              ['GITHUB_UPLOAD_DOC_CHECK_RUN_ID', 'Upload document'],
-            ];
-
-            for (const [envName, checkName] of checks) {
-              const checkRunId = process.env[envName];
-              if (!checkRunId) continue;
-
-              await github.rest.checks.update({
-                ...context.repo,
-                check_run_id: Number(checkRunId),
-                status: 'completed',
-                conclusion: 'failure',
-                completed_at: new Date().toISOString(),
-                details_url: process.env.GITHUB_RUN_URL,
-                output: {
-                  title: checkName,
-                  summary: 'Kubernetes GPU job failed before the deploy pod started.',
-                },
-              });
-            }
-
-      - name: Delete temporary Docker image when job startup fails
-        if: ${{ failure() && steps.run-job.outcome == 'failure' }}
-        shell: bash
-        env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          DOCKER_REPOSITORY: ${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models
-          TEMP_DOCKER_TAG: ${{ needs.create-checks.outputs.temp-docker-tag }}
-        run: |
-          sh .github/scripts/delete-image.sh
-
-  post-fail-deploy:
+          {
+            echo "job_name=${job_name}"
+            echo "cpu_request=${cpu_request}"
+            echo "gpu_request=${gpu_request}"
+          } >> "$GITHUB_OUTPUT"
+  post-deploy:
 
     needs:
-      - create-checks
       - publish-image
-      - deploy-GPU
-
-    if: ${{ always() && needs.create-checks.outputs.gpu-build-check-run-id != '' && (needs.publish-image.result == 'failure' || needs.publish-image.result == 'cancelled' || needs.deploy-GPU.result == 'failure' || needs.deploy-GPU.result == 'cancelled') }}
+      - create-checks
+      - deploy
 
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create GitHub App token for deploy checks
-        id: deploy-check-token
+      - name: Create GitHub App token for cd-cleanup dispatch
+        id: cd-cleanup-dispatch-token
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          permission-checks: write
+          permission-contents: write
 
-      - name: Fail deploy checks
-        uses: actions/github-script@v9
-        env:
-          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GITHUB_GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
-          GITHUB_UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
-          GITHUB_UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
-        with:
-          github-token: ${{ steps.deploy-check-token.outputs.token }}
-          script: |
-            const checks = [
-              ['GITHUB_GPU_BUILD_CHECK_RUN_ID', 'GPU build'],
-              ['GITHUB_UPLOAD_MODEL_CHECK_RUN_ID', 'Upload model'],
-              ['GITHUB_UPLOAD_DOC_CHECK_RUN_ID', 'Upload document'],
-            ];
-
-            for (const [envName, checkName] of checks) {
-              const checkRunId = process.env[envName];
-              if (!checkRunId) continue;
-
-              await github.rest.checks.update({
-                ...context.repo,
-                check_run_id: Number(checkRunId),
-                status: 'completed',
-                conclusion: 'failure',
-                completed_at: new Date().toISOString(),
-                details_url: process.env.GITHUB_RUN_URL,
-                output: {
-                  title: checkName,
-                  summary: 'Deploy failed before Kubernetes job checks completed.',
-                },
-              });
-            }
-
-      - name: Delete temporary Docker image
+      - name: Dispatch cd-cleanup workflow
         shell: bash
         env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          DOCKER_REPOSITORY: ${{ secrets.DOCKER_USERNAME }}/heavyedge/feature-models
-          TEMP_DOCKER_TAG: ${{ needs.create-checks.outputs.temp-docker-tag }}
+          GITHUB_TOKEN: ${{ steps.cd-cleanup-dispatch-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
+          UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
+          UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+          IMAGE_TAG: ${{ needs.publish-image.outputs.tag }}
         run: |
-          sh .github/scripts/delete-image.sh
+          sh .github/scripts/dispatch-cleanup.sh

@@ -1,0 +1,83 @@
+name: CD Cleanup
+
+on:
+  repository_dispatch:
+    types:
+      - cd-cleanup
+
+jobs:
+
+  post-deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create GitHub App token for post-deploy checks
+        id: post-deploy-check-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Update deploy checks
+        uses: actions/github-script@v9
+        env:
+          GPU_BUILD_CHECK_RUN_ID: ${{ github.event.client_payload.gpu_build_check_run_id }}
+          UPLOAD_MODEL_CHECK_RUN_ID: ${{ github.event.client_payload.upload_model_check_run_id }}
+          UPLOAD_DOC_CHECK_RUN_ID: ${{ github.event.client_payload.upload_doc_check_run_id }}
+        with:
+          github-token: ${{ steps.post-deploy-check-token.outputs.token }}
+          script: |
+            const checkRunIds = [
+              process.env.GPU_BUILD_CHECK_RUN_ID,
+              process.env.UPLOAD_MODEL_CHECK_RUN_ID,
+              process.env.UPLOAD_DOC_CHECK_RUN_ID,
+            ].filter(Boolean);
+
+            for (const checkRunId of checkRunIds) {
+              await github.rest.checks.update({
+                ...context.repo,
+                check_run_id: checkRunId,
+                status: 'completed',
+                conclusion: 'success',
+                completed_at: new Date().toISOString(),
+              });
+            }
+
+      - name: Login to Docker registry
+        shell: bash
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          for attempt in 1 2; do
+            if printf '%s' "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USERNAME" --password-stdin; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 2 ]; then
+              echo "Docker login failed. Retrying in 3 seconds..."
+              sleep 3
+            fi
+          done
+
+          echo "Docker login failed after 2 attempts."
+          exit 1
+
+      - name: Delete temporary Docker image
+        shell: bash
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE }}
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
+        run: |
+          sh .github/scripts/delete-image.sh
