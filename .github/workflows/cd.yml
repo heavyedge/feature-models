@@ -133,7 +133,7 @@ jobs:
             gpu_request="1"
           else
             cpu_request="1"
-            gpu_request="1"
+            gpu_request="${{ vars.GPU_REQUEST }}"
           fi
 
           upload_to_huggingface=0
