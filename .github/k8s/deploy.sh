@@ -10,7 +10,9 @@ if [ "${PUSH_MODEL:-0}" = "1" ]; then
   if ! uv pip install --system huggingface_hub; then
     exit 1
   fi
-  if ! python upload.py "${GITHUB_REF_NAME}"; then
+  model_metadata_file="${MODEL_UPLOAD_METADATA_FILE:-/tmp/model-upload-metadata.json}"
+  rm -f "$model_metadata_file"
+  if ! python upload.py "${GITHUB_REF_NAME}" --metadata-file "$model_metadata_file"; then
     exit 1
   fi
 fi

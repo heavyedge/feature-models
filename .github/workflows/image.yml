@@ -1,0 +1,36 @@
+name: Push Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_uploaded:
+        required: true
+        type: string
+      model_revision:
+        required: true
+        type: string
+      repo_id:
+        required: true
+        type: string
+
+jobs:
+
+  publish-image:
+
+    if: inputs.model_uploaded == 'true'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download trained model
+        run: |
+          curl -LsSf https://hf.co/cli/install.sh | bash
+          hf auth login --token $HUGGINGFACE_TOKEN
+          hf download "${REPO_ID}" --repo-type model --revision "${MODEL_REVISION}" --local-dir model
+        env:
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          MODEL_REVISION: ${{ inputs.model_revision }}
+          REPO_ID: ${{ inputs.repo_id }}

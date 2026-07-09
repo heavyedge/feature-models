@@ -5,10 +5,11 @@ set -eu
 required_vars="
 GITHUB_APP_TOKEN
 GITHUB_REPOSITORY
-GITHUB_CLEANUP_REF
+GITHUB_DISPATCH_REF
 GPU_BUILD_CHECK_RUN_ID
 GPU_BUILD_CONCLUSION
 IMAGE_TAG
+MODEL_UPLOADED
 "
 
 for var_name in ${required_vars}; do
@@ -19,9 +20,9 @@ for var_name in ${required_vars}; do
   fi
 done
 
-if ! payload="$(
+if ! cleanup_payload="$(
   jq -n \
-    --arg ref "${GITHUB_CLEANUP_REF}" \
+    --arg ref "${GITHUB_DISPATCH_REF}" \
     --arg gpu_build_check_run_id "${GPU_BUILD_CHECK_RUN_ID}" \
     --arg gpu_build_conclusion "${GPU_BUILD_CONCLUSION}" \
     --arg upload_model_check_run_id "${UPLOAD_MODEL_CHECK_RUN_ID:-}" \
@@ -45,14 +46,42 @@ if ! payload="$(
   exit 2
 fi
 
+if ! image_payload="$(
+  jq -n \
+    --arg ref "${GITHUB_DISPATCH_REF}" \
+    --arg MODEL_UPLOADED "${MODEL_UPLOADED:-}" \
+    --arg MODEL_REVISION "${MODEL_REVISION:-}" \
+    --arg MODEL_REPO_ID "${MODEL_REPO_ID:-}" \
+    '{
+      ref: $ref,
+      inputs: {
+        model_uploaded: $MODEL_UPLOADED,
+        model_revision: $MODEL_REVISION,
+        repo_id: $MODEL_REPO_ID
+      }
+    }'
+)"; then
+  exit 2
+fi
+
 if ! curl -fsS \
   -X POST \
   -H "Accept: application/vnd.github+json" \
   -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/cd-cleanup.yml/dispatches" \
-  -d "${payload}"; then
+  -d "${cleanup_payload}"; then
   exit 3
 fi
 
-echo "Dispatched post-deploy workflow for image tag ${IMAGE_TAG} on ref ${GITHUB_CLEANUP_REF}."
+if ! curl -fsS \
+  -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/image.yml/dispatches" \
+  -d "${image_payload}"; then
+  exit 3
+fi
+
+echo "Dispatched post-deploy workflows for image tag ${IMAGE_TAG} on ref ${GITHUB_DISPATCH_REF}."
