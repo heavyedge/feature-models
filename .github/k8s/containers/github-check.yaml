@@ -187,12 +187,14 @@
               api_url = "https://api.github.com/repos/#{owner}/#{repo}/check-runs"
 
               checks = [
-                ["gpu_build", "GPU build", ENV["GITHUB_GPU_BUILD_CHECK_RUN_ID"].to_s],
-                ["upload_model", "Upload model", ENV["GITHUB_UPLOAD_MODEL_CHECK_RUN_ID"].to_s],
-                ["upload_doc", "Upload document", ENV["GITHUB_UPLOAD_DOC_CHECK_RUN_ID"].to_s],
+                ["gpu_build", "GPU build", ENV["GITHUB_GPU_BUILD_CHECK_RUN_ID"].to_s, true],
+                ["upload_model", "Upload model", ENV["GITHUB_UPLOAD_MODEL_CHECK_RUN_ID"].to_s, ENV["UPLOAD_TO_HUGGINGFACE"].to_s == "1"],
+                ["upload_doc", "Upload document", ENV["GITHUB_UPLOAD_DOC_CHECK_RUN_ID"].to_s, ENV["PUSH_DOC"].to_s == "1"],
               ]
 
-              checks.each do |key, default_name, check_id|
+              checks.each do |key, default_name, check_id, enabled|
+                next unless enabled
+
                 check_state = check_states[key].is_a?(Hash) ? check_states[key] : {}
                 check_name = check_state["name"].to_s.empty? ? default_name : check_state["name"].to_s
                 check_status = normalize_status(check_state["status"], fallback_status)
@@ -232,3 +234,7 @@
               value: "${GITHUB_UPLOAD_MODEL_CHECK_RUN_ID}"
             - name: GITHUB_UPLOAD_DOC_CHECK_RUN_ID
               value: "${GITHUB_UPLOAD_DOC_CHECK_RUN_ID}"
+            - name: UPLOAD_TO_HUGGINGFACE
+              value: "${UPLOAD_TO_HUGGINGFACE}"
+            - name: PUSH_DOC
+              value: "${PUSH_DOC}"
