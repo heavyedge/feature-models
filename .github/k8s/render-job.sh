@@ -7,7 +7,6 @@ containers_dir="${2:-${script_dir}/containers}"
 tmp_file="$(mktemp "${TMPDIR:-/tmp}/job.XXXXXX")"
 container_files='
 build.yaml
-watch-build.yaml
 image-cleanup.yaml
 email-notify.yaml
 github-app-token.yaml

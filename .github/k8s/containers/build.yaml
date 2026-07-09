@@ -17,32 +17,8 @@
               state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
               metadata_tmp_file="${DEPLOY_METADATA_TMP_FILE:-/tmp/deploy-metadata.json}"
               checks_tmp_file="${DEPLOY_CHECKS_TMP_FILE:-/tmp/deploy-checks.json}"
-              heartbeat_file="${DEPLOY_BUILD_HEARTBEAT_FILE:-${state_dir}/build-heartbeat}"
-              heartbeat_interval="${DEPLOY_BUILD_HEARTBEAT_INTERVAL_SECONDS:-5}"
 
               mkdir -p "$(dirname "${state_file}")"
-              mkdir -p "$(dirname "${heartbeat_file}")"
-
-              write_heartbeat() {
-                heartbeat_tmp_file="${heartbeat_file}.$$"
-                date +%s > "${heartbeat_tmp_file}"
-                mv "${heartbeat_tmp_file}" "${heartbeat_file}"
-              }
-
-              (
-                while :; do
-                  write_heartbeat
-                  sleep "${heartbeat_interval}"
-                done
-              ) &
-              heartbeat_pid=$!
-
-              finish_heartbeat() {
-                kill "${heartbeat_pid}" 2>/dev/null || true
-                wait "${heartbeat_pid}" 2>/dev/null || true
-              }
-
-              trap finish_heartbeat EXIT
 
               sh .github/scripts/deploy.sh
               exit_code=$?
