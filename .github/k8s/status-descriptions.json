@@ -1,0 +1,26 @@
+{
+  "build": {
+    "0": "Build completed successfully.",
+    "1": "Dependency installation failed while running uv pip install.",
+    "2": "CUDA device discovery failed.",
+    "3": "CUDA device count discovery failed while choosing MAKE_JOBS.",
+    "4": "CUDA preflight validation failed.",
+    "5": "Model or notebook build failed while running make."
+  },
+  "token": {
+    "0": "GitHub App token was created successfully.",
+    "1": "Required GitHub App token environment variable is missing.",
+    "2": "GitHub App private key file preparation failed.",
+    "3": "GitHub App JWT creation failed.",
+    "4": "GitHub App installation lookup failed.",
+    "5": "GitHub App installation ID parsing failed.",
+    "6": "GitHub App installation token request failed.",
+    "7": "GitHub App installation token parsing failed."
+  },
+  "dispatch": {
+    "0": "Cleanup workflow dispatch completed successfully.",
+    "1": "Cleanup dispatch configuration is incomplete.",
+    "2": "Cleanup dispatch payload generation failed.",
+    "3": "Cleanup workflow dispatch request failed."
+  }
+}

@@ -46,21 +46,35 @@ spec:
 
               python .github/k8s/send-email.py --status "Started" || true
 
-              sh .github/scripts/deploy.sh
-              status=$?
+              build_status=0
+              sh .github/scripts/deploy.sh || build_status=$?
 
-              GITHUB_APP_TOKEN="$(sh .github/scripts/app-token.sh)"
+              token_status=0
+              GITHUB_APP_TOKEN="$(sh .github/scripts/app-token.sh)" || token_status=$?
               export GITHUB_APP_TOKEN
-              sh .github/scripts/dispatch-cleanup.sh
 
-              if [ "$status" -eq 0 ]; then
-                python .github/k8s/send-email.py --status "Completed" || true
+              dispatch_status=0
+              sh .github/scripts/dispatch-cleanup.sh || dispatch_status=$?
+
+              exit_code=0
+              if [ "$build_status" -ne 0 ]; then
+                exit_code=$((exit_code + 1))
+              fi
+              if [ "$token_status" -ne 0 ]; then
+                exit_code=$((exit_code + 2))
+              fi
+              if [ "$dispatch_status" -ne 0 ]; then
+                exit_code=$((exit_code + 4))
+              fi
+
+              if [ "$exit_code" -eq 0 ]; then
+                python .github/k8s/send-email.py --status "Completed" --build-status "$build_status" --token-status "$token_status" --dispatch-status "$dispatch_status" || true
               else
-                python .github/k8s/send-email.py --status "Failed" || true
+                python .github/k8s/send-email.py --status "Failed" --build-status "$build_status" --token-status "$token_status" --dispatch-status "$dispatch_status" || true
               fi
 
               touch /var/run/heavyedge/deploy.done
-              exit "$status"
+              exit "$exit_code"
           env:
             - name: GH_APP_ID
               valueFrom:

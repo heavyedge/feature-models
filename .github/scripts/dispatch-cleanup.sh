@@ -18,7 +18,7 @@ for var_name in ${required_vars}; do
   fi
 done
 
-payload="$(
+if ! payload="$(
   jq -n \
     --arg event_type "post-deploy" \
     --arg gpu_build_check_run_id "${GPU_BUILD_CHECK_RUN_ID}" \
@@ -36,14 +36,18 @@ payload="$(
         image_tag: $image_tag
       }
     }'
-)"
+)"; then
+  exit 2
+fi
 
-curl -fsS \
+if ! curl -fsS \
   -X POST \
   -H "Accept: application/vnd.github+json" \
   -H "Authorization: Bearer ${GITHUB_APP_TOKEN}" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   "https://api.github.com/repos/${GITHUB_REPOSITORY}/dispatches" \
-  -d "${payload}"
+  -d "${payload}"; then
+  exit 3
+fi
 
 echo "Dispatched post-deploy for image tag ${IMAGE_TAG}."
