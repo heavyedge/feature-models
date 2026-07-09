@@ -1,0 +1,240 @@
+        - name: github-check
+          image: ruby:3.4.10-alpine3.24
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              set -f
+
+              state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
+              token_file="${GITHUB_APP_TOKEN_FILE:-${state_dir}/github-app-token}"
+              token_error_file="${GITHUB_APP_TOKEN_ERROR_FILE:-${state_dir}/github-app-token-error}"
+              token_done_file="${GITHUB_APP_TOKEN_DONE_FILE:-${state_dir}/github-app-token-complete}"
+              token_wait_seconds="${GITHUB_APP_TOKEN_WAIT_SECONDS:-120}"
+
+              finish_check_run() {
+                mkdir -p "$(dirname "${token_done_file}")"
+                touch "${token_done_file}"
+              }
+
+              trap finish_check_run EXIT
+
+              wait_for_github_token() {
+                waited=0
+                while [ ! -s "${token_file}" ]; do
+                  if [ -s "${token_error_file}" ]; then
+                    echo "GitHub App token sidecar reported an error; skipping check-run update." >&2
+                    cat "${token_error_file}" >&2
+                    return 1
+                  fi
+                  if [ "${waited}" -ge "${token_wait_seconds}" ]; then
+                    echo "Timed out waiting for GitHub App token at ${token_file}; skipping check-run update." >&2
+                    return 1
+                  fi
+                  sleep 2
+                  waited=$((waited + 2))
+                done
+              }
+
+              update_github_checks() {
+                if ! wait_for_github_token; then
+                  return 0
+                fi
+
+                DEPLOY_STATE_FILE="${state_file}" \
+                  GITHUB_APP_TOKEN_FILE="${token_file}" \
+                  ruby <<'RUBY'
+              require "json"
+              require "net/http"
+              require "time"
+              require "uri"
+
+              token_file = ENV.fetch("GITHUB_APP_TOKEN_FILE")
+              state_file = ENV.fetch("DEPLOY_STATE_FILE")
+
+              missing = %w[GITHUB_REPOSITORY GIT_SHA].select do |name|
+                ENV[name].to_s.empty?
+              end
+
+              unless missing.empty?
+                warn "GitHub check-run environment is incomplete (missing #{missing.join(', ')}); skipping check-run updates."
+                exit 0
+              end
+
+              token = File.read(token_file).strip
+              if token.empty?
+                warn "GitHub App token file #{token_file} is empty; skipping check-run updates."
+                exit 0
+              end
+
+              owner, repo = ENV.fetch("GITHUB_REPOSITORY").split("/", 2)
+              if owner.to_s.empty? || repo.to_s.empty?
+                warn "Invalid GITHUB_REPOSITORY=#{ENV.fetch('GITHUB_REPOSITORY').inspect}; skipping check-run updates."
+                exit 0
+              end
+
+              def github_request(method, url, token, payload = nil, allow_failure: false)
+                uri = URI(url)
+                request_class = {
+                  "GET" => Net::HTTP::Get,
+                  "POST" => Net::HTTP::Post,
+                  "PATCH" => Net::HTTP::Patch,
+                }.fetch(method)
+                request = request_class.new(uri)
+                request["Accept"] = "application/vnd.github+json"
+                request["Authorization"] = "Bearer #{token}"
+                request["X-GitHub-Api-Version"] = "2022-11-28"
+                if payload
+                  request["Content-Type"] = "application/json"
+                  request.body = JSON.generate(payload)
+                end
+
+                response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
+                  http.open_timeout = 10
+                  http.read_timeout = 30
+                  http.request(request)
+                end
+
+                status = response.code.to_i
+                if status < 200 || status >= 300
+                  return [status, response.body.to_s] if allow_failure
+
+                  warn "GitHub API request failed: #{method} #{url} returned HTTP #{status}"
+                  warn "Response body:"
+                  warn response.body.to_s
+                  if payload
+                    warn "Request payload:"
+                    warn JSON.generate(payload)
+                  end
+                  raise "GitHub API request failed"
+                end
+
+                body = response.body.to_s
+                parsed_body = body.empty? ? nil : JSON.parse(body)
+                [status, parsed_body]
+              end
+
+              def default_summary(check_name, status)
+                case status
+                when "succeeded"
+                  "#{check_name} succeeded."
+                when "failed"
+                  "#{check_name} failed."
+                when "skipped"
+                  "#{check_name} skipped."
+                else
+                  "#{check_name} completed."
+                end
+              end
+
+              def normalize_status(raw_status, fallback_status)
+                case raw_status.to_s
+                when "succeeded", "failed", "skipped"
+                  raw_status.to_s
+                else
+                  fallback_status
+                end
+              end
+
+              def check_payload(status, payload_kind, check_name, git_sha, job_name, github_run_url, summary)
+                conclusion = {
+                  "succeeded" => "success",
+                  "failed" => "failure",
+                  "skipped" => "skipped",
+                }.fetch(status, "failure")
+
+                payload = {
+                  "details_url" => github_run_url.to_s,
+                  "status" => "completed",
+                  "conclusion" => conclusion,
+                  "completed_at" => Time.now.utc.iso8601,
+                  "output" => {
+                    "title" => check_name,
+                    "summary" => summary.to_s.empty? ? default_summary(check_name, status) : summary.to_s,
+                  },
+                }
+
+                if payload_kind == "create"
+                  payload["name"] = check_name
+                  payload["head_sha"] = git_sha
+                  payload["external_id"] = job_name.to_s
+                end
+
+                payload
+              end
+
+              begin
+                deploy_state = JSON.parse(File.read(state_file))
+              rescue StandardError => error
+                warn "Failed to read deploy state #{state_file}: #{error.class}: #{error.message}"
+                deploy_state = {}
+              end
+              deploy_state = {} unless deploy_state.is_a?(Hash)
+              check_states = deploy_state["checks"].is_a?(Hash) ? deploy_state["checks"] : {}
+              fallback_status = deploy_state["status"].to_s == "succeeded" ? "succeeded" : "failed"
+
+              git_sha = ENV.fetch("GIT_SHA")
+              job_name = ENV["JOB_NAME"].to_s
+              github_run_url = ENV["GITHUB_RUN_URL"].to_s
+              api_url = "https://api.github.com/repos/#{owner}/#{repo}/check-runs"
+
+              checks = [
+                ["gpu_build", "GPU build", ENV["GITHUB_GPU_BUILD_CHECK_RUN_ID"].to_s, true],
+                ["upload_model", "Upload model", ENV["GITHUB_UPLOAD_MODEL_CHECK_RUN_ID"].to_s, ENV["UPLOAD_TO_HUGGINGFACE"].to_s == "1"],
+                ["upload_doc", "Upload document", ENV["GITHUB_UPLOAD_DOC_CHECK_RUN_ID"].to_s, ENV["PUSH_DOC"].to_s == "1"],
+              ]
+
+              checks.each do |key, default_name, check_id, enabled|
+                next unless enabled
+
+                check_state = check_states[key].is_a?(Hash) ? check_states[key] : {}
+                check_name = check_state["name"].to_s.empty? ? default_name : check_state["name"].to_s
+                check_status = normalize_status(check_state["status"], fallback_status)
+                summary = check_state["summary"].to_s
+
+                if !check_id.empty?
+                  payload = check_payload(check_status, "update", check_name, git_sha, job_name, github_run_url, summary)
+                  github_request("PATCH", "#{api_url}/#{check_id}", token, payload)
+                else
+                  payload = check_payload(check_status, "create", check_name, git_sha, job_name, github_run_url, summary)
+                  github_request("POST", api_url, token, payload)
+                end
+              end
+              RUBY
+              }
+
+              while [ ! -f "${state_file}" ]; do
+                sleep 5
+              done
+
+              update_github_checks || true
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+          env:
+            - name: JOB_NAME
+              value: "${JOB_NAME}"
+            - name: GIT_SHA
+              value: "${GIT_SHA}"
+            - name: GITHUB_REPOSITORY
+              value: "${GITHUB_REPOSITORY}"
+            - name: GITHUB_RUN_URL
+              value: "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            - name: GITHUB_GPU_BUILD_CHECK_RUN_ID
+              value: "${GITHUB_GPU_BUILD_CHECK_RUN_ID}"
+            - name: GITHUB_UPLOAD_MODEL_CHECK_RUN_ID
+              value: "${GITHUB_UPLOAD_MODEL_CHECK_RUN_ID}"
+            - name: GITHUB_UPLOAD_DOC_CHECK_RUN_ID
+              value: "${GITHUB_UPLOAD_DOC_CHECK_RUN_ID}"
+            - name: UPLOAD_TO_HUGGINGFACE
+              value: "${UPLOAD_TO_HUGGINGFACE}"
+            - name: PUSH_DOC
+              value: "${PUSH_DOC}"

@@ -3,7 +3,7 @@ name: Image
 on:
   repository_dispatch:
     types:
-      - GPU-completed
+      - build image
 
 permissions:
   contents: read
