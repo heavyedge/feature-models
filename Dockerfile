@@ -35,7 +35,7 @@ WORKDIR /src
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git make openssl \
+    && apt-get install -y --no-install-recommends build-essential ca-certificates curl git openssl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=downloader /dataset/_data ./_data
