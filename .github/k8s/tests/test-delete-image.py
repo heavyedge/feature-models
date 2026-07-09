@@ -6,7 +6,6 @@ import subprocess
 import sys
 import threading
 
-
 SCRIPT_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "delete-image.sh")
 )
@@ -90,9 +89,7 @@ def assert_contains(output, text):
 
 def assert_request_count(requests, method, expected):
     actual = sum(
-        1
-        for request_method, _path, _headers in requests
-        if request_method == method
+        1 for request_method, _path, _headers in requests if request_method == method
     )
     if actual != expected:
         raise AssertionError(
@@ -157,9 +154,7 @@ def test_delete_accepted_succeeds():
     assert_contains(result.stdout, "Deleted Docker image tag")
     assert_request_count(requests, "HEAD", 1)
     assert_request_count(requests, "DELETE", 1)
-    delete_path = [
-        path for method, path, _headers in requests if method == "DELETE"
-    ][0]
+    delete_path = [path for method, path, _headers in requests if method == "DELETE"][0]
     if not delete_path.endswith(f"/manifests/{digest}"):
         raise AssertionError(f"Unexpected delete path: {delete_path}")
 
