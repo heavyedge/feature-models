@@ -32,8 +32,24 @@ trap cleanup EXIT
 api_base="https://${registry}/v2/${repository}"
 accept_header="Accept: application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json"
 
+run_curl() {
+  if curl "$@"; then
+    return 0
+  fi
+
+  status="$?"
+  if [ "$status" -eq 35 ]; then
+    echo "curl failed with connection reset; retrying once." >&2
+    sleep 3
+    curl "$@"
+    return "$?"
+  fi
+
+  return "$status"
+}
+
 echo "Resolving digest for ${registry}/${repository}:${IMAGE_TAG}"
-curl --fail --silent --show-error --location \
+run_curl --fail --silent --show-error --location \
   --request HEAD \
   --user "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
   --header "$accept_header" \
@@ -52,7 +68,7 @@ if [ -z "$digest" ]; then
 fi
 
 echo "Deleting ${registry}/${repository}@${digest}"
-curl --fail --silent --show-error --location \
+run_curl --fail --silent --show-error --location \
   --request DELETE \
   --user "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
   "${api_base}/manifests/${digest}"
