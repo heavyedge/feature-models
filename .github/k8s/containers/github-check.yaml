@@ -206,9 +206,11 @@
                 if !check_id.empty?
                   payload = check_payload(check_status, "update", check_name, git_sha, job_name, github_run_url, summary)
                   github_request("PATCH", "#{api_url}/#{check_id}", token, payload)
+                  puts "GITHUB_CHECK_UPDATED key=#{key} method=PATCH conclusion=#{payload.fetch('conclusion')}"
                 else
                   payload = check_payload(check_status, "create", check_name, git_sha, job_name, github_run_url, summary)
                   github_request("POST", api_url, token, payload)
+                  puts "GITHUB_CHECK_UPDATED key=#{key} method=POST conclusion=#{payload.fetch('conclusion')}"
                 end
               end
               RUBY
