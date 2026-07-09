@@ -371,6 +371,7 @@ jobs:
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ needs.publish-image.outputs.tag }}
           PUSH_MODEL: ${{ needs.resolve-variables.outputs.upload_to_huggingface }}
+          PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           SMTP_NOTIFY_RECIPIENT: ${{ needs.resolve-variables.outputs.email_recipient }}

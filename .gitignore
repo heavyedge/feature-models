@@ -8,6 +8,7 @@ doc/source/notebooks/
 
 .vscode
 build.sh
+!.github/scripts/build.sh
 slurm*
 
 # Byte-compiled / optimized / DLL files

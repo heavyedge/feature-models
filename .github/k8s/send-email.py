@@ -21,7 +21,12 @@ class BuildStatus(IntEnum):
     MAKE_JOBS_DISCOVERY_FAILED = 3
     CUDA_PREFLIGHT_FAILED = 4
     BUILD_FAILED = 5
-    MODEL_UPLOAD_FAILED = 6
+
+
+class DeployStatus(IntEnum):
+    SUCCESS = 0
+    MODEL_UPLOAD_FAILED = 1
+    DOC_UPLOAD_FAILED = 2
 
 
 class TokenStatus(IntEnum):
@@ -46,11 +51,13 @@ class ContainerExitCode(IntFlag):
     SUCCESS = 0
     BUILD_FAILED = 1
     TOKEN_FAILED = 2
-    DISPATCH_FAILED = 4
+    DEPLOY_FAILED = 4
+    DISPATCH_FAILED = 8
 
 
 STATUS_DESCRIPTION_SECTIONS = {
     BuildStatus: "build",
+    DeployStatus: "deploy",
     TokenStatus: "token",
     DispatchStatus: "dispatch",
 }
@@ -120,7 +127,12 @@ def exit_code_line(exit_code):
 
 
 def build_message(
-    status, exit_code=None, build_status=None, token_status=None, dispatch_status=None
+    status,
+    exit_code=None,
+    build_status=None,
+    deploy_status=None,
+    token_status=None,
+    dispatch_status=None,
 ):
     repository = env("GITHUB_REPOSITORY", "heavyedge/feature-models")
     ref_name = env("GITHUB_REF_NAME", "")
@@ -143,6 +155,7 @@ def build_message(
         body_lines.append(exit_line)
     for line in (
         status_line("Build", BuildStatus, build_status),
+        status_line("Deploy", DeployStatus, deploy_status),
         status_line("Token", TokenStatus, token_status),
         status_line("Dispatch", DispatchStatus, dispatch_status),
     ):
@@ -168,6 +181,7 @@ def main():
     parser.add_argument("--status", required=True, help="Deployment status label.")
     parser.add_argument("--exit-code", type=int, help="Build container exit code.")
     parser.add_argument("--build-status", type=int, help="Build status code.")
+    parser.add_argument("--deploy-status", type=int, help="Deploy status code.")
     parser.add_argument(
         "--token-status", type=int, help="GitHub App token status code."
     )
@@ -186,6 +200,7 @@ def main():
         args.status,
         args.exit_code,
         args.build_status,
+        args.deploy_status,
         args.token_status,
         args.dispatch_status,
     )
