@@ -1,12 +1,8 @@
 #!/bin/sh
 set -e
 
-# Build model
-if [ "${PUSH_DOC}" = "1" ]; then
-    uv pip install --system -r requirements.txt -r notebooks/requirements.txt
-else
-    uv pip install --system -r requirements.txt
-fi
+# Build
+uv pip install --system -r requirements.txt -r notebooks/requirements.txt
 
 HEAVYEDGE_GPU_DEVICES=$(python3 scripts/cuda-preflight.py --print-devices)
 export HEAVYEDGE_GPU_DEVICES
@@ -16,11 +12,7 @@ fi
 export MAKE_JOBS
 python3 scripts/cuda-preflight.py
 
-if [ "${PUSH_DOC}" = "1" ]; then
-    HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make -j "${MAKE_JOBS}" models notebooks
-else
-    HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make -j "${MAKE_JOBS}" models
-fi
+HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE} make -j "${MAKE_JOBS}" models notebooks
 
 # Deploy model
 if [ "${UPLOAD_TO_HUGGINGFACE}" = "1" ]; then
