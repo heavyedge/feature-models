@@ -2,75 +2,80 @@
 
 set -eu
 
-require_env() {
-  name="$1"
-  eval "value=\${$name:-}"
-  if [ -z "$value" ]; then
-    echo "Missing required environment variable: $name" >&2
-    exit 1
-  fi
-}
+if [ -z "${DOCKER_REGISTRY:-}" ] ||
+  [ -z "${DOCKER_NAMESPACE:-}" ] ||
+  [ -z "${IMAGE_NAME:-}" ] ||
+  [ -z "${IMAGE_TAG:-}" ]; then
+  echo "Docker registry cleanup environment is incomplete; skipping ${IMAGE_TAG:-unknown} deletion." >&2
+  exit 0
+fi
 
-require_env DOCKER_REGISTRY
-require_env DOCKER_USERNAME
-require_env DOCKER_PASSWORD
-require_env DOCKER_NAMESPACE
-require_env IMAGE_NAME
-require_env IMAGE_TAG
+if [ -z "${DOCKER_USERNAME:-}" ] || [ -z "${DOCKER_PASSWORD:-}" ]; then
+  echo "Docker registry cleanup credentials are incomplete; skipping ${IMAGE_TAG} deletion." >&2
+  exit 0
+fi
 
-registry="${DOCKER_REGISTRY#http://}"
-registry="${registry#https://}"
-registry="${registry%/}"
-repository="${DOCKER_NAMESPACE}/${IMAGE_NAME}"
+docker_repository="${DOCKER_NAMESPACE}/${IMAGE_NAME}"
 
+case "${DOCKER_REGISTRY}" in
+  http://* | https://*)
+    registry_url="${DOCKER_REGISTRY%/}"
+    ;;
+  *)
+    registry_url="https://${DOCKER_REGISTRY%/}"
+    ;;
+esac
+
+manifest_url="${registry_url}/v2/${docker_repository}/manifests/${IMAGE_TAG}"
 headers_file="$(mktemp)"
-cleanup() {
-  rm -f "$headers_file"
-}
-trap cleanup EXIT
+trap 'rm -f "${headers_file}"' EXIT
 
-api_base="https://${registry}/v2/${repository}"
-accept_header="Accept: application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json"
+accept_header="application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"
 
-run_curl() {
-  if curl "$@"; then
-    return 0
-  fi
-
-  status="$?"
-  if [ "$status" -eq 35 ]; then
-    echo "curl failed with connection reset; retrying once." >&2
-    sleep 3
-    curl "$@"
-    return "$?"
-  fi
-
-  return "$status"
-}
-
-echo "Resolving digest for ${registry}/${repository}:${IMAGE_TAG}"
-run_curl --fail --silent --show-error --location \
-  --request HEAD \
-  --user "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
-  --header "$accept_header" \
-  --dump-header "$headers_file" \
-  --output /dev/null \
-  "${api_base}/manifests/${IMAGE_TAG}"
-
-digest="$(
-  sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest:[[:space:]]*\([^[:space:]\r]*\).*/\1/p' "$headers_file" |
-    tail -n 1
+http_status="$(
+  curl -sS \
+    -o /dev/null \
+    -w "%{http_code}" \
+    -D "${headers_file}" \
+    -u "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
+    -H "Accept: ${accept_header}" \
+    -X HEAD \
+    "${manifest_url}" || true
 )"
 
-if [ -z "$digest" ]; then
-  echo "Docker-Content-Digest header was not returned for ${registry}/${repository}:${IMAGE_TAG}" >&2
+if [ "${http_status}" = "404" ]; then
+  echo "Docker image tag ${docker_repository}:${IMAGE_TAG} is already absent."
+  exit 0
+fi
+
+if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
+  echo "Could not inspect Docker image tag ${docker_repository}:${IMAGE_TAG}; registry returned HTTP ${http_status}." >&2
   exit 1
 fi
 
-echo "Deleting ${registry}/${repository}@${digest}"
-run_curl --fail --silent --show-error --location \
-  --request DELETE \
-  --user "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
-  "${api_base}/manifests/${digest}"
+digest="$(
+  awk 'tolower($0) ~ /^docker-content-digest:/ { print $2; exit }' "${headers_file}" | tr -d '\r'
+)"
 
-echo "Deleted ${registry}/${repository}:${IMAGE_TAG}"
+if [ -z "${digest}" ]; then
+  echo "Registry did not return Docker-Content-Digest for ${docker_repository}:${IMAGE_TAG}." >&2
+  exit 1
+fi
+
+delete_url="${registry_url}/v2/${docker_repository}/manifests/${digest}"
+delete_status="$(
+  curl -sS \
+    -o /dev/null \
+    -w "%{http_code}" \
+    -u "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
+    -X DELETE \
+    "${delete_url}" || true
+)"
+
+if [ "${delete_status}" = "404" ] || [ "${delete_status}" = "202" ]; then
+  echo "Deleted Docker image tag ${docker_repository}:${IMAGE_TAG}."
+  exit 0
+fi
+
+echo "Could not delete Docker image tag ${docker_repository}:${IMAGE_TAG}; registry returned HTTP ${delete_status}." >&2
+exit 1
