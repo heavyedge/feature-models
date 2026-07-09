@@ -21,6 +21,9 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,7 +58,7 @@ jobs:
           exit 1
 
       - name: Set Docker image tag
-        id: docker-tag
+        id: image-tag
         shell: bash
         env:
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
@@ -82,4 +85,153 @@ jobs:
             IMAGE_REVISION=${{ github.sha }}
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: ${{ steps.docker-tag.outputs.tag }}
+          tags: ${{ steps.image-tag.outputs.tag }}
+
+  resolve-flags:
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      upload_to_huggingface: ${{ steps.flags.outputs.upload_to_huggingface }}
+      push_doc: ${{ steps.flags.outputs.push_doc }}
+
+    steps:
+
+      - name: Resolve CD flags
+        id: flags
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+
+          upload_to_huggingface=0
+          if [ "$EVENT_NAME" = "release" ]; then
+            if [[ "$REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              upload_to_huggingface=1
+            fi
+          fi
+
+          push_doc=0
+          if [ "$EVENT_NAME" = "release" ]; then
+            push_doc=1
+          fi
+
+          {
+            echo "upload_to_huggingface=${upload_to_huggingface}"
+            echo "push_doc=${push_doc}"
+          } >> "$GITHUB_OUTPUT"
+
+  create-checks:
+
+    needs:
+      - publish-image
+      - resolve-flags
+
+    outputs:
+      gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
+      upload-model-check-run-id: ${{ steps.deploy-checks.outputs.upload-model-check-run-id }}
+      upload-doc-check-run-id: ${{ steps.deploy-checks.outputs.upload-doc-check-run-id }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Create GitHub App token for deploy checks
+        id: deploy-check-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Create deploy checks
+        id: deploy-checks
+        uses: actions/github-script@v9
+        env:
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          UPLOAD_TO_HUGGINGFACE: ${{ needs.resolve-flags.outputs.upload_to_huggingface }}
+          PUSH_DOC: ${{ needs.resolve-flags.outputs.push_doc }}
+        with:
+          github-token: ${{ steps.deploy-check-token.outputs.token }}
+          script: |
+              const checks = [
+                ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
+              ];
+              if (process.env.UPLOAD_TO_HUGGINGFACE === '1') {
+                checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
+              }
+              if (process.env.PUSH_DOC === '1') {
+                checks.push(['upload-doc-check-run-id', 'Upload document', 'Document upload is queued.']);
+              }
+
+              for (const [outputName, checkName, summary] of checks) {
+                const response = await github.rest.checks.create({
+                  ...context.repo,
+                  name: checkName,
+                  head_sha: process.env.GIT_SHA,
+                  status: 'in_progress',
+                  started_at: new Date().toISOString(),
+                  details_url: process.env.GITHUB_RUN_URL,
+                  output: {
+                    title: checkName,
+                    summary,
+                  },
+                });
+
+                core.setOutput(outputName, String(response.data.id));
+              }
+
+  post-deploy:
+
+    needs:
+      - publish-image
+      - create-checks
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Create GitHub App token for post-deploy checks
+        id: post-deploy-check-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Update deploy checks
+        uses: actions/github-script@v9
+        env:
+          GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
+          UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
+          UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+        with:
+          github-token: ${{ steps.post-deploy-check-token.outputs.token }}
+          script: |
+            const checkRunIds = [
+              process.env.GPU_BUILD_CHECK_RUN_ID,
+              process.env.UPLOAD_MODEL_CHECK_RUN_ID,
+              process.env.UPLOAD_DOC_CHECK_RUN_ID,
+            ].filter(Boolean);
+
+            for (const checkRunId of checkRunIds) {
+              await github.rest.checks.update({
+                ...context.repo,
+                check_run_id: checkRunId,
+                status: 'completed',
+                conclusion: 'success',
+                completed_at: new Date().toISOString(),
+              });
+            }
+
+      - name: Delete temporary Docker image
+        shell: bash
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          IMAGE_TAG: ${{ needs.publish-image.outputs.image-tag }}
+        run: |
+          sh .github/scripts/delete-image.sh
