@@ -42,8 +42,12 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              sh .github/scripts/deploy.sh
+              python .github/k8s/wait-smtp.py
               status=$?
+              if [ "$status" -eq 0 ]; then
+                sh .github/scripts/deploy.sh
+                status=$?
+              fi
               touch /var/run/heavyedge/deploy.done
               exit "$status"
           env:

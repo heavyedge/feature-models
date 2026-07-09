@@ -3,9 +3,7 @@
 import argparse
 import os
 import smtplib
-import socket
 import sys
-import time
 from email.message import EmailMessage
 
 
@@ -43,21 +41,6 @@ def build_message(status):
     return msg
 
 
-def send_with_retry(message, host, port, attempts, delay):
-    last_error = None
-    for attempt in range(1, attempts + 1):
-        try:
-            with smtplib.SMTP(host, port, timeout=10) as smtp:
-                smtp.send_message(message)
-            return
-        except (OSError, smtplib.SMTPException, socket.timeout) as error:
-            last_error = error
-            if attempt < attempts:
-                time.sleep(delay)
-
-    raise last_error
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Send deploy status email through local SMTP relay."
@@ -65,10 +48,6 @@ def main():
     parser.add_argument("--status", required=True, help="Deployment status label.")
     parser.add_argument("--smtp-host", default=env("SMTP_HOST", "127.0.0.1"))
     parser.add_argument("--smtp-port", type=int, default=int(env("SMTP_PORT", "587")))
-    parser.add_argument("--attempts", type=int, default=int(env("SMTP_ATTEMPTS", "12")))
-    parser.add_argument(
-        "--delay", type=float, default=float(env("SMTP_RETRY_DELAY", "5"))
-    )
     args = parser.parse_args()
 
     if not env("SMTP_NOTIFY_RECIPIENT"):
@@ -76,7 +55,8 @@ def main():
         return 0
 
     message = build_message(args.status)
-    send_with_retry(message, args.smtp_host, args.smtp_port, args.attempts, args.delay)
+    with smtplib.SMTP(args.smtp_host, args.smtp_port, timeout=10) as smtp:
+        smtp.send_message(message)
     print(f"Sent deployment email: {args.status}")
     return 0
 
