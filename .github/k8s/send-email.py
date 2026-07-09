@@ -16,7 +16,7 @@ def build_message(status):
     ref_name = env("GITHUB_REF_NAME", "")
     image_tag = env("IMAGE_TAG", "")
 
-    subject_parts = ["HeavyEdge feature-models deploy", status]
+    subject_parts = [f"[{status}]", "HeavyEdge feature-models deploy"]
     if ref_name:
         subject_parts.append(ref_name)
 
