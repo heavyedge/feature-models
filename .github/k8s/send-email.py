@@ -161,10 +161,10 @@ def build_message(
     ):
         if line:
             body_lines.append(line)
-    if env("PUSH_MODEL"):
-        body_lines.append(f"Push model: {env('PUSH_MODEL')}")
-    if env("PUSH_DOC"):
-        body_lines.append(f"Push documentation: {env('PUSH_DOC')}")
+
+    body_lines.append(f"Test mode: {env('TEST_MODE', 'true')}")
+    body_lines.append(f"Push model: {env('PUSH_MODEL', 'false')}")
+    body_lines.append(f"Push documentation: {env('PUSH_DOC', 'false')}")
 
     msg = EmailMessage()
     msg["From"] = env("SMTP_NOTIFY_SENDER", "heavyedge-bot@users.noreply.github.com")
