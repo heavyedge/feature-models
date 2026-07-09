@@ -189,7 +189,6 @@ jobs:
       gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
       upload-model-check-run-id: ${{ steps.deploy-checks.outputs.upload-model-check-run-id }}
       upload-doc-check-run-id: ${{ steps.deploy-checks.outputs.upload-doc-check-run-id }}
-      cd-cleanup-check-run-id: ${{ steps.deploy-checks.outputs.cd-cleanup-check-run-id }}
 
     runs-on: ubuntu-latest
 
@@ -216,7 +215,6 @@ jobs:
           script: |
               const checks = [
                 ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
-                ['cd-cleanup-check-run-id', 'CD Cleanup', 'Post-deploy cleanup is queued.'],
               ];
               if (process.env.UPLOAD_TO_HUGGINGFACE === '1') {
                 checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
@@ -375,12 +373,12 @@ jobs:
           PUSH_MODEL: ${{ needs.resolve-variables.outputs.upload_to_huggingface }}
           PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_CLEANUP_REF: ${{ github.head_ref || github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           SMTP_NOTIFY_RECIPIENT: ${{ needs.resolve-variables.outputs.email_recipient }}
           GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
-          CD_CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cd-cleanup-check-run-id }}
         run: |
           template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
           envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
@@ -413,20 +411,20 @@ jobs:
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          permission-contents: write
+          permission-actions: write
 
       - name: Dispatch cd-cleanup workflow
         shell: bash
         env:
           GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_CLEANUP_REF: ${{ github.head_ref || github.ref_name }}
           GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
-          CD_CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cd-cleanup-check-run-id }}
           IMAGE_TAG: ${{ needs.publish-image.outputs.tag }}
           GPU_BUILD_CONCLUSION: failure
           UPLOAD_MODEL_CONCLUSION: failure
           UPLOAD_DOC_CONCLUSION: failure
         run: |
-          sh .github/scripts/dispatch-cleanup.sh
+          sh .github/scripts/workflow-dispatch.sh

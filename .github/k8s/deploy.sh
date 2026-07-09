@@ -20,7 +20,7 @@ if [ "${PUSH_DOC:-0}" = "1" ]; then
     echo "::error::Missing GITHUB_REF_NAME for doc upload." >&2
     exit 2
   fi
-  if ! sh .github/scripts/push-doc.sh; then
+  if ! sh .github/k8s/push-doc.sh; then
     exit 2
   fi
 fi
