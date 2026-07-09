@@ -6,7 +6,7 @@ import os
 import smtplib
 import sys
 from email.message import EmailMessage
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from pathlib import Path
 
 
@@ -41,6 +41,13 @@ class DispatchStatus(IntEnum):
     REQUEST_FAILED = 3
 
 
+class ContainerExitCode(IntFlag):
+    SUCCESS = 0
+    BUILD_FAILED = 1
+    TOKEN_FAILED = 2
+    DISPATCH_FAILED = 4
+
+
 STATUS_DESCRIPTION_SECTIONS = {
     BuildStatus: "build",
     TokenStatus: "token",
@@ -64,7 +71,6 @@ def load_status_descriptions():
 
 STATUS_DESCRIPTIONS = load_status_descriptions()
 
-
 def parse_status(enum_class, value):
     if value is None:
         return None
@@ -86,7 +92,34 @@ def status_line(label, enum_class, value):
     )
 
 
-def build_message(status, build_status=None, token_status=None, dispatch_status=None):
+def exit_code_line(exit_code):
+    if exit_code is None:
+        return None
+    parsed = ContainerExitCode(exit_code)
+    if parsed == ContainerExitCode.SUCCESS:
+        return "Container exit code: 0 (success)"
+    failed_phases = [
+        name.removesuffix("_FAILED").lower()
+        for flag in ContainerExitCode
+        if flag is not ContainerExitCode.SUCCESS and flag in parsed
+        for name in (flag.name,)
+    ]
+    known_mask = 0
+    for flag in ContainerExitCode:
+        known_mask |= flag.value
+    unknown_bits = exit_code & ~known_mask
+    details = ", ".join(failed_phases)
+    if unknown_bits:
+        if details:
+            details = f"{details}; unknown bits: {unknown_bits}"
+        else:
+            details = f"unknown bits: {unknown_bits}"
+    return f"Container exit code: {exit_code} ({details})"
+
+
+def build_message(
+    status, exit_code=None, build_status=None, token_status=None, dispatch_status=None
+):
     repository = env("GITHUB_REPOSITORY", "heavyedge/feature-models")
     ref_name = env("GITHUB_REF_NAME", "")
     image_tag = env("IMAGE_TAG", "")
@@ -103,6 +136,9 @@ def build_message(status, build_status=None, token_status=None, dispatch_status=
         body_lines.append(f"Ref: {ref_name}")
     if image_tag:
         body_lines.append(f"Image tag: {image_tag}")
+    exit_line = exit_code_line(exit_code)
+    if exit_line:
+        body_lines.append(exit_line)
     for line in (
         status_line("Build", BuildStatus, build_status),
         status_line("Token", TokenStatus, token_status),
@@ -128,6 +164,7 @@ def main():
         description="Send deploy status email through local SMTP relay."
     )
     parser.add_argument("--status", required=True, help="Deployment status label.")
+    parser.add_argument("--exit-code", type=int, help="Build container exit code.")
     parser.add_argument("--build-status", type=int, help="Build status code.")
     parser.add_argument(
         "--token-status", type=int, help="GitHub App token status code."
@@ -144,7 +181,11 @@ def main():
         return 0
 
     message = build_message(
-        args.status, args.build_status, args.token_status, args.dispatch_status
+        args.status,
+        args.exit_code,
+        args.build_status,
+        args.token_status,
+        args.dispatch_status,
     )
     with smtplib.SMTP(args.smtp_host, args.smtp_port, timeout=10) as smtp:
         smtp.send_message(message)
