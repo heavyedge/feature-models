@@ -272,7 +272,7 @@ jobs:
           DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY }}
           DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+          KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
         run: |
           kubectl create secret docker-registry regcred \
             --docker-server="$DOCKER_REGISTRY" \
@@ -288,9 +288,9 @@ jobs:
 
       - name: Create Gmail relay secret
         env:
-          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+          GMAIL_USERNAME: ${{ vars.GMAIL_USERNAME }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+          KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
         run: |
           if [ -z "$GMAIL_USERNAME" ]; then
             echo "::error::Missing GMAIL_USERNAME secret for SMTP relay."
@@ -323,7 +323,7 @@ jobs:
           GH_APP_ID: ${{ secrets.GH_APP_ID }}
           GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
           GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
-          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+          KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
         run: |
           if [ -z "$GH_APP_ID" ]; then
             echo "::error::Missing GH_APP_ID secret for GitHub check runs and documentation branch pushes."
@@ -346,6 +346,7 @@ jobs:
     needs:
       - publish-image
       - create-checks
+      - deploy
 
     runs-on: ubuntu-latest
 
