@@ -80,7 +80,7 @@ if ! token_response="$(
     -H "Authorization: Bearer ${jwt}" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     "https://api.github.com/app/installations/${installation_id}/access_tokens" \
-    -d '{"permissions":{"contents":"write"}}'
+    -d '{"permissions":{"actions":"write","contents":"write"}}'
 )"; then
   echo "::error::Failed to create GitHub App installation token." >&2
   exit 6
