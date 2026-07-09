@@ -507,3 +507,182 @@ jobs:
               echo "::endgroup::"
             done
           done
+
+  kubernetes-workflow-dispatch-sidecars:
+    needs: kubernetes-job-creation
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      KUBE_NAMESPACE: heavyedge-cd-ci
+      KUBE_USERNAME: github-actions
+      MLXP_ZONE: ci-k8s
+      HEAVYEDGE_TEST_MODE: "1"
+      UPLOAD_TO_HUGGINGFACE: "0"
+      PUSH_DOC: "0"
+      DOCKER_REGISTRY: marker-registry.invalid
+      DOCKER_USERNAME: ci
+      DOCKER_TAG: placeholder
+      TEMP_DOCKER_TAG: placeholder-temp
+      CPU_REQUEST: "1"
+      GPU_REQUEST: "0"
+      GIT_AUTHOR_NAME: heavyedge-bot
+      GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
+      SMTP_NOTIFY_TO: ""
+      GITHUB_API_URL: http://127.0.0.1:8080
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: heavyedge-cd-ci-dispatch
+          wait: 120s
+
+      - name: Install render dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+
+      - name: Prepare Kubernetes namespace
+        shell: bash
+        run: |
+          kubectl create namespace "$KUBE_NAMESPACE"
+          kubectl label nodes --all "mlx.navercorp.com/zone=$MLXP_ZONE" --overwrite
+          kubectl create secret docker-registry regcred \
+            --docker-server=example.invalid \
+            --docker-username=placeholder \
+            --docker-password=placeholder \
+            --namespace="$KUBE_NAMESPACE"
+          kubectl create secret generic docker-registry-cleanup \
+            --from-literal=DOCKER_USERNAME="$DOCKER_USERNAME" \
+            --from-literal=DOCKER_PASSWORD=ci-password \
+            --namespace="$KUBE_NAMESPACE"
+          kubectl create secret generic gmail-smtp-relay \
+            --from-literal=GMAIL_USERNAME=heavyedge-feature-models@localhost \
+            --from-literal=GMAIL_APP_PASSWORD=placeholder \
+            --namespace="$KUBE_NAMESPACE"
+
+      - name: Run workflow dispatch scenarios
+        shell: bash
+        env:
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_GPU_BUILD_CHECK_RUN_ID: ""
+          GITHUB_UPLOAD_MODEL_CHECK_RUN_ID: ""
+          GITHUB_UPLOAD_DOC_CHECK_RUN_ID: ""
+          RELEASE_TAG_NAME: ""
+        run: |
+          wait_for_log() {
+            job_name="$1"
+            container="$2"
+            pattern="$3"
+            deadline=$((SECONDS + 180))
+
+            while [ "${SECONDS}" -lt "${deadline}" ]; do
+              pods="$(kubectl get pods \
+                --namespace="$KUBE_NAMESPACE" \
+                --selector="job-name=${job_name}" \
+                -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)"
+
+              for pod in ${pods}; do
+                if kubectl logs "$pod" \
+                  --namespace="$KUBE_NAMESPACE" \
+                  --container="$container" 2>/dev/null \
+                  | grep -F "$pattern"; then
+                  return 0
+                fi
+              done
+
+              sleep 2
+            done
+
+            echo "Timed out waiting for ${pattern} in ${container} for ${job_name}." >&2
+            return 1
+          }
+
+          assert_no_log() {
+            job_name="$1"
+            container="$2"
+            pattern="$3"
+            pods="$(kubectl get pods \
+              --namespace="$KUBE_NAMESPACE" \
+              --selector="job-name=${job_name}" \
+              -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)"
+
+            for pod in ${pods}; do
+              if kubectl logs "$pod" \
+                --namespace="$KUBE_NAMESPACE" \
+                --container="$container" 2>/dev/null \
+                | grep -F "$pattern"; then
+                echo "Unexpected ${pattern} in ${container} for ${job_name}." >&2
+                return 1
+              fi
+            done
+          }
+
+          export DELETE_IMAGE_SCRIPT_BASE64
+          DELETE_IMAGE_SCRIPT_BASE64="$(base64 -w 0 .github/k8s/tests/image-cleanup-marker.sh)"
+
+          export BUILD_FAILURE_SCENARIO=""
+          export JOB_NAME="heavyedge-cd-ci-dispatch-success-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          success_job="${RUNNER_TEMP}/ci-k8s-dispatch-success.yaml"
+          .github/k8s/tests/render-test-job.sh \
+            .github/k8s/tests/containers \
+            .github/k8s/tests/workflow-dispatch-containers > "$success_job"
+          kubectl apply --dry-run=client -f "$success_job"
+          kubectl apply --dry-run=server -f "$success_job"
+          kubectl apply -f "$success_job"
+          kubectl wait \
+            --namespace="$KUBE_NAMESPACE" \
+            --for=create \
+            pod \
+            --selector="job-name=${JOB_NAME}" \
+            --timeout=120s
+          wait_for_log "$JOB_NAME" github-check "DISPATCH_EVENT_TYPE=build image"
+          wait_for_log "$JOB_NAME" dispatch-workflow "Dispatched image workflow event build image"
+
+          for scenario in failed-state crash-no-state unknown-state; do
+            export BUILD_FAILURE_SCENARIO="$scenario"
+            export JOB_NAME="heavyedge-cd-ci-dispatch-${scenario}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            failure_job="${RUNNER_TEMP}/ci-k8s-dispatch-${scenario}.yaml"
+            .github/k8s/tests/render-test-job.sh \
+              .github/k8s/tests/failure-containers \
+              .github/k8s/tests/workflow-dispatch-containers > "$failure_job"
+            kubectl apply --dry-run=client -f "$failure_job"
+            kubectl apply --dry-run=server -f "$failure_job"
+            kubectl apply -f "$failure_job"
+            kubectl wait \
+              --namespace="$KUBE_NAMESPACE" \
+              --for=create \
+              pod \
+              --selector="job-name=${JOB_NAME}" \
+              --timeout=120s
+            wait_for_log "$JOB_NAME" dispatch-workflow "Skipping image workflow dispatch because deploy status"
+            assert_no_log "$JOB_NAME" github-check "DISPATCH_METHOD=POST"
+          done
+
+
+      - name: Print Kubernetes diagnostics
+        if: always()
+        shell: bash
+        run: |
+          kubectl get jobs --namespace="$KUBE_NAMESPACE" -o wide || true
+          kubectl get pods --namespace="$KUBE_NAMESPACE" -o wide || true
+          for pod in $(kubectl get pods --namespace="$KUBE_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            kubectl describe pod "$pod" --namespace="$KUBE_NAMESPACE" || true
+            for container in $(kubectl get pod "$pod" --namespace="$KUBE_NAMESPACE" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null); do
+              echo "::group::${pod}/${container}"
+              kubectl logs "$pod" --namespace="$KUBE_NAMESPACE" --container="$container" || true
+              echo "::endgroup::"
+            done
+          done

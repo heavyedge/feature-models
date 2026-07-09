@@ -18,6 +18,14 @@
               token_file="${GITHUB_APP_TOKEN_FILE:-${state_dir}/github-app-token}"
               token_error_file="${GITHUB_APP_TOKEN_ERROR_FILE:-${state_dir}/github-app-token-error}"
               token_wait_seconds="${GITHUB_APP_TOKEN_WAIT_SECONDS:-120}"
+              dispatch_done_file="${WORKFLOW_DISPATCH_DONE_FILE:-${state_dir}/workflow-dispatch-complete}"
+
+              finish_dispatch() {
+                mkdir -p "$(dirname "${dispatch_done_file}")"
+                touch "${dispatch_done_file}"
+              }
+
+              trap finish_dispatch EXIT
 
               wait_for_github_token() {
                 waited=0
@@ -67,6 +75,12 @@
               state_file = ENV.fetch("DEPLOY_STATE_FILE")
               deploy_state = File.size?(state_file) ? JSON.parse(File.read(state_file)) : {}
               deploy_state = {} unless deploy_state.is_a?(Hash)
+              deploy_status = deploy_state["status"].to_s
+
+              unless deploy_status == "succeeded"
+                puts "Skipping image workflow dispatch because deploy status is #{deploy_status.empty? ? 'unknown' : deploy_status}."
+                exit 0
+              end
 
               owner, repo = ENV.fetch("GITHUB_REPOSITORY").split("/", 2)
               if owner.to_s.empty? || repo.to_s.empty?
@@ -84,7 +98,11 @@
                 },
               }
 
-              uri = URI("https://api.github.com/repos/#{owner}/#{repo}/dispatches")
+              github_api_url = ENV["GITHUB_API_URL"].to_s
+              github_api_url = "https://api.github.com" if github_api_url.empty?
+              github_api_url = github_api_url.sub(%r{/+\z}, "")
+
+              uri = URI("#{github_api_url}/repos/#{owner}/#{repo}/dispatches")
               request = Net::HTTP::Post.new(uri)
               request["Accept"] = "application/vnd.github+json"
               request["Authorization"] = "Bearer #{token}"
@@ -92,7 +110,7 @@
               request["X-GitHub-Api-Version"] = "2022-11-28"
               request.body = JSON.generate(payload)
 
-              response = Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
+              response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
                 http.open_timeout = 10
                 http.read_timeout = 30
                 http.request(request)
@@ -136,3 +154,5 @@
               value: "/var/run/heavyedge/deploy-state.json"
             - name: IMAGE_WORKFLOW_EVENT_TYPE
               value: "build image"
+            - name: GITHUB_API_URL
+              value: "${GITHUB_API_URL}"
