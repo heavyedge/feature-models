@@ -7,14 +7,11 @@ on:
 
 jobs:
 
-  cleanup:
+  update-deploy-checks:
 
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Create GitHub App token for post-deploy checks
         id: app-token
@@ -49,6 +46,15 @@ jobs:
               });
             }
 
+  delete-image:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Login to Docker registry
         shell: bash
         env:
@@ -81,3 +87,56 @@ jobs:
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
         run: |
           sh .github/scripts/delete-image.sh
+
+  finalize-cleanup-check:
+
+    needs:
+      - update-deploy-checks
+      - delete-image
+
+    if: ${{ always() }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Create GitHub App token for cleanup check
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Update cleanup check
+        uses: actions/github-script@v9
+        env:
+          CD_CLEANUP_CHECK_RUN_ID: ${{ github.event.client_payload.cd_cleanup_check_run_id }}
+          UPDATE_CHECKS_RESULT: ${{ needs.update-deploy-checks.result }}
+          DELETE_IMAGE_RESULT: ${{ needs.delete-image.result }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const checkRunId = process.env.CD_CLEANUP_CHECK_RUN_ID;
+            if (!checkRunId) {
+              core.warning('Missing CD cleanup check run ID; skipping check update.');
+              return;
+            }
+
+            const succeeded =
+              process.env.UPDATE_CHECKS_RESULT === 'success' &&
+              process.env.DELETE_IMAGE_RESULT === 'success';
+
+            await github.rest.checks.update({
+              ...context.repo,
+              check_run_id: checkRunId,
+              status: 'completed',
+              conclusion: succeeded ? 'success' : 'failure',
+              completed_at: new Date().toISOString(),
+              output: {
+                title: 'CD Cleanup',
+                summary: succeeded
+                  ? 'Post-deploy cleanup completed.'
+                  : 'Post-deploy cleanup failed.',
+              },
+            });

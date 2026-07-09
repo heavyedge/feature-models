@@ -8,7 +8,7 @@ metadata:
 spec:
   ttlSecondsAfterFinished: 600
   activeDeadlineSeconds: 21600
-  backoffLimit: 1
+  backoffLimit: 0
   template:
     metadata:
       annotations:
@@ -27,7 +27,7 @@ spec:
           secret:
             secretName: gmail-smtp-relay
       containers:
-        - name: heavyedge-feature-models
+        - name: build
           image: ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
           imagePullPolicy: Always
           resources:
@@ -39,7 +39,24 @@ spec:
               memory: "16Gi"
               cpu: "${CPU_REQUEST}"
               nvidia.com/gpu: "${GPU_REQUEST}"
-          command: ["sh", ".github/scripts/deploy.sh"]
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              python .github/k8s/wait-smtp.py || echo "SMTP relay is unavailable; continuing without email notifications."
+
+              python .github/k8s/send-email.py --status "Started" || true
+
+              sh .github/scripts/deploy.sh
+              status=$?
+
+              if [ "$status" -eq 0 ]; then
+                python .github/k8s/send-email.py --status "Completed" || true
+              else
+                python .github/k8s/send-email.py --status "Failed" || true
+              fi
+
+              touch /var/run/heavyedge/deploy.done
+              exit "$status"
           env:
             - name: GH_APP_ID
               valueFrom:
@@ -65,8 +82,73 @@ spec:
               value: "${UPLOAD_MODEL_CHECK_RUN_ID}"
             - name: UPLOAD_DOC_CHECK_RUN_ID
               value: "${UPLOAD_DOC_CHECK_RUN_ID}"
+            - name: CD_CLEANUP_CHECK_RUN_ID
+              value: "${CD_CLEANUP_CHECK_RUN_ID}"
             - name: IMAGE_TAG
               value: "${IMAGE_TAG}"
+            - name: GITHUB_REF_NAME
+              value: "${GITHUB_REF_NAME}"
+            - name: SMTP_NOTIFY_RECIPIENT
+              value: "${SMTP_NOTIFY_RECIPIENT}"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
+        - name: postfix
+          image: boky/postfix:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          ports:
+            - name: smtp
+              containerPort: 587
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              /scripts/run.sh &
+              postfix_pid=$!
+
+              while kill -0 "$postfix_pid" 2>/dev/null; do
+                if [ -f /var/run/heavyedge/deploy.done ]; then
+                  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+                    postqueue -f || true
+                    if postqueue -p 2>/dev/null | grep -q "Mail queue is empty"; then
+                      break
+                    fi
+                    sleep 2
+                  done
+                  kill "$postfix_pid" 2>/dev/null || true
+                  wait "$postfix_pid" || true
+                  exit 0
+                fi
+                sleep 2
+              done
+
+              wait "$postfix_pid" || true
+          env:
+            - name: RELAYHOST
+              value: "[smtp.gmail.com]:587"
+            - name: RELAYHOST_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: gmail-smtp-relay
+                  key: GMAIL_USERNAME
+            - name: RELAYHOST_PASSWORD_FILE
+              value: "/run/secrets/gmail/GMAIL_APP_PASSWORD"
+            - name: POSTFIX_smtp_tls_security_level
+              value: "encrypt"
+            - name: POSTFIX_mynetworks
+              value: "127.0.0.0/8 [::1]/128"
+            - name: ALLOW_EMPTY_SENDER_DOMAINS
+              value: "true"
+            - name: LOG_FORMAT
+              value: "json"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+            - name: gmail-smtp-relay
+              mountPath: /run/secrets/gmail
+              readOnly: true
