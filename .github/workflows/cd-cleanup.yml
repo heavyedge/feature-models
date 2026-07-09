@@ -1,9 +1,29 @@
 name: CD Cleanup
 
 on:
-  repository_dispatch:
-    types:
-      - post-deploy
+  workflow_dispatch:
+    inputs:
+      gpu_build_check_run_id:
+        required: true
+        type: string
+      gpu_build_conclusion:
+        required: true
+        type: string
+      upload_model_check_run_id:
+        required: false
+        type: string
+      upload_model_conclusion:
+        required: true
+        type: string
+      upload_doc_check_run_id:
+        required: false
+        type: string
+      upload_doc_conclusion:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
 
 jobs:
 
@@ -24,12 +44,12 @@ jobs:
       - name: Update deploy checks
         uses: actions/github-script@v9
         env:
-          GPU_BUILD_CHECK_RUN_ID: ${{ github.event.client_payload.gpu_build_check_run_id }}
-          GPU_BUILD_CONCLUSION: ${{ github.event.client_payload.gpu_build_conclusion }}
-          UPLOAD_MODEL_CHECK_RUN_ID: ${{ github.event.client_payload.upload_model_check_run_id }}
-          UPLOAD_MODEL_CONCLUSION: ${{ github.event.client_payload.upload_model_conclusion }}
-          UPLOAD_DOC_CHECK_RUN_ID: ${{ github.event.client_payload.upload_doc_check_run_id }}
-          UPLOAD_DOC_CONCLUSION: ${{ github.event.client_payload.upload_doc_conclusion }}
+          GPU_BUILD_CHECK_RUN_ID: ${{ inputs.gpu_build_check_run_id }}
+          GPU_BUILD_CONCLUSION: ${{ inputs.gpu_build_conclusion }}
+          UPLOAD_MODEL_CHECK_RUN_ID: ${{ inputs.upload_model_check_run_id }}
+          UPLOAD_MODEL_CONCLUSION: ${{ inputs.upload_model_conclusion }}
+          UPLOAD_DOC_CHECK_RUN_ID: ${{ inputs.upload_doc_check_run_id }}
+          UPLOAD_DOC_CONCLUSION: ${{ inputs.upload_doc_conclusion }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
@@ -92,59 +112,6 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
-          IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           sh .github/scripts/delete-image.sh
-
-  finalize-cleanup-check:
-
-    needs:
-      - update-deploy-checks
-      - delete-image
-
-    if: ${{ always() }}
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Create GitHub App token for cleanup check
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          permission-checks: write
-
-      - name: Update cleanup check
-        uses: actions/github-script@v9
-        env:
-          CD_CLEANUP_CHECK_RUN_ID: ${{ github.event.client_payload.cd_cleanup_check_run_id }}
-          UPDATE_CHECKS_RESULT: ${{ needs.update-deploy-checks.result }}
-          DELETE_IMAGE_RESULT: ${{ needs.delete-image.result }}
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const checkRunId = process.env.CD_CLEANUP_CHECK_RUN_ID;
-            if (!checkRunId) {
-              core.warning('Missing CD cleanup check run ID; skipping check update.');
-              return;
-            }
-
-            const succeeded =
-              process.env.UPDATE_CHECKS_RESULT === 'success' &&
-              process.env.DELETE_IMAGE_RESULT === 'success';
-
-            await github.rest.checks.update({
-              ...context.repo,
-              check_run_id: checkRunId,
-              status: 'completed',
-              conclusion: succeeded ? 'success' : 'failure',
-              completed_at: new Date().toISOString(),
-              output: {
-                title: 'CD Cleanup',
-                summary: succeeded
-                  ? 'Post-deploy cleanup completed.'
-                  : 'Post-deploy cleanup failed.',
-              },
-            });

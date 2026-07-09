@@ -79,7 +79,7 @@ spec:
               export UPLOAD_DOC_CONCLUSION="$upload_doc_conclusion"
 
               dispatch_status=0
-              sh .github/scripts/dispatch-cleanup.sh || dispatch_status=$?
+              sh .github/scripts/workflow-dispatch.sh || dispatch_status=$?
 
               exit_code=0
               if [ "$build_status" -ne 0 ]; then
@@ -128,12 +128,12 @@ spec:
               value: "${UPLOAD_MODEL_CHECK_RUN_ID}"
             - name: UPLOAD_DOC_CHECK_RUN_ID
               value: "${UPLOAD_DOC_CHECK_RUN_ID}"
-            - name: CD_CLEANUP_CHECK_RUN_ID
-              value: "${CD_CLEANUP_CHECK_RUN_ID}"
             - name: IMAGE_TAG
               value: "${IMAGE_TAG}"
             - name: GITHUB_REF_NAME
               value: "${GITHUB_REF_NAME}"
+            - name: GITHUB_CLEANUP_REF
+              value: "${GITHUB_CLEANUP_REF}"
             - name: SMTP_NOTIFY_RECIPIENT
               value: "${SMTP_NOTIFY_RECIPIENT}"
             - name: HUGGINGFACE_TOKEN
