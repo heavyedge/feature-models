@@ -150,6 +150,8 @@ spec:
               value: "${IMAGE_TAG}"
             - name: GITHUB_REF_NAME
               value: "${GITHUB_REF_NAME}"
+            - name: TAG_NAME
+              value: "${GITHUB_REF_NAME}"
             - name: GITHUB_DISPATCH_REF
               value: "${GITHUB_DISPATCH_REF}"
             - name: SMTP_NOTIFY_RECIPIENT

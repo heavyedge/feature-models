@@ -179,7 +179,7 @@ jobs:
         - name: test models in inference environment
           run: make test
 
-  docker:
+  model-image:
 
       needs: train-model
 
@@ -234,7 +234,7 @@ jobs:
           run: |
             docker run --rm -v $PWD/_temp:/app heavyedge-feature-models:ci python3 /model/predict-quantiles.py /app/X.npy --target H --method delta -o /app/H.quantiles.npy
 
-  docker-dev:
+  dev-image:
 
     runs-on: ubuntu-latest
 
