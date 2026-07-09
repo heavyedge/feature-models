@@ -46,15 +46,13 @@ spec:
           args:
             - |
               state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
-              result_file="${DEPLOY_RESULT_FILE:-${state_dir}/deploy-result}"
-              output_file="${DEPLOY_OUTPUT_FILE:-${state_dir}/deploy-output.json}"
-              output_tmp_file="${DEPLOY_OUTPUT_TMP_FILE:-${state_dir}/deploy-output.tmp.json}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
+              metadata_tmp_file="${DEPLOY_METADATA_TMP_FILE:-/tmp/deploy-metadata.json}"
 
               sh .github/scripts/deploy.sh
               exit_code=$?
 
-              mkdir -p "$(dirname "${result_file}")"
-              mkdir -p "$(dirname "${output_file}")"
+              mkdir -p "$(dirname "${state_file}")"
 
               if [ "${exit_code}" -eq 0 ]; then
                 result_status=succeeded
@@ -62,19 +60,37 @@ spec:
                 result_status=failed
               fi
 
-              result_file_tmp="${result_file}.$$"
-              {
-                printf 'status=%s\n' "${result_status}"
-                printf 'exit_code=%s\n' "${exit_code}"
-              } > "${result_file_tmp}"
-              mv "${result_file_tmp}" "${result_file}"
+              state_tmp_file="${state_file}.$$"
+              if ! DEPLOY_STATUS="${result_status}" \
+                DEPLOY_EXIT_CODE="${exit_code}" \
+                DEPLOY_METADATA_TMP_FILE="${metadata_tmp_file}" \
+                DEPLOY_STATE_TMP_FILE="${state_tmp_file}" \
+                python3 <<'PY'
+              import json
+              import os
+              import sys
 
-              if [ -f "${output_tmp_file}" ]; then
-                mv "${output_tmp_file}" "${output_file}"
-              else
-                printf '{}\n' > "${output_file}.$$"
-                mv "${output_file}.$$" "${output_file}"
+              metadata_file = os.environ["DEPLOY_METADATA_TMP_FILE"]
+              payload = {}
+              if os.path.exists(metadata_file):
+                  with open(metadata_file, encoding="utf-8") as file:
+                      parsed = json.load(file)
+                  if isinstance(parsed, dict):
+                      payload.update(parsed)
+                  else:
+                      print(f"Ignoring non-object deploy metadata in {metadata_file}", file=sys.stderr)
+
+              payload["status"] = os.environ["DEPLOY_STATUS"]
+              payload["exit_code"] = int(os.environ["DEPLOY_EXIT_CODE"])
+
+              with open(os.environ["DEPLOY_STATE_TMP_FILE"], "w", encoding="utf-8") as file:
+                  json.dump(payload, file, sort_keys=True)
+                  file.write("\n")
+              PY
+              then
+                printf '{"exit_code":%s,"status":"%s"}\n' "${exit_code}" "${result_status}" > "${state_tmp_file}"
               fi
+              mv "${state_tmp_file}" "${state_file}"
 
               exit "${exit_code}"
           volumeMounts:
@@ -99,10 +115,10 @@ spec:
               value: "${UPLOAD_TO_HUGGINGFACE}"
             - name: PUSH_DOC
               value: "${PUSH_DOC}"
-            - name: DEPLOY_OUTPUT_FILE
-              value: "/var/run/heavyedge/deploy-output.json"
-            - name: DEPLOY_OUTPUT_TMP_FILE
-              value: "/var/run/heavyedge/deploy-output.tmp.json"
+            - name: DEPLOY_STATE_FILE
+              value: "/var/run/heavyedge/deploy-state.json"
+            - name: DEPLOY_METADATA_TMP_FILE
+              value: "/tmp/deploy-metadata.json"
             - name: GIT_AUTHOR_NAME
               value: "${GIT_AUTHOR_NAME}"
             - name: GIT_AUTHOR_EMAIL
@@ -128,9 +144,9 @@ spec:
               set -eu
 
               state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
-              result_file="${DEPLOY_RESULT_FILE:-${state_dir}/deploy-result}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
 
-              while [ ! -f "${result_file}" ]; do
+              while [ ! -f "${state_file}" ]; do
                 sleep 5
               done
 
@@ -180,7 +196,7 @@ spec:
               set -f
 
               state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
-              result_file="${DEPLOY_RESULT_FILE:-${state_dir}/deploy-result}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
               notify_done_file="${NOTIFY_DEPLOY_DONE_FILE:-${state_dir}/notify-deploy-complete}"
 
               finish_notify() {
@@ -280,11 +296,11 @@ spec:
 
               send_mail started || true
 
-              while [ ! -f "${result_file}" ]; do
+              while [ ! -f "${state_file}" ]; do
                 sleep 5
               done
 
-              . "${result_file}"
+              status="$(sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${state_file}" | head -n 1)"
 
               case "${status:-}" in
                 succeeded|failed)
@@ -556,7 +572,7 @@ spec:
               set -f
 
               state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
-              result_file="${DEPLOY_RESULT_FILE:-${state_dir}/deploy-result}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
               check_id_file="${GITHUB_CHECK_RUN_ID_FILE:-${state_dir}/github-check-id}"
               token_file="${GITHUB_APP_TOKEN_FILE:-${state_dir}/github-app-token}"
               token_error_file="${GITHUB_APP_TOKEN_ERROR_FILE:-${state_dir}/github-app-token-error}"
@@ -759,11 +775,21 @@ spec:
 
               update_github_check_run started || true
 
-              while [ ! -f "${result_file}" ]; do
+              while [ ! -f "${state_file}" ]; do
                 sleep 5
               done
 
-              . "${result_file}"
+              status="$(DEPLOY_STATE_FILE="${state_file}" ruby <<'RUBY'
+              require "json"
+
+              begin
+                payload = JSON.parse(File.read(ENV.fetch("DEPLOY_STATE_FILE")))
+                puts payload["status"].to_s
+              rescue StandardError => error
+                warn "Failed to read deploy state: #{error.class}: #{error.message}"
+              end
+              RUBY
+              )"
 
               case "${status:-}" in
                 succeeded|failed)
@@ -804,7 +830,7 @@ spec:
               set -f
 
               state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
-              output_file="${DEPLOY_OUTPUT_FILE:-${state_dir}/deploy-output.json}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
               token_file="${GITHUB_APP_TOKEN_FILE:-${state_dir}/github-app-token}"
               token_error_file="${GITHUB_APP_TOKEN_ERROR_FILE:-${state_dir}/github-app-token-error}"
               token_wait_seconds="${GITHUB_APP_TOKEN_WAIT_SECONDS:-120}"
@@ -832,7 +858,7 @@ spec:
                 fi
 
                 GITHUB_APP_TOKEN_FILE="${token_file}" \
-                  DEPLOY_OUTPUT_FILE="${output_file}" \
+                  DEPLOY_STATE_FILE="${state_file}" \
                   ruby <<'RUBY'
               require "json"
               require "net/http"
@@ -854,9 +880,9 @@ spec:
                 exit 0
               end
 
-              output_file = ENV.fetch("DEPLOY_OUTPUT_FILE")
-              deploy_output = File.size?(output_file) ? JSON.parse(File.read(output_file)) : {}
-              deploy_output = {} unless deploy_output.is_a?(Hash)
+              state_file = ENV.fetch("DEPLOY_STATE_FILE")
+              deploy_state = File.size?(state_file) ? JSON.parse(File.read(state_file)) : {}
+              deploy_state = {} unless deploy_state.is_a?(Hash)
 
               owner, repo = ENV.fetch("GITHUB_REPOSITORY").split("/", 2)
               if owner.to_s.empty? || repo.to_s.empty?
@@ -868,8 +894,8 @@ spec:
                 "event_type" => ENV["IMAGE_WORKFLOW_EVENT_TYPE"].to_s.empty? ? "GPU-completed" : ENV["IMAGE_WORKFLOW_EVENT_TYPE"],
                 "client_payload" => {
                   "model" => {
-                    "repo" => deploy_output["model_repo"].to_s,
-                    "revision" => deploy_output["model_revision"].to_s,
+                    "repo" => deploy_state["model_repo"].to_s,
+                    "revision" => deploy_state["model_revision"].to_s,
                   },
                 },
               }
@@ -899,7 +925,7 @@ spec:
               RUBY
               }
 
-              while [ ! -f "${output_file}" ]; do
+              while [ ! -f "${state_file}" ]; do
                 sleep 5
               done
 
@@ -922,8 +948,8 @@ spec:
               value: "${EVENT_NAME}"
             - name: DOCKER_TAG
               value: "${DOCKER_TAG}"
-            - name: DEPLOY_OUTPUT_FILE
-              value: "/var/run/heavyedge/deploy-output.json"
+            - name: DEPLOY_STATE_FILE
+              value: "/var/run/heavyedge/deploy-state.json"
             - name: IMAGE_WORKFLOW_EVENT_TYPE
               value: "GPU-completed"
         - name: postfix

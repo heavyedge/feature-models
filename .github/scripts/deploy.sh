@@ -21,8 +21,8 @@ if [ "${UPLOAD_TO_HUGGINGFACE}" = "1" ]; then
     exit 1
   fi
   uv pip install --system huggingface_hub
-  if [ -n "${DEPLOY_OUTPUT_TMP_FILE:-}" ]; then
-    python upload.py "${TAG_NAME}" --metadata-file "${DEPLOY_OUTPUT_TMP_FILE}"
+  if [ -n "${DEPLOY_METADATA_TMP_FILE:-}" ]; then
+    python upload.py "${TAG_NAME}" --metadata-file "${DEPLOY_METADATA_TMP_FILE}"
   else
     python upload.py "${TAG_NAME}"
   fi
