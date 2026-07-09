@@ -132,8 +132,8 @@ jobs:
             cpu_request="1"
             gpu_request="1"
           else
-            cpu_request="2"
-            gpu_request="2"
+            cpu_request="1"
+            gpu_request="1"
           fi
 
           upload_to_huggingface=0
