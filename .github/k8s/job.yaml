@@ -108,6 +108,13 @@ spec:
               value: "${GITHUB_REF_NAME}"
             - name: SMTP_NOTIFY_RECIPIENT
               value: "${SMTP_NOTIFY_RECIPIENT}"
+            - name: HUGGINGFACE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface-token
+                  key: HUGGINGFACE_TOKEN
+            - name: PUSH_MODEL
+              value: "${PUSH_MODEL}"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge

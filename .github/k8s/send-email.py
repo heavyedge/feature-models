@@ -21,6 +21,7 @@ class BuildStatus(IntEnum):
     MAKE_JOBS_DISCOVERY_FAILED = 3
     CUDA_PREFLIGHT_FAILED = 4
     BUILD_FAILED = 5
+    MODEL_UPLOAD_FAILED = 6
 
 
 class TokenStatus(IntEnum):
@@ -147,8 +148,8 @@ def build_message(
     ):
         if line:
             body_lines.append(line)
-    if env("UPLOAD_TO_HUGGINGFACE"):
-        body_lines.append(f"Upload to Hugging Face: {env('UPLOAD_TO_HUGGINGFACE')}")
+    if env("PUSH_MODEL"):
+        body_lines.append(f"Push model: {env('PUSH_MODEL')}")
     if env("PUSH_DOC"):
         body_lines.append(f"Push documentation: {env('PUSH_DOC')}")
 

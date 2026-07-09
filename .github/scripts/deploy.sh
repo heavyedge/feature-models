@@ -23,3 +23,16 @@ fi
 if ! HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE:-} make -j "${MAKE_JOBS}" models notebooks; then
   exit 5
 fi
+
+if [ "${PUSH_MODEL:-0}" = "1" ]; then
+  if [ -z "${GITHUB_REF_NAME:-}" ]; then
+    echo "::error::Missing GITHUB_REF_NAME for model upload." >&2
+    exit 6
+  fi
+  if ! uv pip install --system huggingface_hub; then
+    exit 6
+  fi
+  if ! python upload.py "${GITHUB_REF_NAME}"; then
+    exit 6
+  fi
+fi

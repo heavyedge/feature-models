@@ -5,7 +5,8 @@
     "2": "CUDA device discovery failed.",
     "3": "CUDA device count discovery failed while choosing MAKE_JOBS.",
     "4": "CUDA preflight validation failed.",
-    "5": "Model or notebook build failed while running make."
+    "5": "Model or notebook build failed while running make.",
+    "6": "Model upload failed."
   },
   "token": {
     "0": "GitHub App token was created successfully.",
