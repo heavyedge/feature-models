@@ -104,7 +104,7 @@ jobs:
 
       - name: Stage documentation version metadata
         run: |
-          python .github/scripts/write-doc-versions.py \
+          python .github/scripts/doc-versions.py \
             --site-dir pages-site \
             --fallback-version "${{ steps.version.outputs.version }}"
 
