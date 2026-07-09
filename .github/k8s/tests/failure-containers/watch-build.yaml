@@ -1,0 +1,66 @@
+        - name: watch-build
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+            limits:
+              memory: "64Mi"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+
+              state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
+              heartbeat_file="${DEPLOY_BUILD_HEARTBEAT_FILE:-${state_dir}/build-heartbeat}"
+              started_at="$(date +%s)"
+
+              write_failed_state() {
+                mkdir -p "$(dirname "${state_file}")"
+                if [ -f "${state_file}" ]; then
+                  return 0
+                fi
+
+                state_tmp_file="${state_file}.watch-build.$$"
+                cat > "${state_tmp_file}" <<'JSON'
+              {"checks":{"gpu_build":{"name":"GPU build","status":"failed","summary":"Test build container stopped before publishing deploy state."}},"exit_code":255,"failure_reason":"build container stopped before publishing deploy state","status":"failed"}
+              JSON
+                if [ ! -f "${state_file}" ]; then
+                  mv "${state_tmp_file}" "${state_file}"
+                else
+                  rm -f "${state_tmp_file}"
+                fi
+              }
+
+              while [ ! -f "${state_file}" ]; do
+                now="$(date +%s)"
+
+                if [ -f "${heartbeat_file}" ]; then
+                  heartbeat_at="$(cat "${heartbeat_file}" 2>/dev/null || true)"
+                  case "${heartbeat_at}" in
+                    ''|*[!0-9]*)
+                      heartbeat_at=0
+                      ;;
+                  esac
+
+                  if [ $((now - heartbeat_at)) -ge 3 ]; then
+                    echo "Test build heartbeat is stale; publishing failed deploy state."
+                    write_failed_state
+                    exit 0
+                  fi
+                elif [ $((now - started_at)) -ge 3 ]; then
+                  echo "Test build heartbeat was not created; publishing failed deploy state."
+                  write_failed_state
+                  exit 0
+                fi
+
+                sleep 1
+              done
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+          env:
+            - name: DEPLOY_STATE_FILE
+              value: "/var/run/heavyedge/deploy-state.json"
