@@ -55,7 +55,6 @@ spec:
                 python .github/k8s/send-email.py --status "Failed" || true
               fi
 
-              sleep 10
               touch /var/run/heavyedge/deploy.done
               exit "$status"
           env:
