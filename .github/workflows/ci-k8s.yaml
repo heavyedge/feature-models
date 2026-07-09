@@ -22,7 +22,7 @@ jobs:
       HEAVYEDGE_TEST_MODE: "1"
       UPLOAD_TO_HUGGINGFACE: "0"
       PUSH_DOC: "0"
-      DOCKER_REGISTRY: ""
+      DOCKER_REGISTRY: http://mock-registry:5000
       DOCKER_USERNAME: ci
       DOCKER_TAG: placeholder
       TEMP_DOCKER_TAG: placeholder-temp
@@ -35,6 +35,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Test Docker image deletion script
+        shell: bash
+        run: |
+          python3 .github/k8s/tests/test-delete-image.py
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -61,10 +66,27 @@ jobs:
             --docker-username=placeholder \
             --docker-password=placeholder \
             --namespace="$KUBE_NAMESPACE"
+          kubectl create secret generic docker-registry-cleanup \
+            --from-literal=DOCKER_USERNAME="$DOCKER_USERNAME" \
+            --from-literal=DOCKER_PASSWORD=ci-password \
+            --namespace="$KUBE_NAMESPACE"
           kubectl create secret generic gmail-smtp-relay \
             --from-literal=GMAIL_USERNAME=heavyedge-feature-models@localhost \
             --from-literal=GMAIL_APP_PASSWORD=placeholder \
             --namespace="$KUBE_NAMESPACE"
+
+      - name: Start mock Docker registry
+        shell: bash
+        run: |
+          kubectl create configmap mock-registry \
+            --from-file=mock-registry.py=.github/k8s/tests/mock-registry.py \
+            --namespace="$KUBE_NAMESPACE"
+          kubectl apply \
+            --namespace="$KUBE_NAMESPACE" \
+            -f .github/k8s/tests/mock-registry.yaml
+          kubectl rollout status deployment/mock-registry \
+            --namespace="$KUBE_NAMESPACE" \
+            --timeout=120s
 
       - name: Render Kubernetes job with placeholder build
         id: render
@@ -105,6 +127,16 @@ jobs:
             "job/${job_name}" \
             --timeout=300s
 
+      - name: Assert image cleanup sidecar deleted image
+        shell: bash
+        run: |
+          registry_logs="$(kubectl logs deployment/mock-registry --namespace="$KUBE_NAMESPACE")"
+          printf '%s\n' "$registry_logs"
+          grep -F "HEAD /v2/ci/heavyedge/feature-models/manifests/placeholder-temp" \
+            <<< "$registry_logs"
+          grep -F "DELETE /v2/ci/heavyedge/feature-models/manifests/sha256:ci-cleanup" \
+            <<< "$registry_logs"
+
       - name: Print Kubernetes diagnostics
         if: always()
         shell: bash
@@ -115,6 +147,7 @@ jobs:
             kubectl get job "$job_name" --namespace="$KUBE_NAMESPACE" -o wide || true
             kubectl describe job "$job_name" --namespace="$KUBE_NAMESPACE" || true
             kubectl get pods --namespace="$KUBE_NAMESPACE" --selector="job-name=${job_name}" -o wide || true
+            kubectl logs deployment/mock-registry --namespace="$KUBE_NAMESPACE" || true
             for pod in $(kubectl get pods --namespace="$KUBE_NAMESPACE" --selector="job-name=${job_name}" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
               for container in $(kubectl get pod "$pod" --namespace="$KUBE_NAMESPACE" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null); do
                 echo "::group::${pod}/${container}"
