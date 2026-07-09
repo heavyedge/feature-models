@@ -42,9 +42,19 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              python .github/k8s/wait-smtp.py || echo "SMTP relay is unavailable; continuing without blocking deploy."
+              python .github/k8s/wait-smtp.py || echo "SMTP relay is unavailable; continuing without email notifications."
+
+              python .github/k8s/send-email.py --status "Started" || true
+
               sh .github/scripts/deploy.sh
               status=$?
+
+              if [ "$status" -eq 0 ]; then
+                python .github/k8s/send-email.py --status "Completed" || true
+              else
+                python .github/k8s/send-email.py --status "Failed" || true
+              fi
+
               touch /var/run/heavyedge/deploy.done
               exit "$status"
           env:
