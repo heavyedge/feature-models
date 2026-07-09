@@ -422,5 +422,8 @@ jobs:
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
           CD_CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cd-cleanup-check-run-id }}
           IMAGE_TAG: ${{ needs.publish-image.outputs.tag }}
+          GPU_BUILD_CONCLUSION: failure
+          UPLOAD_MODEL_CONCLUSION: failure
+          UPLOAD_DOC_CONCLUSION: failure
         run: |
           sh .github/scripts/dispatch-cleanup.sh

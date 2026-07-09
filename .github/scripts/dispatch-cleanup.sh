@@ -6,6 +6,7 @@ required_vars="
 GITHUB_APP_TOKEN
 GITHUB_REPOSITORY
 GPU_BUILD_CHECK_RUN_ID
+GPU_BUILD_CONCLUSION
 CD_CLEANUP_CHECK_RUN_ID
 IMAGE_TAG
 "
@@ -22,16 +23,22 @@ if ! payload="$(
   jq -n \
     --arg event_type "post-deploy" \
     --arg gpu_build_check_run_id "${GPU_BUILD_CHECK_RUN_ID}" \
+    --arg gpu_build_conclusion "${GPU_BUILD_CONCLUSION}" \
     --arg upload_model_check_run_id "${UPLOAD_MODEL_CHECK_RUN_ID:-}" \
+    --arg upload_model_conclusion "${UPLOAD_MODEL_CONCLUSION:-failure}" \
     --arg upload_doc_check_run_id "${UPLOAD_DOC_CHECK_RUN_ID:-}" \
+    --arg upload_doc_conclusion "${UPLOAD_DOC_CONCLUSION:-failure}" \
     --arg cd_cleanup_check_run_id "${CD_CLEANUP_CHECK_RUN_ID}" \
     --arg image_tag "${IMAGE_TAG}" \
     '{
       event_type: $event_type,
       client_payload: {
         gpu_build_check_run_id: $gpu_build_check_run_id,
+        gpu_build_conclusion: $gpu_build_conclusion,
         upload_model_check_run_id: $upload_model_check_run_id,
+        upload_model_conclusion: $upload_model_conclusion,
         upload_doc_check_run_id: $upload_doc_check_run_id,
+        upload_doc_conclusion: $upload_doc_conclusion,
         cd_cleanup_check_run_id: $cd_cleanup_check_run_id,
         image_tag: $image_tag
       }

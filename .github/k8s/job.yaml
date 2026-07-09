@@ -53,6 +53,21 @@ spec:
               GITHUB_APP_TOKEN="$(sh .github/scripts/app-token.sh)" || token_status=$?
               export GITHUB_APP_TOKEN
 
+              gpu_build_conclusion=failure
+              upload_model_conclusion=failure
+              upload_doc_conclusion=failure
+              if [ "$build_status" -eq 0 ]; then
+                gpu_build_conclusion=success
+                upload_model_conclusion=success
+                upload_doc_conclusion=success
+              elif [ "$build_status" -eq 6 ]; then
+                gpu_build_conclusion=success
+                upload_doc_conclusion=success
+              fi
+              export GPU_BUILD_CONCLUSION="$gpu_build_conclusion"
+              export UPLOAD_MODEL_CONCLUSION="$upload_model_conclusion"
+              export UPLOAD_DOC_CONCLUSION="$upload_doc_conclusion"
+
               dispatch_status=0
               sh .github/scripts/dispatch-cleanup.sh || dispatch_status=$?
 

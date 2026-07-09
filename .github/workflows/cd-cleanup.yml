@@ -25,23 +25,31 @@ jobs:
         uses: actions/github-script@v9
         env:
           GPU_BUILD_CHECK_RUN_ID: ${{ github.event.client_payload.gpu_build_check_run_id }}
+          GPU_BUILD_CONCLUSION: ${{ github.event.client_payload.gpu_build_conclusion }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ github.event.client_payload.upload_model_check_run_id }}
+          UPLOAD_MODEL_CONCLUSION: ${{ github.event.client_payload.upload_model_conclusion }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ github.event.client_payload.upload_doc_check_run_id }}
+          UPLOAD_DOC_CONCLUSION: ${{ github.event.client_payload.upload_doc_conclusion }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
-            const checkRunIds = [
-              process.env.GPU_BUILD_CHECK_RUN_ID,
-              process.env.UPLOAD_MODEL_CHECK_RUN_ID,
-              process.env.UPLOAD_DOC_CHECK_RUN_ID,
-            ].filter(Boolean);
+            const checks = [
+              [process.env.GPU_BUILD_CHECK_RUN_ID, process.env.GPU_BUILD_CONCLUSION],
+              [process.env.UPLOAD_MODEL_CHECK_RUN_ID, process.env.UPLOAD_MODEL_CONCLUSION],
+              [process.env.UPLOAD_DOC_CHECK_RUN_ID, process.env.UPLOAD_DOC_CONCLUSION],
+            ].filter(([checkRunId]) => checkRunId);
+            const allowedConclusions = new Set(['success', 'failure']);
 
-            for (const checkRunId of checkRunIds) {
+            for (const [checkRunId, conclusion] of checks) {
+              const normalizedConclusion = allowedConclusions.has(conclusion)
+                ? conclusion
+                : 'failure';
+
               await github.rest.checks.update({
                 ...context.repo,
                 check_run_id: checkRunId,
                 status: 'completed',
-                conclusion: 'success',
+                conclusion: normalizedConclusion,
                 completed_at: new Date().toISOString(),
               });
             }
