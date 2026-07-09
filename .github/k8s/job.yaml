@@ -78,6 +78,24 @@ spec:
               export UPLOAD_MODEL_CONCLUSION="$upload_model_conclusion"
               export UPLOAD_DOC_CONCLUSION="$upload_doc_conclusion"
 
+              model_uploaded=false
+              model_revision=
+              model_repo_id=
+              if [ "$PUSH_MODEL" = "1" ]; then
+                case "$deploy_status" in
+                  0|2)
+                    model_metadata_file="${MODEL_UPLOAD_METADATA_FILE:-/tmp/model-upload-metadata.json}"
+                    if model_revision="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_revision"])' "$model_metadata_file")" &&
+                      model_repo_id="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_repo"])' "$model_metadata_file")"; then
+                      model_uploaded=true
+                    fi
+                    ;;
+                esac
+              fi
+              export MODEL_UPLOADED="$model_uploaded"
+              export MODEL_REVISION="$model_revision"
+              export MODEL_REPO_ID="$model_repo_id"
+
               dispatch_status=0
               sh .github/scripts/workflow-dispatch.sh || dispatch_status=$?
 
@@ -132,8 +150,8 @@ spec:
               value: "${IMAGE_TAG}"
             - name: GITHUB_REF_NAME
               value: "${GITHUB_REF_NAME}"
-            - name: GITHUB_CLEANUP_REF
-              value: "${GITHUB_CLEANUP_REF}"
+            - name: GITHUB_DISPATCH_REF
+              value: "${GITHUB_DISPATCH_REF}"
             - name: SMTP_NOTIFY_RECIPIENT
               value: "${SMTP_NOTIFY_RECIPIENT}"
             - name: HUGGINGFACE_TOKEN
@@ -145,6 +163,8 @@ spec:
               value: "${TEST_MODE}"
             - name: PUSH_MODEL
               value: "${PUSH_MODEL}"
+            - name: MODEL_UPLOAD_METADATA_FILE
+              value: "/tmp/model-upload-metadata.json"
             - name: PUSH_DOC
               value: "${PUSH_DOC}"
           volumeMounts:
