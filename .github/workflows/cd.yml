@@ -68,7 +68,6 @@ jobs:
           {
             echo "temp_tag=${image}:${temp_tag}"
             echo "temp_tag_name=${temp_tag}"
-            echo "latest_tag=${image}:latest-dev"
           } >> "$GITHUB_OUTPUT"
 
       - name: Build and push temporary Docker image
@@ -87,24 +86,6 @@ jobs:
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           tags: ${{ steps.docker-tags.outputs.temp_tag }}
-
-      - name: Build and push latest Docker image
-        if: ${{ github.event_name == 'release' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          target: dev
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=feature-models-dev
-          cache-to: type=gha,mode=max,scope=feature-models-dev
-          build-args: |
-            IMAGE_CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-            IMAGE_VERSION=latest-dev
-            IMAGE_REVISION=${{ github.sha }}
-          secrets: |
-            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: ${{ steps.docker-tags.outputs.latest_tag }}
 
   create-check:
 
