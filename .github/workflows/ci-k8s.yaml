@@ -1,0 +1,125 @@
+name: CI Kubernetes
+
+on:
+  push:
+    branches-ignore:
+      - "*-doc"
+      - "**/*-doc"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  kubernetes-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      KUBE_NAMESPACE: heavyedge-cd-ci
+      KUBE_USERNAME: github-actions
+      MLXP_ZONE: ci-k8s
+      HEAVYEDGE_TEST_MODE: "1"
+      UPLOAD_TO_HUGGINGFACE: "0"
+      PUSH_DOC: "0"
+      DOCKER_REGISTRY: ""
+      DOCKER_USERNAME: ci
+      DOCKER_TAG: placeholder
+      TEMP_DOCKER_TAG: placeholder-temp
+      CPU_REQUEST: "1"
+      GPU_REQUEST: "0"
+      GIT_AUTHOR_NAME: heavyedge-bot
+      GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
+      SMTP_NOTIFY_TO: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: heavyedge-cd-ci
+          wait: 120s
+
+      - name: Install render dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+
+      - name: Prepare Kubernetes namespace
+        shell: bash
+        run: |
+          kubectl create namespace "$KUBE_NAMESPACE"
+          kubectl label nodes --all "mlx.navercorp.com/zone=$MLXP_ZONE" --overwrite
+          kubectl create secret docker-registry regcred \
+            --docker-server=example.invalid \
+            --docker-username=placeholder \
+            --docker-password=placeholder \
+            --namespace="$KUBE_NAMESPACE"
+          kubectl create secret generic gmail-smtp-relay \
+            --from-literal=GMAIL_USERNAME=heavyedge-feature-models@localhost \
+            --from-literal=GMAIL_APP_PASSWORD=placeholder \
+            --namespace="$KUBE_NAMESPACE"
+
+      - name: Render Kubernetes job with placeholder build
+        id: render
+        shell: bash
+        env:
+          JOB_NAME: heavyedge-cd-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_GPU_BUILD_CHECK_RUN_ID: ""
+          GITHUB_UPLOAD_MODEL_CHECK_RUN_ID: ""
+          GITHUB_UPLOAD_DOC_CHECK_RUN_ID: ""
+          RELEASE_TAG_NAME: ""
+        run: |
+          DELETE_IMAGE_SCRIPT_BASE64="$(base64 -w 0 .github/scripts/delete-image.sh)"
+          export DELETE_IMAGE_SCRIPT_BASE64
+          rendered_job="${RUNNER_TEMP}/ci-k8s-job.yaml"
+          .github/k8s/tests/render-test-job.sh > "$rendered_job"
+          echo "rendered_job=$rendered_job" >> "$GITHUB_OUTPUT"
+          kubectl apply --dry-run=client -f "$rendered_job"
+
+      - name: Run Kubernetes job
+        shell: bash
+        run: |
+          rendered_job="${{ steps.render.outputs.rendered_job }}"
+          job_name="$(kubectl create --dry-run=client -o jsonpath='{.metadata.name}' -f "$rendered_job")"
+          kubectl apply -f "$rendered_job"
+          kubectl wait \
+            --namespace="$KUBE_NAMESPACE" \
+            --for=create \
+            pod \
+            --selector="job-name=${job_name}" \
+            --timeout=120s
+          kubectl wait \
+            --namespace="$KUBE_NAMESPACE" \
+            --for=condition=complete \
+            "job/${job_name}" \
+            --timeout=300s
+
+      - name: Print Kubernetes diagnostics
+        if: always()
+        shell: bash
+        run: |
+          rendered_job="${{ steps.render.outputs.rendered_job }}"
+          if [ -n "$rendered_job" ] && [ -f "$rendered_job" ]; then
+            job_name="$(kubectl create --dry-run=client -o jsonpath='{.metadata.name}' -f "$rendered_job")"
+            kubectl get job "$job_name" --namespace="$KUBE_NAMESPACE" -o wide || true
+            kubectl describe job "$job_name" --namespace="$KUBE_NAMESPACE" || true
+            kubectl get pods --namespace="$KUBE_NAMESPACE" --selector="job-name=${job_name}" -o wide || true
+            for pod in $(kubectl get pods --namespace="$KUBE_NAMESPACE" --selector="job-name=${job_name}" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+              for container in $(kubectl get pod "$pod" --namespace="$KUBE_NAMESPACE" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null); do
+                echo "::group::${pod}/${container}"
+                kubectl logs "$pod" --namespace="$KUBE_NAMESPACE" --container="$container" || true
+                echo "::endgroup::"
+              done
+            done
+          fi

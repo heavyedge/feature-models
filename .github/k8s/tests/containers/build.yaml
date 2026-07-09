@@ -1,0 +1,39 @@
+        - name: build
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+            limits:
+              memory: "64Mi"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+
+              state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
+              heartbeat_file="${DEPLOY_BUILD_HEARTBEAT_FILE:-${state_dir}/build-heartbeat}"
+
+              mkdir -p "$(dirname "${state_file}")"
+              mkdir -p "$(dirname "${heartbeat_file}")"
+              date +%s > "${heartbeat_file}"
+
+              printf '%s\n' "Running placeholder Kubernetes deploy for ${JOB_NAME}."
+              sleep 2
+
+              state_tmp_file="${state_file}.$$"
+              cat > "${state_tmp_file}" <<JSON
+              {"checks":{"gpu_build":{"name":"GPU build","status":"succeeded","summary":"Placeholder Kubernetes deploy completed."}},"exit_code":0,"status":"succeeded"}
+              JSON
+              mv "${state_tmp_file}" "${state_file}"
+              printf '%s\n' "Placeholder Kubernetes deploy completed."
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+          env:
+            - name: JOB_NAME
+              value: "${JOB_NAME}"
+            - name: DEPLOY_STATE_FILE
+              value: "/var/run/heavyedge/deploy-state.json"
