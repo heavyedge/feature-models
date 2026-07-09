@@ -48,11 +48,35 @@ spec:
               state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
               state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
               metadata_tmp_file="${DEPLOY_METADATA_TMP_FILE:-/tmp/deploy-metadata.json}"
+              heartbeat_file="${DEPLOY_BUILD_HEARTBEAT_FILE:-${state_dir}/build-heartbeat}"
+              heartbeat_interval="${DEPLOY_BUILD_HEARTBEAT_INTERVAL_SECONDS:-5}"
+
+              mkdir -p "$(dirname "${state_file}")"
+              mkdir -p "$(dirname "${heartbeat_file}")"
+
+              write_heartbeat() {
+                heartbeat_tmp_file="${heartbeat_file}.$$"
+                date +%s > "${heartbeat_tmp_file}"
+                mv "${heartbeat_tmp_file}" "${heartbeat_file}"
+              }
+
+              (
+                while :; do
+                  write_heartbeat
+                  sleep "${heartbeat_interval}"
+                done
+              ) &
+              heartbeat_pid=$!
+
+              finish_heartbeat() {
+                kill "${heartbeat_pid}" 2>/dev/null || true
+                wait "${heartbeat_pid}" 2>/dev/null || true
+              }
+
+              trap finish_heartbeat EXIT
 
               sh .github/scripts/deploy.sh
               exit_code=$?
-
-              mkdir -p "$(dirname "${state_file}")"
 
               if [ "${exit_code}" -eq 0 ]; then
                 result_status=succeeded
@@ -129,6 +153,70 @@ spec:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
                   optional: true
+        - name: watch-build
+          image: curlimages/curl:8.21.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+
+              state_dir="${HEAVYEDGE_STATE_DIR:-/var/run/heavyedge}"
+              state_file="${DEPLOY_STATE_FILE:-${state_dir}/deploy-state.json}"
+              heartbeat_file="${DEPLOY_BUILD_HEARTBEAT_FILE:-${state_dir}/build-heartbeat}"
+              poll_seconds="${DEPLOY_BUILD_WATCH_POLL_SECONDS:-5}"
+              initial_timeout_seconds="${DEPLOY_BUILD_INITIAL_TIMEOUT_SECONDS:-600}"
+              heartbeat_timeout_seconds="${DEPLOY_BUILD_HEARTBEAT_TIMEOUT_SECONDS:-120}"
+              started_at="$(date +%s)"
+
+              write_failed_state() {
+                mkdir -p "$(dirname "${state_file}")"
+                if [ -f "${state_file}" ]; then
+                  return 0
+                fi
+
+                state_tmp_file="${state_file}.watch-build.$$"
+                printf '{"exit_code":255,"failure_reason":"build container stopped before publishing deploy state","status":"failed"}\n' > "${state_tmp_file}"
+                if [ ! -f "${state_file}" ]; then
+                  mv "${state_tmp_file}" "${state_file}"
+                else
+                  rm -f "${state_tmp_file}"
+                fi
+              }
+
+              while [ ! -f "${state_file}" ]; do
+                now="$(date +%s)"
+
+                if [ -f "${heartbeat_file}" ]; then
+                  heartbeat_at="$(cat "${heartbeat_file}" 2>/dev/null || true)"
+                  case "${heartbeat_at}" in
+                    ''|*[!0-9]*)
+                      heartbeat_at=0
+                      ;;
+                  esac
+
+                  if [ $((now - heartbeat_at)) -ge "${heartbeat_timeout_seconds}" ]; then
+                    echo "Build heartbeat is stale; publishing failed deploy state."
+                    write_failed_state
+                    exit 0
+                  fi
+                elif [ $((now - started_at)) -ge "${initial_timeout_seconds}" ]; then
+                  echo "Build heartbeat was not created; publishing failed deploy state."
+                  write_failed_state
+                  exit 0
+                fi
+
+                sleep "${poll_seconds}"
+              done
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
         - name: image-cleanup
           image: curlimages/curl:8.21.0
           imagePullPolicy: IfNotPresent
