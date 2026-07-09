@@ -355,6 +355,7 @@ jobs:
             echo "job_name=${job_name}"
             echo "cpu_request=${cpu_request}"
             echo "gpu_request=${gpu_request}"
+            echo "test_mode=${TEST_MODE}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Kubernetes
@@ -370,6 +371,7 @@ jobs:
           DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ needs.publish-image.outputs.tag }}
+          TEST_MODE: ${{ steps.k8s-variables.outputs.test_mode }}
           PUSH_MODEL: ${{ needs.resolve-variables.outputs.upload_to_huggingface }}
           PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
           GITHUB_REF_NAME: ${{ github.ref_name }}

@@ -141,6 +141,8 @@ spec:
                 secretKeyRef:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
+            - name: TEST_MODE
+              value: "${TEST_MODE}"
             - name: PUSH_MODEL
               value: "${PUSH_MODEL}"
             - name: PUSH_DOC

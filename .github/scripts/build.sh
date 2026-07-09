@@ -20,6 +20,6 @@ if ! python3 scripts/cuda-preflight.py; then
   exit 4
 fi
 
-if ! HEAVYEDGE_TEST_MODE=${HEAVYEDGE_TEST_MODE:-} make -j "${MAKE_JOBS}" models notebooks; then
+if ! HEAVYEDGE_TEST_MODE=${TEST_MODE:-} make -j "${MAKE_JOBS}" models notebooks; then
   exit 5
 fi
