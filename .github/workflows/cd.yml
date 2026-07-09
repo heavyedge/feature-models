@@ -60,9 +60,10 @@ jobs:
         shell: bash
         env:
           GIT_SHA: ${{ github.sha }}
-          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          echo "tag=${GIT_SHA::7}-${EVENT_NAME}-dev" >> "$GITHUB_OUTPUT"
+          echo "tag=${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}-dev" >> "$GITHUB_OUTPUT"
           echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
       - name: Build and push temporary Docker image
@@ -336,10 +337,12 @@ jobs:
         id: k8s-variables
         env:
           GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          job_name="heavyedge-feature-models-${GIT_SHA::7}-${{ github.event_name }}"
+          job_name="heavyedge-feature-models-${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}"
 
           if [ "$TEST_MODE" = "1" ]; then
             cpu_request="1"
