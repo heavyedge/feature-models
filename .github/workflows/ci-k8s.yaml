@@ -153,7 +153,7 @@ jobs:
             done
           fi
 
-  kubernetes-build-failure-cleanup:
+  kubernetes-build-failure-sidecars:
     needs: kubernetes-job-creation
 
     runs-on: ubuntu-latest
@@ -174,7 +174,7 @@ jobs:
       GPU_REQUEST: "0"
       GIT_AUTHOR_NAME: heavyedge-bot
       GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
-      SMTP_NOTIFY_TO: ""
+      SMTP_NOTIFY_TO: heavyedge-ci@example.invalid
 
     steps:
       - name: Checkout
@@ -252,7 +252,33 @@ jobs:
             return 1
           }
 
-          for scenario in failed-state crash-no-state; do
+          wait_for_failed_email() {
+            job_name="$1"
+            deadline=$((SECONDS + 180))
+
+            while [ "${SECONDS}" -lt "${deadline}" ]; do
+              pods="$(kubectl get pods \
+                --namespace="$KUBE_NAMESPACE" \
+                --selector="job-name=${job_name}" \
+                -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)"
+
+              for pod in ${pods}; do
+                if kubectl logs "$pod" \
+                  --namespace="$KUBE_NAMESPACE" \
+                  --container=postfix 2>/dev/null \
+                  | grep -F "EMAIL_STATUS=failed"; then
+                  return 0
+                fi
+              done
+
+              sleep 2
+            done
+
+            echo "Timed out waiting for failed email notification for ${job_name}." >&2
+            return 1
+          }
+
+          for scenario in failed-state crash-no-state unknown-state; do
             export BUILD_FAILURE_SCENARIO="$scenario"
             export JOB_NAME="heavyedge-cd-ci-${scenario}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             export DELETE_IMAGE_SCRIPT_BASE64
@@ -260,7 +286,8 @@ jobs:
 
             rendered_job="${RUNNER_TEMP}/ci-k8s-job-${scenario}.yaml"
             .github/k8s/tests/render-test-job.sh \
-              .github/k8s/tests/failure-containers > "$rendered_job"
+              .github/k8s/tests/failure-containers \
+              .github/k8s/tests/email-containers > "$rendered_job"
             kubectl apply --dry-run=client -f "$rendered_job"
             kubectl apply --dry-run=server -f "$rendered_job"
             kubectl apply -f "$rendered_job"
@@ -271,6 +298,7 @@ jobs:
               --selector="job-name=${JOB_NAME}" \
               --timeout=120s
             wait_for_cleanup_trigger "$JOB_NAME"
+            wait_for_failed_email "$JOB_NAME"
           done
 
       - name: Print Kubernetes diagnostics

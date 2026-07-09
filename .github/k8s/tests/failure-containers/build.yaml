@@ -34,6 +34,15 @@
                   printf '%s\n' "BUILD_FAILURE_SCENARIO=crash-no-state"
                   exit 43
                   ;;
+                unknown-state)
+                  printf '%s\n' "BUILD_FAILURE_SCENARIO=unknown-state"
+                  state_tmp_file="${state_file}.$$"
+                  cat > "${state_tmp_file}" <<JSON
+              {"checks":{"gpu_build":{"name":"GPU build","status":"failed","summary":"Test build published unknown deploy state."}},"exit_code":45,"status":"errored"}
+              JSON
+                  mv "${state_tmp_file}" "${state_file}"
+                  exit 45
+                  ;;
                 *)
                   printf '%s\n' "Unknown BUILD_FAILURE_SCENARIO=${BUILD_FAILURE_SCENARIO}" >&2
                   exit 44
