@@ -27,7 +27,7 @@ spec:
           secret:
             secretName: gmail-smtp-relay
       containers:
-        - name: heavyedge-feature-models
+        - name: build
           image: ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
           imagePullPolicy: Always
           resources:
@@ -39,7 +39,13 @@ spec:
               memory: "16Gi"
               cpu: "${CPU_REQUEST}"
               nvidia.com/gpu: "${GPU_REQUEST}"
-          command: ["sh", ".github/scripts/deploy.sh"]
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              sh .github/scripts/deploy.sh
+              status=$?
+              touch /var/run/heavyedge/deploy.done
+              exit "$status"
           env:
             - name: GH_APP_ID
               valueFrom:
@@ -67,6 +73,62 @@ spec:
               value: "${UPLOAD_DOC_CHECK_RUN_ID}"
             - name: IMAGE_TAG
               value: "${IMAGE_TAG}"
+            - name: GITHUB_REF_NAME
+              value: "${GITHUB_REF_NAME}"
+            - name: SMTP_NOTIFY_RECIPIENT
+              value: "${SMTP_NOTIFY_RECIPIENT}"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
+        - name: postfix
+          image: boky/postfix:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          ports:
+            - name: smtp
+              containerPort: 587
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              /scripts/run.sh &
+              postfix_pid=$!
+
+              while kill -0 "$postfix_pid" 2>/dev/null; do
+                if [ -f /var/run/heavyedge/deploy.done ]; then
+                  postfix stop || true
+                  wait "$postfix_pid"
+                  exit 0
+                fi
+                sleep 2
+              done
+
+              wait "$postfix_pid"
+          env:
+            - name: RELAYHOST
+              value: "[smtp.gmail.com]:587"
+            - name: RELAYHOST_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: gmail-smtp-relay
+                  key: GMAIL_USERNAME
+            - name: RELAYHOST_PASSWORD_FILE
+              value: "/run/secrets/gmail/GMAIL_APP_PASSWORD"
+            - name: POSTFIX_smtp_tls_security_level
+              value: "encrypt"
+            - name: POSTFIX_mynetworks
+              value: "127.0.0.0/8 [::1]/128"
+            - name: ALLOW_EMPTY_SENDER_DOMAINS
+              value: "true"
+            - name: LOG_FORMAT
+              value: "json"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+            - name: gmail-smtp-relay
+              mountPath: /run/secrets/gmail
+              readOnly: true

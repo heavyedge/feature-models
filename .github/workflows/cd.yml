@@ -368,7 +368,9 @@ jobs:
           DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ needs.publish-image.outputs.tag }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          SMTP_NOTIFY_RECIPIENT: ${{ needs.resolve-variables.outputs.email_recipient }}
           GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
