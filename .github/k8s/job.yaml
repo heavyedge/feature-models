@@ -47,14 +47,14 @@ spec:
               python .github/k8s/send-email.py --status "Started" || true
 
               build_status=0
-              sh .github/scripts/build.sh || build_status=$?
+              sh .github/k8s/build.sh || build_status=$?
 
               token_status=0
-              GITHUB_APP_TOKEN="$(sh .github/scripts/app-token.sh)" || token_status=$?
+              GITHUB_APP_TOKEN="$(sh .github/k8s/app-token.sh)" || token_status=$?
               export GITHUB_APP_TOKEN
 
               deploy_status=0
-              sh .github/scripts/deploy.sh || deploy_status=$?
+              sh .github/k8s/deploy.sh || deploy_status=$?
 
               gpu_build_conclusion=failure
               upload_model_conclusion=failure
