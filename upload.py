@@ -45,7 +45,7 @@ api.create_tag(
 
 if args.metadata_file:
     metadata = {
-        "model_url": f"https://huggingface.co/{REPO}",
+        "model_repo": f"{REPO}",
         "model_revision": MODEL_VERSION,
     }
     with open(args.metadata_file, "w", encoding="utf-8") as file:

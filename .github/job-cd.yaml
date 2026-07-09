@@ -868,7 +868,7 @@ spec:
                 "event_type" => ENV["IMAGE_WORKFLOW_EVENT_TYPE"].to_s.empty? ? "GPU-completed" : ENV["IMAGE_WORKFLOW_EVENT_TYPE"],
                 "client_payload" => {
                   "model" => {
-                    "url" => deploy_output["model_url"].to_s,
+                    "repo" => deploy_output["model_repo"].to_s,
                     "revision" => deploy_output["model_revision"].to_s,
                   },
                 },
