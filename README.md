@@ -42,7 +42,15 @@ make test
 
 ## Documentation
 
+Documents are built and pushed to Github Pages.
+Document for the latest version can be found at:
+
 > https://heavyedge.github.io/feature-models/
+
+other versions can be found by specifying sub-urls.
+For example, document for `v1.0.0` can be found at:
+
+> https://heavyedge.github.io/feature-models/v1.0.0
 
 To build the documents yourself, run the following commands:
 

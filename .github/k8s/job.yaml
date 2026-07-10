@@ -167,6 +167,8 @@ spec:
               value: "${TEST_MODE}"
             - name: PUSH_MODEL
               value: "${PUSH_MODEL}"
+            - name: PUSH_IMAGE
+              value: "${PUSH_IMAGE}"
             - name: MODEL_UPLOAD_METADATA_FILE
               value: "/tmp/model-upload-metadata.json"
             - name: PUSH_DOC

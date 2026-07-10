@@ -39,6 +39,21 @@ def trained_model_can_be_released(tag):
     return version.post is None
 
 
+def inference_image_must_be_released(tag):
+    if not VERSION_PATTERN.fullmatch(tag):
+        print(f"Unsupported release version tag: {tag}", file=sys.stderr)
+        return False
+
+    version_text = tag.removeprefix("v")
+    try:
+        version = Version(version_text)
+    except InvalidVersion:
+        print(f"Invalid release version tag: {tag}", file=sys.stderr)
+        return False
+
+    return version.pre is None and version.post is None and version.dev is None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Resolve CD workflow flags")
     parser.add_argument("--event-name", required=True)
@@ -47,9 +62,11 @@ def main():
 
     is_release = args.event_name == "release"
     push_model = int(is_release and trained_model_can_be_released(args.ref_name))
+    push_image = int(is_release and inference_image_must_be_released(args.ref_name))
     push_doc = int(is_release)
 
     github_output("push_model", push_model)
+    github_output("push_image", push_image)
     github_output("push_doc", push_doc)
 
 
