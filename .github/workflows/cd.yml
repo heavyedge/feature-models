@@ -90,6 +90,7 @@ jobs:
       push_model: ${{ steps.flags.outputs.push_model }}
       push_image: ${{ steps.flags.outputs.push_image }}
       push_doc: ${{ steps.flags.outputs.push_doc }}
+      doc_branch: ${{ steps.doc-branch.outputs.doc_branch }}
       email_recipient: ${{ steps.email.outputs.email }}
 
     steps:
@@ -107,6 +108,19 @@ jobs:
           python3 .github/scripts/parse-version.py \
             --event-name "$EVENT_NAME" \
             --ref-name "$REF_NAME"
+
+      - name: Resolve doc branch name
+        id: doc-branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            echo "doc_branch=${REF_NAME}-doc" >> "$GITHUB_OUTPUT"
+          else
+            echo "doc_branch=${GITHUB_SHA::7}-doc" >> "$GITHUB_OUTPUT"
 
       - name: Resolve email recipient
         id: email
@@ -329,12 +343,12 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          TEST_MODE: ${{ github.event_name == 'release' && '0' || '1' }}
+          DRY_BUILD: ${{ github.event_name == 'release' && '0' || '1' }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           job_name="heavyedge-feature-models-${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}"
 
-          if [ "$TEST_MODE" = "1" ]; then
+          if [ "$DRY_BUILD" = "1" ]; then
             cpu_request="1"
             gpu_request="1"
           else
@@ -346,7 +360,7 @@ jobs:
             echo "job_name=${job_name}"
             echo "cpu_request=${cpu_request}"
             echo "gpu_request=${gpu_request}"
-            echo "test_mode=${TEST_MODE}"
+            echo "dry_build=${DRY_BUILD}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Kubernetes
@@ -362,10 +376,11 @@ jobs:
           DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ needs.dev-image.outputs.tag }}
-          TEST_MODE: ${{ steps.k8s-variables.outputs.test_mode }}
+          DRY_BUILD: ${{ steps.k8s-variables.outputs.dry_build }}
           PUSH_MODEL: ${{ needs.resolve-variables.outputs.push_model }}
           PUSH_IMAGE: ${{ needs.resolve-variables.outputs.push_image }}
           PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
+          DOC_BRANCH: ${{ needs.resolve-variables.outputs.doc_branch }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}

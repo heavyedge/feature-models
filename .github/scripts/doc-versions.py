@@ -2,6 +2,7 @@
 import argparse
 import json
 import re
+import shutil
 from pathlib import Path
 
 VERSION_PATTERN = re.compile(r"^v?[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?$")
@@ -22,7 +23,7 @@ def main():
     args = parser.parse_args()
 
     site_dir = Path(args.site_dir)
-    versions = sorted(
+    release_versions = sorted(
         (
             path.name
             for path in site_dir.iterdir()
@@ -31,19 +32,49 @@ def main():
         key=version_key,
     )
 
-    if not versions:
-        versions = [args.fallback_version]
+    stable = release_versions[-1] if release_versions else None
+    has_latest = (site_dir / "latest").is_dir()
+    versions = []
+    if has_latest:
+        versions.append("latest")
+    if stable:
+        versions.append("stable")
+    versions.extend(release_versions)
+
+    if stable:
+        stable_dir = site_dir / "stable"
+        shutil.rmtree(stable_dir, ignore_errors=True)
+        stable_dir.mkdir(parents=True)
+        stable_dir.joinpath("index.html").write_text(
+            f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="refresh" content="0; url=../{stable}/">
+    <title>HeavyEdge Feature Models stable documentation</title>
+  </head>
+  <body>
+    <p><a href="../{stable}/">Stable documentation</a></p>
+  </body>
+</html>
+""",
+            encoding="utf-8",
+        )
+
+    latest = "latest" if has_latest else stable or args.fallback_version
 
     metadata = {
-        "latest": versions[-1],
+        "latest": latest,
+        "stable": stable,
+        "releases": release_versions,
         "versions": versions,
     }
     (site_dir / "versions.json").write_text(
         json.dumps(metadata, indent=2) + "\n",
         encoding="utf-8",
     )
-    v = versions[-1]
-    print(f"Root documentation URL resolves latest version from versions.json: {v}.")
+    print(f"Latest documentation URL resolves to: {latest}.")
+    print(f"Stable documentation URL resolves to: {stable}.")
 
 
 if __name__ == "__main__":

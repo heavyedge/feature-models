@@ -152,8 +152,6 @@ spec:
               value: "${IMAGE_TAG}"
             - name: GITHUB_REF_NAME
               value: "${GITHUB_REF_NAME}"
-            - name: TAG_NAME
-              value: "${GITHUB_REF_NAME}"
             - name: GITHUB_DISPATCH_REF
               value: "${GITHUB_DISPATCH_REF}"
             - name: SMTP_NOTIFY_RECIPIENT
@@ -163,8 +161,8 @@ spec:
                 secretKeyRef:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
-            - name: TEST_MODE
-              value: "${TEST_MODE}"
+            - name: DRY_BUILD
+              value: "${DRY_BUILD}"
             - name: PUSH_MODEL
               value: "${PUSH_MODEL}"
             - name: PUSH_IMAGE
@@ -173,6 +171,8 @@ spec:
               value: "/tmp/model-upload-metadata.json"
             - name: PUSH_DOC
               value: "${PUSH_DOC}"
+            - name: DOC_BRANCH
+              value: "${DOC_BRANCH}"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge

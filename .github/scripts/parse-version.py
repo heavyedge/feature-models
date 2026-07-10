@@ -61,9 +61,10 @@ def main():
     args = parser.parse_args()
 
     is_release = args.event_name == "release"
+    is_master_push = args.event_name == "push" and args.ref_name == "master"
     push_model = int(is_release and trained_model_can_be_released(args.ref_name))
     push_image = int(is_release and inference_image_must_be_released(args.ref_name))
-    push_doc = int(is_release)
+    push_doc = int(is_release or is_master_push)
 
     github_output("push_model", push_model)
     github_output("push_image", push_image)

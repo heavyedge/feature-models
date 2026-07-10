@@ -5,7 +5,7 @@
     <title>HeavyEdge Feature Models documentation</title>
   </head>
   <body>
-    <p id="message">Redirecting to the latest documentation.</p>
+    <p id="message">Redirecting to the stable documentation.</p>
     <script>
       fetch("./versions.json", { cache: "no-store" })
         .then((response) => {
@@ -16,11 +16,11 @@
         })
         .then((metadata) => {
           const versions = Array.isArray(metadata.versions) ? metadata.versions : [];
-          const latest = metadata.latest || versions[versions.length - 1];
-          if (!latest) {
+          const target = metadata.stable ? "stable" : metadata.latest || versions[versions.length - 1];
+          if (!target) {
             throw new Error("No documentation versions are available.");
           }
-          window.location.replace(`./${latest}/`);
+          window.location.replace(`./${target}/`);
         })
         .catch((error) => {
           document.getElementById("message").textContent = error.message;

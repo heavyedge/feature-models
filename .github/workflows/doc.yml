@@ -33,10 +33,16 @@ jobs:
           fi
 
           version="${BASH_REMATCH[1]}"
+          doc_path="${version}"
+          if [[ "${version}" =~ ^[0-9a-f]{40}$ ]]; then
+            doc_path="latest"
+          fi
           artifact_name="${version//\//-}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "doc_path=${doc_path}" >> "${GITHUB_OUTPUT}"
           echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
           echo "Documentation version: ${version}"
+          echo "Documentation path: ${doc_path}"
 
       - name: Checkout documentation branch
         uses: actions/checkout@v4
@@ -92,10 +98,10 @@ jobs:
       - name: Stage versioned documentation
         shell: bash
         run: |
-          version="${{ steps.version.outputs.version }}"
-          rm -rf "pages-site/${version}"
-          mkdir -p "pages-site/${version}"
-          cp -a doc/build/html/. "pages-site/${version}/"
+          doc_path="${{ steps.version.outputs.doc_path }}"
+          rm -rf "pages-site/${doc_path}"
+          mkdir -p "pages-site/${doc_path}"
+          cp -a doc/build/html/. "pages-site/${doc_path}/"
           touch pages-site/.nojekyll
 
       - name: Stage root documentation redirect
@@ -119,14 +125,10 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           git -C pages-site config user.name "${GIT_AUTHOR_NAME}"
           git -C pages-site config user.email "${GIT_AUTHOR_EMAIL}"
-          git -C pages-site add .
-
-          if git -C pages-site diff --cached --quiet; then
-            echo "No Pages site changes to persist."
-          else
-            git -C pages-site commit -m "Deploy documentation for ${version}"
-            git -C pages-site push origin HEAD:gh-pages
-          fi
+          git -C pages-site checkout --orphan pages-snapshot
+          git -C pages-site add -A .
+          git -C pages-site commit -m "Deploy documentation for ${version}"
+          git -C pages-site push --force origin HEAD:gh-pages
 
       - name: Delete documentation branch
         env:

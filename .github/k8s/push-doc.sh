@@ -5,26 +5,17 @@ if [ -z "${GITHUB_REPOSITORY}" ]; then
   echo "Missing GITHUB_REPOSITORY for pushing built notebooks" >&2
   exit 1
 fi
-if [ -z "${TAG_NAME}" ]; then
-  echo "Missing TAG_NAME for pushing built notebooks" >&2
-  exit 1
-fi
-if [ "${PUSH_DOC:-0}" != "1" ] && [ -z "${GITHUB_SHA:-}" ]; then
-  echo "Missing GITHUB_SHA for pushing test built notebooks" >&2
-  exit 1
-fi
 if [ -z "${GITHUB_APP_TOKEN}" ]; then
   echo "Missing GITHUB_APP_TOKEN for pushing built notebooks" >&2
   exit 1
 fi
 
 if [ "${PUSH_DOC:-0}" = "1" ]; then
-  doc_branch="${TAG_NAME}-doc"
-  fetch_ref="refs/tags/${TAG_NAME}"
+  doc_branch="${DOC_BRANCH:-${GITHUB_SHA}-doc}"
 else
-  doc_branch="${GITHUB_REF_NAME}-doc-test"
-  fetch_ref="${GITHUB_SHA}"
+  doc_branch="${DOC_BRANCH:-${GITHUB_SHA}-doc}-test"
 fi
+fetch_ref="${GITHUB_SHA}"
 doc_repo="/tmp/heavyedge-doc-repo-$$"
 remote_url="https://github.com/${GITHUB_REPOSITORY}.git"
 git_author_name="${GIT_AUTHOR_NAME:-heavyedge-bot}"
@@ -58,7 +49,7 @@ git -C "${doc_repo}" \
 if git -C "${doc_repo}" diff --cached --quiet; then
   echo "No changes to commit for ${doc_branch}"
 else
-  git -C "${doc_repo}" commit -m "Build doc for ${TAG_NAME}"
+  git -C "${doc_repo}" commit -m "Build doc for ${doc_branch%-doc}"
 fi
 
 git -C "${doc_repo}" \

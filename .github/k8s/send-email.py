@@ -162,7 +162,7 @@ def build_message(
         if line:
             body_lines.append(line)
 
-    body_lines.append(f"Test mode: {env('TEST_MODE', 'true')}")
+    body_lines.append(f"Dry build: {env('DRY_BUILD', 'true')}")
     body_lines.append(f"Push model: {env('PUSH_MODEL', 'false')}")
     body_lines.append(f"Push documentation: {env('PUSH_DOC', 'false')}")
 
