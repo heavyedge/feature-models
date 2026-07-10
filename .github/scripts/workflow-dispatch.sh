@@ -87,6 +87,7 @@ if [ "${UPLOAD_DOC_CONCLUSION:-failure}" = "success" ] && [ -n "${DOC_BRANCH:-}"
       --arg doc_branch "${DOC_BRANCH}" \
       --arg push_doc "${PUSH_DOC:-0}" \
       --arg doc_dir "${DOC_DIR:-}" \
+      --arg doc_version "${DOC_VERSION:-}" \
       --arg dry_build "${DRY_BUILD:-1}" \
       '{
         ref: $ref,
@@ -94,6 +95,7 @@ if [ "${UPLOAD_DOC_CONCLUSION:-failure}" = "success" ] && [ -n "${DOC_BRANCH:-}"
           doc_branch: $doc_branch,
           push_doc: $push_doc,
           doc_dir: $doc_dir,
+          doc_version: $doc_version,
           dry_build: $dry_build
         }
       }'

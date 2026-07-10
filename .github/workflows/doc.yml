@@ -16,6 +16,11 @@ on:
         required: false
         default: ""
         type: string
+      doc_version:
+        description: Version label to append to the Sphinx project title.
+        required: false
+        default: ""
+        type: string
       dry_build:
         description: Whether the notebooks were built in dry build mode.
         required: true
@@ -43,6 +48,7 @@ jobs:
           DOC_BRANCH: ${{ github.event.inputs.doc_branch }}
           PUSH_DOC: ${{ github.event.inputs.push_doc }}
           DOC_DIR: ${{ github.event.inputs.doc_dir }}
+          DOC_VERSION: ${{ github.event.inputs.doc_version }}
           DRY_BUILD: ${{ github.event.inputs.dry_build }}
         run: |
           if [ "${PUSH_DOC}" != "0" ] && [ "${PUSH_DOC}" != "1" ]; then
@@ -64,6 +70,10 @@ jobs:
               echo "Missing doc_dir for documentation publishing." >&2
               exit 1
             fi
+            if [ -z "${DOC_VERSION}" ]; then
+              echo "Missing doc_version for documentation publishing." >&2
+              exit 1
+            fi
             case "${DOC_DIR}" in
               /*|.|..|*/*)
                 echo "Unsupported documentation directory: ${DOC_DIR}" >&2
@@ -76,11 +86,13 @@ jobs:
           echo "doc_branch=${DOC_BRANCH}" >> "${GITHUB_OUTPUT}"
           echo "push_doc=${PUSH_DOC}" >> "${GITHUB_OUTPUT}"
           echo "doc_dir=${DOC_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "doc_version=${DOC_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "dry_build=${DRY_BUILD}" >> "${GITHUB_OUTPUT}"
           echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
           echo "Documentation branch: ${DOC_BRANCH}"
           echo "Publish documentation: ${PUSH_DOC}"
           echo "Documentation directory: ${DOC_DIR}"
+          echo "Documentation version: ${DOC_VERSION}"
           echo "Dry build: ${DRY_BUILD}"
 
       - name: Create GitHub App token
@@ -123,6 +135,7 @@ jobs:
         if: ${{ steps.dispatch.outputs.push_doc == '1' }}
         env:
           DRY_BUILD: ${{ steps.dispatch.outputs.dry_build }}
+          DOC_VERSION: ${{ steps.dispatch.outputs.doc_version }}
         run: |
           python -m sphinx -b html doc/source doc/build/html
 

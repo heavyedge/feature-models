@@ -18,7 +18,10 @@ shutil.copytree(notebooks_source, notebooks_dest)
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+project_version = os.environ.get("DOC_VERSION", "")
 project = "HeavyEdge Feature Models"
+if project_version:
+    project = f"{project} {project_version}"
 copyright = "2026, Jisoo Song"
 author = "Jisoo Song"
 

@@ -175,6 +175,8 @@ spec:
               value: "${DOC_BRANCH}"
             - name: DOC_DIR
               value: "${DOC_DIR}"
+            - name: DOC_VERSION
+              value: "${DOC_VERSION}"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
