@@ -5,6 +5,8 @@ on:
     branches-ignore:
       - "*-doc"
       - "**/*-doc"
+      - "*-doc-test"
+      - "**/*-doc-test"
   pull_request:
 
 jobs:
