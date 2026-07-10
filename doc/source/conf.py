@@ -25,7 +25,7 @@ author = "Jisoo Song"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["myst_nb"]
+extensions = ["myst_nb", "sphinx.ext.ifconfig"]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -33,3 +33,7 @@ extensions = ["myst_nb"]
 html_theme = "alabaster"
 
 nb_execution_mode = "off"
+
+
+def setup(app):
+    app.add_config_value("dry_build", os.environ.get("DRY_BUILD", "0") == "1", "env")

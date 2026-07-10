@@ -16,6 +16,10 @@ on:
         required: false
         default: ""
         type: string
+      dry_build:
+        description: Whether the notebooks were built in dry build mode.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -39,9 +43,14 @@ jobs:
           DOC_BRANCH: ${{ github.event.inputs.doc_branch }}
           PUSH_DOC: ${{ github.event.inputs.push_doc }}
           DOC_DIR: ${{ github.event.inputs.doc_dir }}
+          DRY_BUILD: ${{ github.event.inputs.dry_build }}
         run: |
           if [ "${PUSH_DOC}" != "0" ] && [ "${PUSH_DOC}" != "1" ]; then
             echo "Unsupported PUSH_DOC value: ${PUSH_DOC}" >&2
+            exit 1
+          fi
+          if [ "${DRY_BUILD}" != "0" ] && [ "${DRY_BUILD}" != "1" ]; then
+            echo "Unsupported DRY_BUILD value: ${DRY_BUILD}" >&2
             exit 1
           fi
 
@@ -67,10 +76,12 @@ jobs:
           echo "doc_branch=${DOC_BRANCH}" >> "${GITHUB_OUTPUT}"
           echo "push_doc=${PUSH_DOC}" >> "${GITHUB_OUTPUT}"
           echo "doc_dir=${DOC_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "dry_build=${DRY_BUILD}" >> "${GITHUB_OUTPUT}"
           echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
           echo "Documentation branch: ${DOC_BRANCH}"
           echo "Publish documentation: ${PUSH_DOC}"
           echo "Documentation directory: ${DOC_DIR}"
+          echo "Dry build: ${DRY_BUILD}"
 
       - name: Create GitHub App token
         id: app-token
@@ -110,6 +121,8 @@ jobs:
 
       - name: Build Sphinx documentation
         if: ${{ steps.dispatch.outputs.push_doc == '1' }}
+        env:
+          DRY_BUILD: ${{ steps.dispatch.outputs.dry_build }}
         run: |
           python -m sphinx -b html doc/source doc/build/html
 

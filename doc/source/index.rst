@@ -9,6 +9,13 @@
 Examples
 --------
 
+.. ifconfig:: dry_build
+
+   .. warning::
+
+      These example notebooks were built in dry build mode. Their outputs do
+      not come from the real model and may be inaccurate.
+
 .. toctree::
    :maxdepth: 1
    :caption: Quantile crossing test
