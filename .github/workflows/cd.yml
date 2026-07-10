@@ -91,6 +91,7 @@ jobs:
       push_image: ${{ steps.flags.outputs.push_image }}
       push_doc: ${{ steps.flags.outputs.push_doc }}
       doc_branch: ${{ steps.doc-branch.outputs.doc_branch }}
+      doc_dir: ${{ steps.doc-branch.outputs.doc_dir }}
       email_recipient: ${{ steps.email.outputs.email }}
 
     steps:
@@ -119,8 +120,14 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "release" ]; then
             echo "doc_branch=${REF_NAME}-doc" >> "$GITHUB_OUTPUT"
+            echo "doc_dir=${REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT_NAME" = "push" ] && [ "$REF_NAME" = "master" ]; then
+            echo "doc_branch=${GITHUB_SHA}-doc" >> "$GITHUB_OUTPUT"
+            echo "doc_dir=latest" >> "$GITHUB_OUTPUT"
           else
-            echo "doc_branch=${GITHUB_SHA::7}-doc" >> "$GITHUB_OUTPUT"
+            echo "doc_branch=${GITHUB_SHA}-doc-test" >> "$GITHUB_OUTPUT"
+            echo "doc_dir=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Resolve email recipient
         id: email
@@ -381,6 +388,7 @@ jobs:
           PUSH_IMAGE: ${{ needs.resolve-variables.outputs.push_image }}
           PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
           DOC_BRANCH: ${{ needs.resolve-variables.outputs.doc_branch }}
+          DOC_DIR: ${{ needs.resolve-variables.outputs.doc_dir }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}
@@ -435,6 +443,9 @@ jobs:
           IMAGE_TAG: ${{ needs.dev-image.outputs.tag }}
           MODEL_UPLOADED: "false"
           PUSH_IMAGE: "0"
+          PUSH_DOC: "0"
+          DOC_BRANCH: ""
+          DOC_DIR: ""
           MODEL_REVISION: ""
           MODEL_REPO_ID: ""
           GPU_BUILD_CONCLUSION: failure

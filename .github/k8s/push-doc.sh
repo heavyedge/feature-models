@@ -9,12 +9,15 @@ if [ -z "${GITHUB_APP_TOKEN}" ]; then
   echo "Missing GITHUB_APP_TOKEN for pushing built notebooks" >&2
   exit 1
 fi
-
-if [ "${PUSH_DOC:-0}" = "1" ]; then
-  doc_branch="${DOC_BRANCH:-${GITHUB_SHA}-doc}"
-else
-  doc_branch="${DOC_BRANCH:-${GITHUB_SHA}-doc}-test"
+if [ -z "${GITHUB_SHA:-}" ]; then
+  echo "Missing GITHUB_SHA for pushing built notebooks" >&2
+  exit 1
 fi
+if [ -z "${DOC_BRANCH:-}" ]; then
+  echo "Missing DOC_BRANCH for pushing built notebooks" >&2
+  exit 1
+fi
+doc_branch="${DOC_BRANCH}"
 fetch_ref="${GITHUB_SHA}"
 doc_repo="/tmp/heavyedge-doc-repo-$$"
 remote_url="https://github.com/${GITHUB_REPOSITORY}.git"
@@ -55,9 +58,3 @@ fi
 git -C "${doc_repo}" \
   -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
   push --force origin "HEAD:refs/heads/${doc_branch}"
-
-if [ ! "${PUSH_DOC:-0}" = "1" ]; then
-  git -C "${doc_repo}" \
-    -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
-    push origin --delete "${doc_branch}"
-fi

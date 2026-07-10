@@ -80,6 +80,32 @@ if ! dispatch_workflow "cd-cleanup.yml" "${cleanup_payload}"; then
   exit 3
 fi
 
+if [ "${UPLOAD_DOC_CONCLUSION:-failure}" = "success" ] && [ -n "${DOC_BRANCH:-}" ]; then
+  if ! doc_payload="$(
+    jq -n \
+      --arg ref "${GITHUB_DISPATCH_REF}" \
+      --arg doc_branch "${DOC_BRANCH}" \
+      --arg push_doc "${PUSH_DOC:-0}" \
+      --arg doc_dir "${DOC_DIR:-}" \
+      '{
+        ref: $ref,
+        inputs: {
+          doc_branch: $doc_branch,
+          push_doc: $push_doc,
+          doc_dir: $doc_dir
+        }
+      }'
+  )"; then
+    exit 2
+  fi
+
+  if ! dispatch_workflow "doc.yml" "${doc_payload}"; then
+    exit 3
+  fi
+else
+  echo "Skipping doc.yml dispatch because no documentation branch was pushed."
+fi
+
 if [ "${MODEL_UPLOADED}" = "true" ]; then
   if ! image_payload="$(
     jq -n \

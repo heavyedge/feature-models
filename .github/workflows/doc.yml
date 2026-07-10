@@ -1,77 +1,76 @@
 name: Doc
 
 on:
-  push:
-    branches:
-      - "*-doc"
-      - "**/*-doc"
+  workflow_dispatch:
+    inputs:
+      doc_branch:
+        description: Built notebook documentation branch to process.
+        required: true
+        type: string
+      push_doc:
+        description: Whether to build and publish documentation from the branch.
+        required: true
+        type: string
+      doc_dir:
+        description: Pages directory to receive the built documentation.
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: doc-${{ github.ref }}
+  group: doc-${{ github.event.inputs.doc_branch }}
   cancel-in-progress: false
 
 jobs:
   build:
-    if: ${{ github.event.deleted != true }}
     runs-on: ubuntu-latest
     env:
       GIT_AUTHOR_NAME: heavyedge-bot
       GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
 
     steps:
-      - name: Resolve documentation version
-        id: version
+      - name: Resolve documentation dispatch
+        id: dispatch
         shell: bash
+        env:
+          DOC_BRANCH: ${{ github.event.inputs.doc_branch }}
+          PUSH_DOC: ${{ github.event.inputs.push_doc }}
+          DOC_DIR: ${{ github.event.inputs.doc_dir }}
         run: |
-          ref_name="${GITHUB_REF_NAME}"
-          if [[ ! "${ref_name}" =~ ^(.+)-doc$ ]]; then
-            echo "Unsupported documentation branch: ${ref_name}" >&2
+          if [ "${PUSH_DOC}" != "0" ] && [ "${PUSH_DOC}" != "1" ]; then
+            echo "Unsupported PUSH_DOC value: ${PUSH_DOC}" >&2
             exit 1
           fi
 
-          version="${BASH_REMATCH[1]}"
-          doc_path="${version}"
-          if [[ "${version}" =~ ^[0-9a-f]{40}$ ]]; then
-            doc_path="latest"
+          if ! git check-ref-format "refs/heads/${DOC_BRANCH}"; then
+            echo "Invalid documentation branch name: ${DOC_BRANCH}" >&2
+            exit 1
           fi
-          artifact_name="${version//\//-}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "doc_path=${doc_path}" >> "${GITHUB_OUTPUT}"
+
+          if [ "${PUSH_DOC}" = "1" ]; then
+            if [ -z "${DOC_DIR}" ]; then
+              echo "Missing doc_dir for documentation publishing." >&2
+              exit 1
+            fi
+            case "${DOC_DIR}" in
+              /*|.|..|*/*)
+                echo "Unsupported documentation directory: ${DOC_DIR}" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          artifact_name="${DOC_BRANCH//\//-}"
+          echo "doc_branch=${DOC_BRANCH}" >> "${GITHUB_OUTPUT}"
+          echo "push_doc=${PUSH_DOC}" >> "${GITHUB_OUTPUT}"
+          echo "doc_dir=${DOC_DIR}" >> "${GITHUB_OUTPUT}"
           echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
-          echo "Documentation version: ${version}"
-          echo "Documentation path: ${doc_path}"
-
-      - name: Checkout documentation branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Install documentation dependencies
-        run: |
-          uv pip install --system -r doc/requirements.txt
-
-      - name: Build Sphinx documentation
-        run: |
-          python -m sphinx -b html doc/source doc/build/html
-
-      - name: Upload Sphinx HTML artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sphinx-html-${{ steps.version.outputs.artifact_name }}
-          path: doc/build/html
-          if-no-files-found: error
+          echo "Documentation branch: ${DOC_BRANCH}"
+          echo "Publish documentation: ${PUSH_DOC}"
+          echo "Documentation directory: ${DOC_DIR}"
 
       - name: Create GitHub App token
         id: app-token
@@ -81,7 +80,49 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           permission-contents: write
 
+      - name: Skip documentation publishing
+        if: ${{ steps.dispatch.outputs.push_doc != '1' }}
+        run: |
+          echo "Skipping Sphinx build and Pages upload for ${{ steps.dispatch.outputs.doc_branch }}."
+
+      - name: Checkout documentation branch
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.dispatch.outputs.doc_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install documentation dependencies
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
+        run: |
+          uv pip install --system -r doc/requirements.txt
+
+      - name: Build Sphinx documentation
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
+        run: |
+          python -m sphinx -b html doc/source doc/build/html
+
+      - name: Upload Sphinx HTML artifact
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sphinx-html-${{ steps.dispatch.outputs.artifact_name }}
+          path: doc/build/html
+          if-no-files-found: error
+
       - name: Restore Pages site state
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
         shell: bash
         env:
           GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -96,42 +137,62 @@ jobs:
           fi
 
       - name: Stage versioned documentation
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
         shell: bash
         run: |
-          doc_path="${{ steps.version.outputs.doc_path }}"
-          rm -rf "pages-site/${doc_path}"
-          mkdir -p "pages-site/${doc_path}"
-          cp -a doc/build/html/. "pages-site/${doc_path}/"
+          doc_dir="${{ steps.dispatch.outputs.doc_dir }}"
+          rm -rf "pages-site/${doc_dir}"
+          mkdir -p "pages-site/${doc_dir}"
+          cp -a doc/build/html/. "pages-site/${doc_dir}/"
           touch pages-site/.nojekyll
 
       - name: Stage root documentation redirect
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
         run: |
           cp .github/static/index.html pages-site/index.html
 
       - name: Stage documentation version metadata
+        if: ${{ steps.dispatch.outputs.push_doc == '1' && steps.dispatch.outputs.doc_dir != 'latest' }}
         run: |
           python .github/scripts/doc-versions.py \
             --site-dir pages-site \
-            --fallback-version "${{ steps.version.outputs.version }}"
+            --fallback-version "${{ steps.dispatch.outputs.doc_dir }}"
 
       - name: Stage Pages workflow
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
         run: |
           mkdir -p pages-site/.github/workflows
           cp .github/workflows/pages.yml pages-site/.github/workflows/pages.yml
 
       - name: Persist Pages site state
+        if: ${{ steps.dispatch.outputs.push_doc == '1' }}
         shell: bash
         run: |
-          version="${{ steps.version.outputs.version }}"
+          doc_branch="${{ steps.dispatch.outputs.doc_branch }}"
           git -C pages-site config user.name "${GIT_AUTHOR_NAME}"
           git -C pages-site config user.email "${GIT_AUTHOR_EMAIL}"
           git -C pages-site checkout --orphan pages-snapshot
           git -C pages-site add -A .
-          git -C pages-site commit -m "Deploy documentation for ${version}"
+          git -C pages-site commit -m "Deploy documentation from ${doc_branch}"
           git -C pages-site push --force origin HEAD:gh-pages
 
       - name: Delete documentation branch
+        if: ${{ always() && steps.app-token.outputs.token != '' }}
+        shell: bash
         env:
           GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          DOC_BRANCH: ${{ steps.dispatch.outputs.doc_branch }}
         run: |
-          git push "https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ":refs/heads/${GITHUB_REF_NAME}"
+          auth_header="$(printf 'x-access-token:%s' "${GITHUB_APP_TOKEN}" | openssl base64 -A)"
+          mkdir -p delete-doc-branch
+          git -C delete-doc-branch init
+          git -C delete-doc-branch remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          if git -C delete-doc-branch \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+              ls-remote --exit-code --heads origin "${DOC_BRANCH}" >/dev/null 2>&1; then
+            git -C delete-doc-branch \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+              push origin ":refs/heads/${DOC_BRANCH}"
+          else
+            echo "Documentation branch ${DOC_BRANCH} is already absent."
+          fi
