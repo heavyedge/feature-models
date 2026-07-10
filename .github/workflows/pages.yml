@@ -27,15 +27,15 @@ jobs:
 
       - name: Prepare Pages artifact
         run: |
-          mkdir -p pages-artifact
-          cp -a . pages-artifact/
-          rm -rf pages-artifact/.git
-          rm -rf pages-artifact/.github
+          mkdir -p "${{ runner.temp }}/pages-artifact"
+          cp -a . "${{ runner.temp }}/pages-artifact/"
+          rm -rf "${{ runner.temp }}/pages-artifact/.git"
+          rm -rf "${{ runner.temp }}/pages-artifact/.github"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: pages-artifact
+          path: ${{ runner.temp }}/pages-artifact
 
       - name: Deploy to GitHub Pages
         id: deployment
