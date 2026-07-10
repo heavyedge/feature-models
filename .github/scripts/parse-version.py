@@ -46,12 +46,10 @@ def main():
     args = parser.parse_args()
 
     is_release = args.event_name == "release"
-    upload_to_huggingface = int(
-        is_release and trained_model_can_be_released(args.ref_name)
-    )
+    push_model = int(is_release and trained_model_can_be_released(args.ref_name))
     push_doc = int(is_release)
 
-    github_output("upload_to_huggingface", upload_to_huggingface)
+    github_output("push_model", push_model)
     github_output("push_doc", push_doc)
 
 
