@@ -39,6 +39,7 @@ GPU_BUILD_CHECK_RUN_ID
 GPU_BUILD_CONCLUSION
 IMAGE_TAG
 MODEL_UPLOADED
+PUSH_IMAGE
 "
 
 for var_name in ${required_vars}; do
@@ -84,12 +85,14 @@ if [ "${MODEL_UPLOADED}" = "true" ]; then
     jq -n \
       --arg ref "${GITHUB_DISPATCH_REF}" \
       --arg MODEL_UPLOADED "${MODEL_UPLOADED}" \
+      --arg PUSH_IMAGE "${PUSH_IMAGE}" \
       --arg MODEL_REVISION "${MODEL_REVISION:-}" \
       --arg MODEL_REPO_ID "${MODEL_REPO_ID:-}" \
       '{
         ref: $ref,
         inputs: {
           model_uploaded: $MODEL_UPLOADED,
+          push_image: $PUSH_IMAGE,
           model_revision: $MODEL_REVISION,
           repo_id: $MODEL_REPO_ID
         }

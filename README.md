@@ -42,7 +42,15 @@ make test
 
 ## Documentation
 
+Documents are built and pushed to Github Pages.
+Document for the latest version can be found at:
+
 > https://heavyedge.github.io/feature-models/
+
+other versions can be found by specifying sub-urls.
+For example, document for `v1.0.0` can be found at:
+
+> https://heavyedge.github.io/feature-models/v1.0.0
 
 To build the documents yourself, run the following commands:
 
@@ -71,24 +79,54 @@ git config filter.nbstripout.required true
 This repository follows semantic versioning with [Python version specifiers](https://packaging.python.org/en/latest/specifications/version-specifiers/):
 
 ```
-N.N.N[.postN]
+N.N.N[{a|b|rc}N][.postN][.devN]
 ```
 
 **Major version**
 
-- Updated if model API is changed.
-- Each major version has dedicated repository, e.g., `heavyedge-features-v1`, `heavyedge-features-v2`, and so on.
+Major version change indicates that a completely different model is released.
+Each major version has dedicated repository, e.g., `heavyedge-features-v1`, `heavyedge-features-v2`, and so on.
+
+- Model inference API MAY change.
+- Model architecture and weight MAY change.
+- New versions of trained model and inference image MUST be released.
 
 **Minor version**
 
-- Updated if model is re-trained without API change.
+Minor version change indicates that the same model is re-trained with different data and released.
+
+- Model inference API and architecture MUST NOT change.
+- Model weight MAY change.
+- New versions of trained model and inference image MUST be released.
 
 **Patch version**
 
-- Bug fix.
-- Model metadata change.
+Patch version change indicates metadata change and bug fixes in auxiliary scripts that are distributed with the model.
+Trained model itself SHOULD NOT change, unless it is trained with the same data.
 
-**Post release**
+- Model inference API and architecture MUST NOT change.
+- Model weight SHOULD NOT change.
+- New versions of trained model and inference image MUST be released.
 
-- Changes that do not affect models, e.g., documentation update.
-- Post releases are not pushed to Huggingface repository.
+**Pre-release version**
+
+Pre-release version supports testing before the final release.
+
+- Whether the model inference API, architecture, and weight would change depends on the final version that the pre-release version refers to.
+- New version of trained model MUST be released.
+- New version of inference image MAY be released.
+
+**Post release** 
+
+Post-release version indicate changes that are not distributed with the model, e.g., documentation update.
+
+- Model inference API and architecture MUST NOT change.
+- Model weight SHOULD NOT change.
+- New versions of trained model and inference image MUST NOT be released.
+
+**Developmental release**
+
+Developmental release include experimental changes.
+
+- Model inference API, architecture, and weight MAY change.
+- New versions of trained model and inference image MAY be released.

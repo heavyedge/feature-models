@@ -2,9 +2,13 @@ import argparse
 import importlib
 import json
 import os
-import re
 import shutil
 import sys
+
+try:
+    from packaging.version import InvalidVersion, Version
+except ModuleNotFoundError:
+    from setuptools._vendor.packaging.version import InvalidVersion, Version
 
 parser = argparse.ArgumentParser(description="Upload model to Hugging Face Hub")
 parser.add_argument("tag", help="Model version tag (e.g., v1.0.0)")
@@ -14,7 +18,15 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-if re.search(r"\.post\d*$", args.tag):
+version_text = args.tag.removeprefix("v")
+
+try:
+    version = Version(version_text)
+except InvalidVersion:
+    print(f"Invalid model version tag: {args.tag}", file=sys.stderr)
+    sys.exit(1)
+
+if version.post is not None:
     print(f"Skipping Hugging Face upload for post release tag: {args.tag}")
     sys.exit(1)
 
@@ -22,7 +34,7 @@ HfApi = importlib.import_module("huggingface_hub").HfApi
 api = HfApi(token=os.getenv("HUGGINGFACE_TOKEN"))
 
 MODEL_VERSION = args.tag
-MAJOR_VERSION = args.tag.split(".")[0]
+MAJOR_VERSION = f"v{version.major}"
 REPO = f"jeesoo9595/heavyedge-features-{MAJOR_VERSION}"
 
 shutil.rmtree("model/__pycache__", ignore_errors=True)
