@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.19
 FROM ghcr.io/astral-sh/uv:latest AS uv
 
+
 FROM python:slim AS downloader
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /dataset
@@ -8,10 +9,8 @@ WORKDIR /dataset
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
-
-ENV PATH="/root/.local/bin:$PATH"
-
 RUN curl -LsSf https://hf.co/cli/install.sh | bash
+ENV PATH="/root/.local/bin:$PATH"
 
 COPY setup.sh .
 RUN --mount=type=secret,id=hf_token,required=false \

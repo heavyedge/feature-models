@@ -111,6 +111,25 @@ Documentation can be found at:
 
 > https://heavyedge.github.io/feature-models/
 
+The HTML document is also distributed in `/app/doc` directory inside the inference image.
+To view the document in a browser on the host, build the image and run:
+
+```sh
+docker run --rm -p 8000:8000 heavyedge/feature-models:v1.0.0 -m http.server 8000 --directory /app/doc
+```
+
+Then open <http://localhost:8000/> in the host's browser while the container is running.
+
+Alternatively, you can build the document by yourself.
+After building the model and the notebooks, run the following commands:
+
+```
+cd doc
+make html
+```
+
+The main page is `doc/build/html/index.html`.
+
 ## Contributing
 
 ### Configuring git
