@@ -1,0 +1,469 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  release:
+    types: [published]
+
+permissions:
+  actions: write
+  checks: write
+  contents: read
+
+jobs:
+
+  dev-image:
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      tag: ${{ steps.image-metadata.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker registry
+        shell: bash
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          for attempt in 1 2; do
+            if printf '%s' "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USERNAME" --password-stdin; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 2 ]; then
+              echo "Docker login failed. Retrying in 3 seconds..."
+              sleep 3
+            fi
+          done
+
+          echo "Docker login failed after 2 attempts."
+          exit 1
+
+      - name: Set Docker image metadata
+        id: image-metadata
+        shell: bash
+        env:
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          echo "tag=${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}-dev" >> "$GITHUB_OUTPUT"
+          echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push temporary Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          target: dev
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=feature-models-dev
+          cache-to: type=gha,mode=max,scope=feature-models-dev
+          build-args: |
+            IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
+            IMAGE_REVISION=${{ github.sha }}
+          secrets: |
+            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          tags: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}
+
+  resolve-variables:
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      push_model: ${{ steps.flags.outputs.push_model }}
+      push_image: ${{ steps.flags.outputs.push_image }}
+      push_doc: ${{ steps.flags.outputs.push_doc }}
+      doc_branch: ${{ steps.doc-branch.outputs.doc_branch }}
+      doc_dir: ${{ steps.doc-branch.outputs.doc_dir }}
+      doc_version: ${{ steps.doc-branch.outputs.doc_version }}
+      email_recipient: ${{ steps.email.outputs.email }}
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve CD flags
+        id: flags
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          python3 .github/scripts/parse-version.py \
+            --event-name "$EVENT_NAME" \
+            --ref-name "$REF_NAME"
+
+      - name: Resolve doc branch name
+        id: doc-branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            echo "doc_branch=${REF_NAME}-${RUN_ID::7}-doc" >> "$GITHUB_OUTPUT"
+            echo "doc_dir=${REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "doc_version=${REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT_NAME" = "push" ] && [ "$REF_NAME" = "master" ]; then
+            version_tag="$(python3 .github/scripts/latest-version-tag.py)"
+            echo "doc_branch=${GITHUB_SHA::7}-${RUN_ID::7}-doc" >> "$GITHUB_OUTPUT"
+            echo "doc_dir=latest" >> "$GITHUB_OUTPUT"
+            if [ -n "$version_tag" ]; then
+              echo "doc_version=${version_tag}+${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            else
+              echo "doc_version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "doc_branch=${GITHUB_SHA::7}-${RUN_ID::7}-doc-test" >> "$GITHUB_OUTPUT"
+            echo "doc_dir=" >> "$GITHUB_OUTPUT"
+            echo "doc_version=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve email recipient
+        id: email
+        uses: actions/github-script@v9
+        env:
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NOTIFY_EMAIL_MAP: ${{ vars.SMTP_NOTIFY_EMAIL_MAP }}
+        with:
+          script: |
+            const noreplyPattern = /(^|@)(users\.)?noreply\.github\.com$/i;
+            const usableEmail = (email) => email && !noreplyPattern.test(email);
+
+            let emailMap = {};
+            if (process.env.NOTIFY_EMAIL_MAP) {
+              try {
+                emailMap = JSON.parse(process.env.NOTIFY_EMAIL_MAP);
+              } catch (error) {
+                core.warning(`Ignoring invalid SMTP_NOTIFY_EMAIL_MAP JSON: ${error.message}`);
+              }
+            }
+
+            const { data: commit } = await github.rest.repos.getCommit({
+              ...context.repo,
+              ref: process.env.GIT_SHA,
+            });
+
+            const candidates = [
+              context.payload.pull_request?.user?.login,
+              context.payload.release?.author?.login,
+              commit.author?.login,
+              commit.committer?.login,
+              context.actor,
+            ].filter(Boolean);
+            const login = [...new Set(candidates)][0];
+
+            if (login && emailMap[login]) {
+              core.setOutput('email', emailMap[login]);
+              return;
+            }
+
+            if (login) {
+              const { data: user } = await github.rest.users.getByUsername({ username: login });
+              if (usableEmail(user.email)) {
+                core.setOutput('email', user.email);
+                return;
+              }
+            }
+
+            const commitEmails = [
+              commit.commit.author?.email,
+              commit.commit.committer?.email,
+            ];
+            const commitEmail = commitEmails.find(usableEmail);
+            if (commitEmail) {
+              core.setOutput('email', commitEmail);
+              return;
+            }
+
+            core.warning(
+              `Could not resolve a public notification email for ${login || 'the commit author'}; deployment email notification will be skipped.`
+            );
+            core.setOutput('email', '');
+
+  create-checks:
+
+    needs:
+      - dev-image
+      - resolve-variables
+
+    outputs:
+      gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
+      upload-model-check-run-id: ${{ steps.deploy-checks.outputs.upload-model-check-run-id }}
+      upload-doc-check-run-id: ${{ steps.deploy-checks.outputs.upload-doc-check-run-id }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Create GitHub App token for deploy checks
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Create deploy checks
+        id: deploy-checks
+        uses: actions/github-script@v9
+        env:
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PUSH_MODEL: ${{ needs.resolve-variables.outputs.push_model }}
+          PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+              const checks = [
+                ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
+              ];
+              if (process.env.PUSH_MODEL === '1') {
+                checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
+              }
+              if (process.env.PUSH_DOC === '1') {
+                checks.push(['upload-doc-check-run-id', 'Upload document', 'Document upload is queued.']);
+              }
+
+              for (const [outputName, checkName, summary] of checks) {
+                const response = await github.rest.checks.create({
+                  ...context.repo,
+                  name: checkName,
+                  head_sha: process.env.GIT_SHA,
+                  status: 'in_progress',
+                  started_at: new Date().toISOString(),
+                  details_url: process.env.GITHUB_RUN_URL,
+                  output: {
+                    title: checkName,
+                    summary,
+                  },
+                });
+
+                core.setOutput(outputName, String(response.data.id));
+              }
+
+  deploy:
+
+    needs:
+      - dev-image
+      - resolve-variables
+      - create-checks
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create Docker secrets
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          kubectl create secret docker-registry regcred \
+            --docker-server="$DOCKER_REGISTRY" \
+            --docker-username="$DOCKER_USERNAME" \
+            --docker-password="$DOCKER_PASSWORD" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Gmail relay secret
+        env:
+          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          if [ -z "$GMAIL_USERNAME" ]; then
+            echo "::error::Missing GMAIL_USERNAME secret for SMTP relay."
+            exit 1
+          fi
+          if [ -z "$GMAIL_APP_PASSWORD" ]; then
+            echo "::error::Missing GMAIL_APP_PASSWORD secret for SMTP relay."
+            exit 1
+          fi
+
+          kubectl create secret generic gmail-smtp-relay \
+            --from-literal=GMAIL_USERNAME="$GMAIL_USERNAME" \
+            --from-literal=GMAIL_APP_PASSWORD="$GMAIL_APP_PASSWORD" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Hugging Face token secret
+        if: needs.resolve-variables.outputs.push_model == '1'
+        env:
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          kubectl create secret generic huggingface-token \
+            --from-literal=HUGGINGFACE_TOKEN="$HUGGINGFACE_TOKEN" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create GitHub app secret
+        env:
+          GH_APP_ID: ${{ secrets.GH_APP_ID }}
+          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+        run: |
+          if [ -z "$GH_APP_ID" ]; then
+            echo "::error::Missing GH_APP_ID secret for GitHub check runs and documentation branch pushes."
+            exit 1
+          fi
+          if [ -z "$GH_APP_PRIVATE_KEY" ]; then
+            echo "::error::Missing GH_APP_PRIVATE_KEY secret for GitHub check runs and documentation branch pushes."
+            exit 1
+          fi
+
+          kubectl create secret generic github-app \
+            --from-literal=GH_APP_ID="$GH_APP_ID" \
+            --from-literal=GH_APP_PRIVATE_KEY="$GH_APP_PRIVATE_KEY" \
+            --from-literal=GH_APP_INSTALLATION_ID="$GH_APP_INSTALLATION_ID" \
+            --namespace="$KUBE_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Set Kubernetes variables
+        id: k8s-variables
+        env:
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          DRY_BUILD: ${{ github.event_name == 'release' && '0' || '1' }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          job_name="heavyedge-feature-models-${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}"
+
+          if [ "$DRY_BUILD" = "1" ]; then
+            cpu_request="1"
+            gpu_request="1"
+          else
+            cpu_request="2"
+            gpu_request="2"
+          fi
+
+          {
+            echo "job_name=${job_name}"
+            echo "cpu_request=${cpu_request}"
+            echo "gpu_request=${gpu_request}"
+            echo "dry_build=${DRY_BUILD}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Kubernetes
+        shell: bash
+        env:
+          JOB_NAME: ${{ steps.k8s-variables.outputs.job_name }}
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+          KUBE_USERNAME: ${{ secrets.KUBE_USERNAME }}
+          MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
+          CPU_REQUEST: ${{ steps.k8s-variables.outputs.cpu_request }}
+          GPU_REQUEST: ${{ steps.k8s-variables.outputs.gpu_request }}
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE }}
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          IMAGE_TAG: ${{ needs.dev-image.outputs.tag }}
+          DRY_BUILD: ${{ steps.k8s-variables.outputs.dry_build }}
+          PUSH_MODEL: ${{ needs.resolve-variables.outputs.push_model }}
+          PUSH_IMAGE: ${{ needs.resolve-variables.outputs.push_image }}
+          PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
+          DOC_BRANCH: ${{ needs.resolve-variables.outputs.doc_branch }}
+          DOC_DIR: ${{ needs.resolve-variables.outputs.doc_dir }}
+          DOC_VERSION: ${{ needs.resolve-variables.outputs.doc_version }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SMTP_NOTIFY_RECIPIENT: ${{ needs.resolve-variables.outputs.email_recipient }}
+          GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
+          UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
+          UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+        run: |
+          template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
+          envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
+          kubectl wait \
+            --namespace="$KUBE_NAMESPACE" \
+            --for=create \
+            "pod" \
+            --selector="job-name=${JOB_NAME}" \
+            --timeout=120s
+
+  deploy-fallback:
+
+    needs:
+      - dev-image
+      - create-checks
+      - deploy
+
+    if: ${{ always() && needs.deploy.result == 'failure' }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create GitHub App token for cd-cleanup dispatch
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-actions: write
+
+      - name: Dispatch cd-cleanup workflow
+        shell: bash
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}
+          GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
+          UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
+          UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+          IMAGE_TAG: ${{ needs.dev-image.outputs.tag }}
+          MODEL_UPLOADED: "false"
+          PUSH_IMAGE: "0"
+          PUSH_DOC: "0"
+          DOC_BRANCH: ""
+          DOC_DIR: ""
+          DOC_VERSION: ""
+          MODEL_REVISION: ""
+          MODEL_REPO_ID: ""
+          GPU_BUILD_CONCLUSION: failure
+          UPLOAD_MODEL_CONCLUSION: failure
+          UPLOAD_DOC_CONCLUSION: failure
+        run: |
+          sh .github/scripts/deploy-dispatch.sh

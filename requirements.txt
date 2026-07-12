@@ -1,0 +1,9 @@
+numpy
+scipy
+torch
+scikit-learn
+gpytorch
+gpytorch-qr==0.8.0
+pandas
+xarray
+packaging

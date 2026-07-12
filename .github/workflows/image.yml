@@ -1,0 +1,113 @@
+name: Push Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_name:
+        description: Name of the Sphinx HTML artifact to download.
+        required: true
+        type: string
+      artifact_run_id:
+        description: Documentation workflow run ID that produced the artifact.
+        required: true
+        type: string
+      push_image:
+        description: Whether to push the published image.
+        required: true
+        type: string
+      model_revision:
+        description: Revision of the trained model to include in the image.
+        required: true
+        type: string
+      repo_id:
+        description: Hugging Face repository containing the trained model.
+        required: true
+        type: string
+
+jobs:
+  publish-image:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download trained model
+        run: |
+          curl -LsSf https://hf.co/cli/install.sh | bash
+          hf auth login --token $HUGGINGFACE_TOKEN
+          hf download "${REPO_ID}" --repo-type model --revision "${MODEL_REVISION}" --local-dir model
+        env:
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          MODEL_REVISION: ${{ inputs.model_revision }}
+          REPO_ID: ${{ inputs.repo_id }}
+
+      - name: Create GitHub App token for artifact download
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-actions: read
+
+      - name: Download Sphinx HTML artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: doc/build/html
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker registry
+        if: inputs.push_image == '1'
+        shell: bash
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          for attempt in 1 2; do
+            if printf '%s' "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USERNAME" --password-stdin; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 2 ]; then
+              echo "Docker login failed. Retrying in 3 seconds..."
+              sleep 3
+            fi
+          done
+
+          echo "Docker login failed after 2 attempts."
+          exit 1
+
+      - name: Set Docker image metadata
+        id: image-metadata
+        shell: bash
+        env:
+          MODEL_VERSION: ${{ inputs.model_revision }}
+        run: |
+          echo "tag=${MODEL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ inputs.push_image == '1' }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=feature-models
+          cache-to: type=gha,mode=max,scope=feature-models
+          build-args: |
+            IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
+            IMAGE_VERSION=${{ inputs.model_revision }}
+            IMAGE_REVISION=${{ github.sha }}
+          secrets: |
+            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          tags: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}

@@ -1,0 +1,359 @@
+name: Doc
+
+on:
+  workflow_dispatch:
+    inputs:
+      doc_branch:
+        description: Built notebook documentation branch to process.
+        required: true
+        type: string
+      push_doc:
+        description: Whether to build and publish documentation from the branch.
+        required: true
+        type: string
+      doc_dir:
+        description: Pages directory to receive the built documentation.
+        required: false
+        default: ""
+        type: string
+      doc_version:
+        description: Version label to append to the Sphinx project title.
+        required: false
+        default: ""
+        type: string
+      dry_build:
+        description: Whether the notebooks were built in dry build mode.
+        required: true
+        type: string
+      model_uploaded:
+        description: Whether a trained model is ready for image publishing.
+        required: false
+        default: "false"
+        type: string
+      push_image:
+        description: Whether to push the published image.
+        required: false
+        default: "0"
+        type: string
+      model_revision:
+        description: Revision of the trained model to include in the image.
+        required: false
+        default: ""
+        type: string
+      repo_id:
+        description: Hugging Face repository containing the trained model.
+        required: false
+        default: ""
+        type: string
+      source_ref:
+        description: Source ref to use when building the image.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: doc-${{ github.event.inputs.doc_branch }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+
+    outputs:
+      doc_branch: ${{ steps.dispatch.outputs.doc_branch }}
+      push_doc: ${{ steps.dispatch.outputs.push_doc }}
+      doc_dir: ${{ steps.dispatch.outputs.doc_dir }}
+      doc_version: ${{ steps.dispatch.outputs.doc_version }}
+      dry_build: ${{ steps.dispatch.outputs.dry_build }}
+      artifact_name: ${{ steps.dispatch.outputs.artifact_name }}
+      model_uploaded: ${{ steps.dispatch.outputs.model_uploaded }}
+      push_image: ${{ steps.dispatch.outputs.push_image }}
+      model_revision: ${{ steps.dispatch.outputs.model_revision }}
+      repo_id: ${{ steps.dispatch.outputs.repo_id }}
+      source_ref: ${{ steps.dispatch.outputs.source_ref }}
+
+    steps:
+      - name: Resolve documentation dispatch
+        id: dispatch
+        shell: bash
+        env:
+          DOC_BRANCH: ${{ github.event.inputs.doc_branch }}
+          PUSH_DOC: ${{ github.event.inputs.push_doc }}
+          DOC_DIR: ${{ github.event.inputs.doc_dir }}
+          DOC_VERSION: ${{ github.event.inputs.doc_version }}
+          DRY_BUILD: ${{ github.event.inputs.dry_build }}
+          MODEL_UPLOADED: ${{ github.event.inputs.model_uploaded }}
+          PUSH_IMAGE: ${{ github.event.inputs.push_image }}
+          MODEL_REVISION: ${{ github.event.inputs.model_revision }}
+          REPO_ID: ${{ github.event.inputs.repo_id }}
+          SOURCE_REF: ${{ github.event.inputs.source_ref }}
+        run: |
+          if [ "${PUSH_DOC}" != "0" ] && [ "${PUSH_DOC}" != "1" ]; then
+            echo "Unsupported PUSH_DOC value: ${PUSH_DOC}" >&2
+            exit 1
+          fi
+          if [ "${DRY_BUILD}" != "0" ] && [ "${DRY_BUILD}" != "1" ]; then
+            echo "Unsupported DRY_BUILD value: ${DRY_BUILD}" >&2
+            exit 1
+          fi
+          if [ "${MODEL_UPLOADED}" != "true" ] && [ "${MODEL_UPLOADED}" != "false" ]; then
+            echo "Unsupported MODEL_UPLOADED value: ${MODEL_UPLOADED}" >&2
+            exit 1
+          fi
+          if [ "${PUSH_IMAGE}" != "0" ] && [ "${PUSH_IMAGE}" != "1" ]; then
+            echo "Unsupported PUSH_IMAGE value: ${PUSH_IMAGE}" >&2
+            exit 1
+          fi
+          if [ "${MODEL_UPLOADED}" = "true" ] && { [ -z "${MODEL_REVISION}" ] || [ -z "${REPO_ID}" ]; }; then
+            echo "Missing model_revision or repo_id for image publishing." >&2
+            exit 1
+          fi
+
+          if ! git check-ref-format "refs/heads/${DOC_BRANCH}"; then
+            echo "Invalid documentation branch name: ${DOC_BRANCH}" >&2
+            exit 1
+          fi
+
+          if [ "${PUSH_DOC}" = "1" ]; then
+            if [ -z "${DOC_DIR}" ]; then
+              echo "Missing doc_dir for documentation publishing." >&2
+              exit 1
+            fi
+            if [ -z "${DOC_VERSION}" ]; then
+              echo "Missing doc_version for documentation publishing." >&2
+              exit 1
+            fi
+            case "${DOC_DIR}" in
+              /*|.|..|*/*)
+                echo "Unsupported documentation directory: ${DOC_DIR}" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          artifact_name="${DOC_BRANCH//\//-}"
+          echo "doc_branch=${DOC_BRANCH}" >> "${GITHUB_OUTPUT}"
+          echo "push_doc=${PUSH_DOC}" >> "${GITHUB_OUTPUT}"
+          echo "doc_dir=${DOC_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "doc_version=${DOC_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "dry_build=${DRY_BUILD}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
+          echo "model_uploaded=${MODEL_UPLOADED}" >> "${GITHUB_OUTPUT}"
+          echo "push_image=${PUSH_IMAGE}" >> "${GITHUB_OUTPUT}"
+          echo "model_revision=${MODEL_REVISION}" >> "${GITHUB_OUTPUT}"
+          echo "repo_id=${REPO_ID}" >> "${GITHUB_OUTPUT}"
+          echo "source_ref=${SOURCE_REF}" >> "${GITHUB_OUTPUT}"
+          echo "Documentation branch: ${DOC_BRANCH}"
+          echo "Publish documentation: ${PUSH_DOC}"
+          echo "Documentation directory: ${DOC_DIR}"
+          echo "Documentation version: ${DOC_VERSION}"
+          echo "Dry build: ${DRY_BUILD}"
+
+  build-doc:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.push_doc == '1' || needs.resolve.outputs.model_uploaded == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout documentation branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.doc_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install documentation dependencies
+        run: |
+          uv pip install --system -r doc/requirements.txt
+
+      - name: Build Sphinx documentation
+        env:
+          DRY_BUILD: ${{ needs.resolve.outputs.dry_build }}
+          DOC_VERSION: ${{ needs.resolve.outputs.doc_version }}
+        run: |
+          python -m sphinx -b html doc/source doc/build/html
+
+      - name: Upload Sphinx HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sphinx-html-${{ needs.resolve.outputs.artifact_name }}
+          path: doc/build/html
+          if-no-files-found: error
+
+  publish-doc:
+    needs:
+      - resolve
+      - build-doc
+    if: ${{ needs.resolve.outputs.push_doc == '1' }}
+    runs-on: ubuntu-latest
+    env:
+      GIT_AUTHOR_NAME: heavyedge-bot
+      GIT_AUTHOR_EMAIL: heavyedge-bot@users.noreply.github.com
+
+    steps:
+      - name: Checkout workflow sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download Sphinx HTML artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sphinx-html-${{ needs.resolve.outputs.artifact_name }}
+          path: sphinx-html
+
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Restore Pages site state
+        shell: bash
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          mkdir -p pages-site
+          git -C pages-site init -b gh-pages
+          git -C pages-site remote add origin "https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git -C pages-site ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git -C pages-site fetch --depth=1 origin gh-pages
+            git -C pages-site reset --hard FETCH_HEAD
+          fi
+
+      - name: Stage versioned documentation
+        shell: bash
+        run: |
+          doc_dir="${{ needs.resolve.outputs.doc_dir }}"
+          rm -rf "pages-site/${doc_dir}"
+          mkdir -p "pages-site/${doc_dir}"
+          cp -a sphinx-html/. "pages-site/${doc_dir}/"
+          touch pages-site/.nojekyll
+
+      - name: Stage root documentation redirect
+        run: |
+          cp .github/static/index.html pages-site/index.html
+
+      - name: Stage documentation version metadata
+        run: |
+          python .github/scripts/doc-versions.py \
+            --site-dir pages-site
+
+      - name: Stage documentation version switcher
+        run: |
+          mkdir -p pages-site/_static
+          cp .github/static/version-switcher.css pages-site/_static/version-switcher.css
+          cp .github/static/version-switcher.js pages-site/_static/version-switcher.js
+          python .github/scripts/inject-doc-version-switcher.py \
+            --site-dir pages-site
+
+      - name: Stage Pages workflow
+        run: |
+          mkdir -p pages-site/.github/workflows
+          cp .github/workflows/pages.yml pages-site/.github/workflows/pages.yml
+
+      - name: Persist Pages site state
+        shell: bash
+        run: |
+          doc_branch="${{ needs.resolve.outputs.doc_branch }}"
+          git -C pages-site config user.name "${GIT_AUTHOR_NAME}"
+          git -C pages-site config user.email "${GIT_AUTHOR_EMAIL}"
+          git -C pages-site checkout --orphan pages-snapshot
+          git -C pages-site add -A .
+          git -C pages-site commit -m "Deploy documentation from ${doc_branch}"
+          git -C pages-site push --force origin HEAD:gh-pages
+
+  delete-doc-branch:
+    needs:
+      - resolve
+      - build-doc
+      - publish-doc
+    if: ${{ always() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Delete documentation branch
+        shell: bash
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          DOC_BRANCH: ${{ needs.resolve.outputs.doc_branch }}
+        run: |
+          auth_header="$(printf 'x-access-token:%s' "${GITHUB_APP_TOKEN}" | openssl base64 -A)"
+          mkdir -p delete-doc-branch
+          git -C delete-doc-branch init
+          git -C delete-doc-branch remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          if git -C delete-doc-branch \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+              ls-remote --exit-code --heads origin "${DOC_BRANCH}" >/dev/null 2>&1; then
+            git -C delete-doc-branch \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+              push origin ":refs/heads/${DOC_BRANCH}"
+          else
+            echo "Documentation branch ${DOC_BRANCH} is already absent."
+          fi
+
+  dispatch-image:
+    needs:
+      - resolve
+      - build-doc
+      - publish-doc
+      - delete-doc-branch
+    if: ${{ always() && needs.resolve.result == 'success' && needs.resolve.outputs.model_uploaded == 'true' && needs.build-doc.result == 'success' && needs.delete-doc-branch.result == 'success' && (needs.resolve.outputs.push_doc != '1' || needs.publish-doc.result == 'success') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create GitHub App token for image dispatch
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-actions: write
+
+      - name: Dispatch image publishing
+        uses: actions/github-script@v9
+        env:
+          ARTIFACT_NAME: sphinx-html-${{ needs.resolve.outputs.artifact_name }}
+          ARTIFACT_RUN_ID: ${{ github.run_id }}
+          PUSH_IMAGE: ${{ needs.resolve.outputs.push_image }}
+          MODEL_REVISION: ${{ needs.resolve.outputs.model_revision }}
+          REPO_ID: ${{ needs.resolve.outputs.repo_id }}
+          SOURCE_REF: ${{ needs.resolve.outputs.source_ref }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: 'image.yml',
+              ref: process.env.SOURCE_REF,
+              inputs: {
+                artifact_name: process.env.ARTIFACT_NAME,
+                artifact_run_id: process.env.ARTIFACT_RUN_ID,
+                push_image: process.env.PUSH_IMAGE,
+                model_revision: process.env.MODEL_REVISION,
+                repo_id: process.env.REPO_ID,
+              },
+            });
