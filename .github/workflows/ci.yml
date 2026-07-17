@@ -271,6 +271,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
       - name: set up uv
         uses: astral-sh/setup-uv@v5
 
@@ -333,4 +338,4 @@ jobs:
 
       - name: Test Docker image
         run: |
-          docker run --rm -v $PWD/_data:/app/_data heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
+          docker run --rm heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
