@@ -108,7 +108,7 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           bash <<'SCRIPT'
-          set -eu
+          set -euo pipefail
 
           if [ -z "${DOCKER_REGISTRY:-}" ] ||
             [ -z "${DOCKER_NAMESPACE:-}" ] ||
@@ -135,11 +135,37 @@ jobs:
           trap 'rm -f "${headers_file}"' EXIT
           accept_header="application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"
 
-          http_status="$(
-            curl -sS -o /dev/null -w "%{http_code}" -D "${headers_file}" \
-              -u "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
-              -H "Accept: ${accept_header}" -X HEAD "${manifest_url}" || true
-          )"
+          auth_status="$(curl -sS -o /dev/null -w "%{http_code}" -D "${headers_file}" \
+            -H "Accept: ${accept_header}" --head "${manifest_url}" || true)"
+
+          if [ "${auth_status}" = "404" ]; then
+            echo "Docker image tag ${docker_repository}:${IMAGE_TAG} is already absent."
+            exit 0
+          fi
+
+          www_authenticate="$(awk 'BEGIN { IGNORECASE = 1 } /^www-authenticate:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "${headers_file}" | tr -d '\r')"
+          token_realm="$(printf '%s\n' "${www_authenticate}" | sed -n 's/.*realm="\([^"]*\)".*/\1/p')"
+          token_service="$(printf '%s\n' "${www_authenticate}" | sed -n 's/.*service="\([^"]*\)".*/\1/p')"
+
+          if [ -z "${token_realm}" ] || [ -z "${token_service}" ]; then
+            echo "Could not obtain a registry authentication challenge for ${docker_repository}:${IMAGE_TAG}; registry returned HTTP ${auth_status}." >&2
+            exit 1
+          fi
+
+          token_response="$(curl -fsS --user "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
+            --get --data-urlencode "service=${token_service}" \
+            --data-urlencode "scope=repository:${docker_repository}:pull,delete" \
+            "${token_realm}")"
+          registry_token="$(printf '%s' "${token_response}" | jq -r '.token // .access_token // empty')"
+
+          if [ -z "${registry_token}" ]; then
+            echo "Registry token service did not return an access token for ${docker_repository}." >&2
+            exit 1
+          fi
+
+          http_status="$(curl -sS -o /dev/null -w "%{http_code}" -D "${headers_file}" \
+            -H "Accept: ${accept_header}" \
+            -H "Authorization: Bearer ${registry_token}" --head "${manifest_url}" || true)"
 
           if [ "${http_status}" = "404" ]; then
             echo "Docker image tag ${docker_repository}:${IMAGE_TAG} is already absent."
@@ -159,7 +185,7 @@ jobs:
 
           delete_status="$(
             curl -sS -o /dev/null -w "%{http_code}" \
-              -u "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
+              -H "Authorization: Bearer ${registry_token}" \
               -X DELETE "${registry_url}/v2/${docker_repository}/manifests/${digest}" || true
           )"
 
