@@ -44,6 +44,32 @@ jobs:
         run: |
           isort --check .
 
+  doc:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: get repo
+        uses: actions/checkout@v4
+
+      - name: set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: install package
+        run: |
+          uv pip install --system -r doc/requirements.txt
+
+      - name: build document
+        run: |
+          cd doc
+          make html SPHINXOPTS="-W --keep-going"
+
   train-models:
 
       needs: lint
@@ -181,33 +207,6 @@ jobs:
         - name: test models in inference environment
           run: make test
 
-  image-train:
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          push: false
-          target: train
-          cache-from: type=gha,scope=feature-models-train
-          cache-to: type=gha,mode=max,scope=feature-models-train
-          secrets: |
-            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: heavyedge-feature-models:train-ci
-
-      - name: Test Docker image
-        run: docker run --rm heavyedge-feature-models:train-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
-
   image-infer:
 
       needs: train-models
@@ -242,9 +241,9 @@ jobs:
             load: true
             push: false
             target: infer
-            cache-from: type=gha,scope=feature-models
-            cache-to: type=gha,mode=max,scope=feature-models
-            tags: heavyedge-feature-models:ci
+            cache-from: type=gha,scope=feature-models-infer
+            cache-to: type=gha,mode=max,scope=feature-models-infer
+            tags: heavyedge-feature-models:infer-ci
 
         - name: Download feature dataset
           run: |
@@ -262,87 +261,71 @@ jobs:
 
         - name: Test Docker image
           run: |
-            docker run --rm -v $PWD/_temp:/workdir heavyedge-feature-models:ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
+            docker run --rm -w /workdir -v $PWD/_temp:/workdir heavyedge-feature-models:infer-ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
 
-  image-dev:
-
-      needs: train-models
-
-      runs-on: ubuntu-latest
-
-      steps:
-
-        - name: Checkout
-          uses: actions/checkout@v4
-
-        - name: set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: "3.12"
-
-        - name: set up uv
-          uses: astral-sh/setup-uv@v5
-
-        - uses: actions/download-artifact@v4
-          with:
-            name: trained-models
-            path: model
-
-        - name: Set up Docker Buildx
-          uses: docker/setup-buildx-action@v3
-
-        - name: Build Docker image
-          uses: docker/build-push-action@v6
-          with:
-            context: .
-            load: true
-            push: false
-            target: dev
-            cache-from: type=gha,scope=feature-models-dev
-            cache-to: type=gha,mode=max,scope=feature-models-dev
-            tags: heavyedge-feature-models:dev-ci
-
-        - name: Download feature dataset
-          run: |
-            curl -LsSf https://hf.co/cli/install.sh | bash
-            hf auth login --token $HUGGINGFACE_TOKEN
-            ./download.sh
-          env:
-            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-
-        - name: Prepare test input
-          run: |
-            uv pip install --system numpy pandas
-            make _temp/X.npy
-            python3 -c "import numpy as np; np.save('_temp/X.npy', np.load('_temp/X.npy')[:1])"
-
-        - name: Test Docker image
-          run: |
-            docker run --rm -v $PWD/_data:/app/_data heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
-            docker run --rm -w /workdir -v $PWD/_temp:/workdir heavyedge-feature-models:dev-ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
-
-  doc:
+  image-base:
 
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: get repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
         with:
-          python-version: "3.12"
+          context: .
+          load: true
+          push: false
+          target: base
+          cache-from: type=gha,scope=feature-models-base
+          cache-to: type=gha,mode=max,scope=feature-models-base
+          tags: heavyedge-feature-models:base-ci
 
-      - name: set up uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: install package
+      - name: Download feature dataset
         run: |
-          uv pip install --system -r doc/requirements.txt
+          curl -LsSf https://hf.co/cli/install.sh | bash
+          hf auth login --token $HUGGINGFACE_TOKEN
+          ./download.sh
+        env:
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
 
-      - name: build document
+      - name: Prepare test input
         run: |
-          cd doc
-          make html SPHINXOPTS="-W --keep-going"
+          uv pip install --system numpy pandas
+          make _temp/X.npy
+          python3 -c "import numpy as np; np.save('_temp/X.npy', np.load('_temp/X.npy')[:1])"
+
+      - name: Test Docker image
+        run: |
+          docker run --rm -w /workdir -v $PWD/_temp:/workdir heavyedge-feature-models:base-ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
+          docker run --rm -v $PWD/_data:/app/_data heavyedge-feature-models:base-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
+
+  image-dev:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          target: dev
+          cache-from: type=gha,scope=feature-models-dev
+          cache-to: type=gha,mode=max,scope=feature-models-dev
+          tags: heavyedge-feature-models:dev-ci
+
+      - name: Test Docker image
+        run: |
+          docker run --rm -v $PWD/_data:/app/_data heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
