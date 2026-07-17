@@ -62,6 +62,7 @@ if ! cleanup_payload="$(
     --arg upload_doc_check_run_id "${UPLOAD_DOC_CHECK_RUN_ID:-}" \
     --arg upload_doc_conclusion "${UPLOAD_DOC_CONCLUSION:-failure}" \
     --arg image_tag "${IMAGE_TAG}" \
+    --arg kubernetes_job_name "${KUBERNETES_JOB_NAME:-}" \
     '{
       ref: $ref,
       inputs: {
@@ -72,7 +73,8 @@ if ! cleanup_payload="$(
         upload_model_conclusion: $upload_model_conclusion,
         upload_doc_check_run_id: $upload_doc_check_run_id,
         upload_doc_conclusion: $upload_doc_conclusion,
-        image_tag: $image_tag
+        image_tag: $image_tag,
+        kubernetes_job_name: $kubernetes_job_name
       }
     }'
 )"; then
