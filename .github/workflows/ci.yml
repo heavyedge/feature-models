@@ -206,7 +206,7 @@ jobs:
           tags: heavyedge-feature-models:train-ci
 
       - name: Test Docker image
-        run: docker run --rm heavyedge-feature-models:train-ci sh -c 'uv pip install --system -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models'
+        run: docker run --rm heavyedge-feature-models:train-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
 
   image-infer:
 
