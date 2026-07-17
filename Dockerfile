@@ -28,7 +28,7 @@ COPY notebooks ./notebooks
 RUN nbstripout notebooks/*.ipynb
 
 
-FROM python:slim AS dev
+FROM python:slim AS train
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 WORKDIR /app

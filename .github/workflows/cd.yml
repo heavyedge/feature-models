@@ -49,7 +49,7 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          echo "tag=${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}-dev" >> "$GITHUB_OUTPUT"
+          echo "tag=${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}-train" >> "$GITHUB_OUTPUT"
           echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
       - name: Build and push temporary Docker image
@@ -57,10 +57,10 @@ jobs:
         with:
           context: .
           push: true
-          target: dev
+          target: train
           platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=feature-models-dev
-          cache-to: type=gha,mode=max,scope=feature-models-dev
+          cache-from: type=gha,scope=feature-models-train
+          cache-to: type=gha,mode=max,scope=feature-models-train
           build-args: |
             IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
             IMAGE_REVISION=${{ github.sha }}

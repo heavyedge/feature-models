@@ -63,15 +63,15 @@ We recommend training the models in a CUDA environment.
 
 > **NOTE**: Initial training in a container requires a network connection to download Python packages.
 
-Images for containerized training are provided and are identified by the `*-dev` tag.
+Images for containerized training are identified by the `*-train` tag.
 
 The image keeps our dataset and repository source under the `/app` directory.
 
-Let the image reference be `jeesoo9595/heavyedge-feature-models:v1.0.0-dev`.
+Let the image reference be `jeesoo9595/heavyedge-feature-models:v1.0.0-train`.
 The following command installs the prerequisite packages, trains the model, and stores the output under the `/app/model` directory.
 
 ```
-docker run jeesoo9595/heavyedge-feature-models:v1.0.0-dev sh -c 'uv pip install --system -r requirements.txt && make models'
+docker run jeesoo9595/heavyedge-feature-models:v1.0.0-train sh -c 'uv pip install --system -r requirements.txt && make models'
 ```
 
 ### Direct installation

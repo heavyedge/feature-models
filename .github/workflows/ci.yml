@@ -44,7 +44,7 @@ jobs:
         run: |
           isort --check .
 
-  train-model:
+  train-models:
 
       needs: lint
 
@@ -90,7 +90,7 @@ jobs:
 
   find-notebooks:
 
-      needs: train-model
+      needs: train-models
 
       runs-on: ubuntu-latest
 
@@ -108,7 +108,7 @@ jobs:
             notebooks=$(find notebooks -name "*.ipynb" | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
             echo "notebooks=$notebooks" >> $GITHUB_OUTPUT
 
-  notebooks:
+  build-notebooks:
 
       needs: find-notebooks
 
@@ -153,7 +153,7 @@ jobs:
 
   test-model:
 
-      needs: train-model
+      needs: train-models
 
       runs-on: ubuntu-latest
 
@@ -181,9 +181,9 @@ jobs:
         - name: test models in inference environment
           run: make test
 
-  model-image:
+  inference-image:
 
-      needs: train-model
+      needs: train-models
 
       runs-on: ubuntu-latest
 
@@ -236,7 +236,7 @@ jobs:
           run: |
             docker run --rm -v $PWD/_temp:/workdir heavyedge-feature-models:ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
 
-  dev-image:
+  training-image:
 
     runs-on: ubuntu-latest
 
@@ -253,15 +253,15 @@ jobs:
           context: .
           load: true
           push: false
-          target: dev
-          cache-from: type=gha,scope=feature-models-dev
-          cache-to: type=gha,mode=max,scope=feature-models-dev
+          target: train
+          cache-from: type=gha,scope=feature-models-train
+          cache-to: type=gha,mode=max,scope=feature-models-train
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: heavyedge-feature-models:dev-ci
+          tags: heavyedge-feature-models:train-ci
 
       - name: Test Docker image
-        run: docker run --rm heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models'
+        run: docker run --rm heavyedge-feature-models:train-ci sh -c 'uv pip install --system -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models'
 
   doc:
 
