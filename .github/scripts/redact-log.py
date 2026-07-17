@@ -5,10 +5,7 @@ import os
 import re
 from pathlib import Path
 
-
-parser = argparse.ArgumentParser(
-    description="Redact configured secrets and common access-token formats from a log file."
-)
+parser = argparse.ArgumentParser(description="Redact log file.")
 parser.add_argument("input_file", type=Path)
 parser.add_argument("output_file", type=Path)
 parser.add_argument(
@@ -44,6 +41,8 @@ content = re.sub(
     content,
     flags=re.IGNORECASE,
 )
-content = re.sub(r"(x-access-token:)[^\s@]+", r"\1[REDACTED]", content, flags=re.IGNORECASE)
+content = re.sub(
+    r"(x-access-token:)[^\s@]+", r"\1[REDACTED]", content, flags=re.IGNORECASE
+)
 
 args.output_file.write_text(content, encoding="utf-8")
