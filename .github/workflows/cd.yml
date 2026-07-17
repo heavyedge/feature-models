@@ -452,6 +452,7 @@ jobs:
           GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+          CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cleanup-check-run-id }}
           IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
           MODEL_UPLOADED: "false"
           PUSH_IMAGE: "0"

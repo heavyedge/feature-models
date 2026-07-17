@@ -46,15 +46,40 @@ spec:
 
               python .github/k8s/send-email.py --status "Started" || true
 
+              job_log_dir="${JOB_LOG_DIR:-/tmp/heavyedge-deploy-logs}"
+              mkdir -p "$job_log_dir"
+              build_log_file="$job_log_dir/gpu-build.log"
+              app_token_log_file="$job_log_dir/github-app-token.log"
+              deploy_log_file="$job_log_dir/deploy.log"
+              dispatch_log_file="$job_log_dir/deploy-dispatch.log"
+              export GPU_BUILD_LOG_FILE="$build_log_file"
+              export GITHUB_APP_TOKEN_LOG_FILE="$app_token_log_file"
+              export DEPLOY_LOG_FILE="$deploy_log_file"
+              export DEPLOY_DISPATCH_LOG_FILE="$dispatch_log_file"
+
+              run_and_log() {
+                command_label="$1"
+                log_file="$2"
+                shift 2
+
+                printf '$ %s\n' "$command_label" > "$log_file"
+                "$@" >> "$log_file" 2>&1
+                command_status=$?
+                cat "$log_file"
+                return "$command_status"
+              }
+
               build_status=0
-              sh .github/k8s/build.sh || build_status=$?
+              run_and_log "sh .github/k8s/build.sh" "$build_log_file" sh .github/k8s/build.sh || build_status=$?
 
               token_status=0
-              GITHUB_APP_TOKEN="$(sh .github/k8s/app-token.sh)" || token_status=$?
+              printf '%s\n' '$ sh .github/k8s/app-token.sh' > "$app_token_log_file"
+              GITHUB_APP_TOKEN="$(sh .github/k8s/app-token.sh 2>> "$app_token_log_file")" || token_status=$?
+              cat "$app_token_log_file"
               export GITHUB_APP_TOKEN
 
               deploy_status=0
-              sh .github/k8s/deploy.sh || deploy_status=$?
+              run_and_log "sh .github/k8s/deploy.sh" "$deploy_log_file" sh .github/k8s/deploy.sh || deploy_status=$?
 
               gpu_build_conclusion=failure
               upload_model_conclusion=failure
@@ -97,7 +122,7 @@ spec:
               export MODEL_REPO_ID="$model_repo_id"
 
               dispatch_status=0
-              sh .github/scripts/deploy-dispatch.sh || dispatch_status=$?
+              run_and_log "sh .github/scripts/deploy-dispatch.sh" "$dispatch_log_file" sh .github/scripts/deploy-dispatch.sh || dispatch_status=$?
 
               exit_code=0
               if [ "$build_status" -ne 0 ]; then

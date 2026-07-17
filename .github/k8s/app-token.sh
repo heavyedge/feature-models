@@ -107,7 +107,7 @@ if ! github_api "${response_file}" \
     -H "Authorization: Bearer ${jwt}" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     "https://api.github.com/app/installations/${installation_id}/access_tokens" \
-    -d '{"permissions":{"actions":"write","contents":"write"}}'; then
+    -d '{"permissions":{"actions":"write","checks":"write","contents":"write"}}'; then
   report_github_api_error "Failed to create GitHub App installation token for installation ${installation_id}"
   rm -f "${response_file}"
   exit 6
