@@ -167,7 +167,7 @@ A minor version change indicates that the same model is re-trained with differen
 **Patch version**
 
 A patch version change indicates metadata changes and bug fixes in auxiliary scripts that are distributed with the model.
-The trained model itself SHOULD NOT change, unless it is trained with the same data.
+The trained model itself SHOULD NOT change, unless it is retrained with the same data.
 
 - Model inference API and architecture MUST NOT change.
 - Model weights SHOULD NOT change.
