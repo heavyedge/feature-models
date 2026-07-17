@@ -181,7 +181,34 @@ jobs:
         - name: test models in inference environment
           run: make test
 
-  inference-image:
+  image-train:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          target: train
+          cache-from: type=gha,scope=feature-models-train
+          cache-to: type=gha,mode=max,scope=feature-models-train
+          secrets: |
+            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          tags: heavyedge-feature-models:train-ci
+
+      - name: Test Docker image
+        run: docker run --rm heavyedge-feature-models:train-ci sh -c 'uv pip install --system -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models'
+
+  image-infer:
 
       needs: train-models
 
@@ -237,7 +264,7 @@ jobs:
           run: |
             docker run --rm -v $PWD/_temp:/workdir heavyedge-feature-models:ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
 
-  training-image:
+  image-dev:
 
     runs-on: ubuntu-latest
 
@@ -254,15 +281,15 @@ jobs:
           context: .
           load: true
           push: false
-          target: train
-          cache-from: type=gha,scope=feature-models-train
-          cache-to: type=gha,mode=max,scope=feature-models-train
+          target: dev
+          cache-from: type=gha,scope=feature-models-dev
+          cache-to: type=gha,mode=max,scope=feature-models-dev
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: heavyedge-feature-models:train-ci
+          tags: heavyedge-feature-models:dev-ci
 
       - name: Test Docker image
-        run: docker run --rm heavyedge-feature-models:train-ci sh -c 'uv pip install --system -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models'
+        run: docker run --rm heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt && HEAVYEDGE_TEST_MODE=1 make models && python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy'
 
   doc:
 
@@ -271,7 +298,7 @@ jobs:
     steps:
 
       - name: get repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: set up Python
         uses: actions/setup-python@v4

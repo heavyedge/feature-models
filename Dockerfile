@@ -59,6 +59,31 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.description="Training environment for heavyedge/feature-models. Includes source in '/app' directory. Does not include trained models."
 
 
+FROM python:slim as dev
+COPY --from=uv /uv /uvx /usr/local/bin/
+
+WORKDIR /app
+COPY --from=train . .
+COPY --from=infer . .
+
+WORKDIR /workdir
+
+ARG IMAGE_CREATED
+ARG IMAGE_VERSION
+ARG IMAGE_REVISION
+ARG IMAGE_TITLE
+ARG IMAGE_DESCRIPTION
+LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
+      org.opencontainers.image.authors="Jisoo Song <jeesoo9595@snu.ac.kr>" \
+      org.opencontainers.image.documentation="https://heavyedge.github.io/feature-models/" \
+      org.opencontainers.image.source="https://github.com/jisoosong/heavyedge/feature-models" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.title="HeavyEdge Feature Models (dev)" \
+      org.opencontainers.image.description="Development environment for heavyedge/feature-models. Includes source and trained models in '/app' directory."
+
+
 FROM python:slim as infer
 COPY --from=uv /uv /uvx /usr/local/bin/
 
@@ -81,4 +106,4 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.title="HeavyEdge Feature Models (infer)" \
-      org.opencontainers.image.description="Inference environment for heavyedge/feature-models. Includes models in '/app' directory. Does not include source code."
+      org.opencontainers.image.description="Inference environment for heavyedge/feature-models. Includes trained models in '/app' directory. Does not include source."
