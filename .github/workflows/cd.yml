@@ -17,7 +17,7 @@ permissions:
 
 jobs:
 
-  dev-image:
+  build-image:
 
     runs-on: ubuntu-latest
 
@@ -192,7 +192,7 @@ jobs:
   create-checks:
 
     needs:
-      - dev-image
+      - build-image
       - resolve-variables
 
     outputs:
@@ -253,7 +253,7 @@ jobs:
   deploy:
 
     needs:
-      - dev-image
+      - build-image
       - resolve-variables
       - create-checks
 
@@ -380,7 +380,7 @@ jobs:
           DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
           DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
-          IMAGE_TAG: ${{ needs.dev-image.outputs.tag }}
+          IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
           DRY_BUILD: ${{ steps.k8s-variables.outputs.dry_build }}
           PUSH_MODEL: ${{ needs.resolve-variables.outputs.push_model }}
           PUSH_IMAGE: ${{ needs.resolve-variables.outputs.push_image }}
@@ -409,7 +409,7 @@ jobs:
   deploy-fallback:
 
     needs:
-      - dev-image
+      - build-image
       - create-checks
       - deploy
 
@@ -439,7 +439,7 @@ jobs:
           GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
-          IMAGE_TAG: ${{ needs.dev-image.outputs.tag }}
+          IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
           MODEL_UPLOADED: "false"
           PUSH_IMAGE: "0"
           PUSH_DOC: "0"
