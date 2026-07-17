@@ -18,8 +18,6 @@ Pre-trained models for inference can be accessed via an image, or by installing 
 
 ### Inference image
 
-> **NOTE**: Initial inference in a container requires a network connection to download Python packages.
-
 Images for containerized inference are provided.
 
 The image keeps the packaged model under `/app/model` and uses `/workdir` as the intended mount point for user input and output files.
@@ -60,8 +58,6 @@ If you want to train the model with your own dataset, install this repository di
 We recommend training the models in a CUDA environment.
 
 ### Training image
-
-> **NOTE**: Initial training in a container requires a network connection to download Python packages.
 
 Images for containerized training are identified by the `*-train` tag.
 

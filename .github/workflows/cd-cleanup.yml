@@ -6,6 +6,9 @@ on:
       gpu_build_check_run_id:
         required: true
         type: string
+      cleanup_check_run_id:
+        required: true
+        type: string
       gpu_build_conclusion:
         required: true
         type: string
@@ -101,3 +104,51 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           sh .github/scripts/delete-image.sh
+
+  finalize-cleanup-check:
+
+    name: Finalize CD Cleanup check
+
+    needs:
+      - update-deploy-checks
+      - delete-image
+
+    if: ${{ always() }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Complete CD Cleanup check
+        uses: actions/github-script@v9
+        env:
+          CLEANUP_CHECK_RUN_ID: ${{ inputs.cleanup_check_run_id }}
+          UPDATE_RESULT: ${{ needs.update-deploy-checks.result }}
+          DELETE_RESULT: ${{ needs.delete-image.result }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const conclusion =
+              process.env.UPDATE_RESULT === 'success' &&
+              process.env.DELETE_RESULT === 'success'
+                ? 'success'
+                : 'failure';
+
+            await github.rest.checks.update({
+              ...context.repo,
+              check_run_id: Number(process.env.CLEANUP_CHECK_RUN_ID),
+              status: 'completed',
+              conclusion,
+              completed_at: new Date().toISOString(),
+              output: {
+                title: 'CD Cleanup',
+                summary: `Cleanup result: ${conclusion}`,
+              },
+            });

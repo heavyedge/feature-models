@@ -199,6 +199,7 @@ jobs:
       gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
       upload-model-check-run-id: ${{ steps.deploy-checks.outputs.upload-model-check-run-id }}
       upload-doc-check-run-id: ${{ steps.deploy-checks.outputs.upload-doc-check-run-id }}
+      cleanup-check-run-id: ${{ steps.deploy-checks.outputs.cleanup-check-run-id }}
 
     runs-on: ubuntu-latest
 
@@ -225,6 +226,7 @@ jobs:
           script: |
               const checks = [
                 ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
+                ['cleanup-check-run-id', 'CD Cleanup', 'CD cleanup is queued.'],
               ];
               if (process.env.PUSH_MODEL === '1') {
                 checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
@@ -396,6 +398,7 @@ jobs:
           GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+          CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cleanup-check-run-id }}
         run: |
           template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
           envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
