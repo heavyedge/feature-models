@@ -214,6 +214,7 @@ jobs:
             context: .
             load: true
             push: false
+            target: infer
             cache-from: type=gha,scope=feature-models
             cache-to: type=gha,mode=max,scope=feature-models
             tags: heavyedge-feature-models:ci

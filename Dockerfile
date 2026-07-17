@@ -3,8 +3,7 @@ FROM ghcr.io/astral-sh/uv:latest AS uv
 
 
 FROM python:slim AS downloader
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-WORKDIR /dataset
+WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
@@ -19,13 +18,14 @@ RUN --mount=type=secret,id=hf_token,required=false \
     fi \
     && ./setup.sh
 
-FROM python:slim AS clear-notebooks
 
+FROM scratch as doc
 WORKDIR /app
-COPY --from=uv /uv /uvx /usr/local/bin/
-RUN uv --no-cache pip install --system nbstripout
-COPY notebooks ./notebooks
-RUN nbstripout notebooks/*.ipynb
+
+COPY doc ./doc
+# If built document exists in the source directory, doc/build/html is copied.
+# If not, create empty directory to aviod error when copying to the final image.
+WORKDIR doc/build/html
 
 
 FROM python:slim AS train
@@ -37,10 +37,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential ca-certificates curl git jq openssl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=downloader /dataset/_data ./_data
-
-COPY --from=clear-notebooks /app/notebooks ./notebooks
-COPY --exclude=notebooks . .
+COPY --from=downloader /app/_data ./_data
+COPY . .
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
@@ -57,24 +55,16 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.title="HeavyEdge Feature Models (dev)" \
-      org.opencontainers.image.description="Image for developing heavyedge/feature-models. Includes source in '/app' directory. Does not include trained models."
+      org.opencontainers.image.title="HeavyEdge Feature Models (train)" \
+      org.opencontainers.image.description="Training environment for heavyedge/feature-models. Includes source in '/app' directory. Does not include trained models."
 
 
-FROM scratch as doc
-
-COPY doc ./doc
-# If built document exists in the source directory, doc/build/html is copied.
-# If not, create empty directory to aviod error when copying to the final image.
-WORKDIR doc/build/html
-
-
-FROM python:slim
+FROM python:slim as infer
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 COPY model ./model
-COPY --from=doc /doc/build/html ./doc
+COPY --from=doc /app/doc/build/html ./doc
 
 WORKDIR /workdir
 
@@ -90,5 +80,5 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.title="HeavyEdge Feature Models" \
-      org.opencontainers.image.description="Image for evaluating heavyedge/feature-models. Includes models in '/app' directory. Does not include source code. Use '/workdir' as volume mount point for input/output files."
+      org.opencontainers.image.title="HeavyEdge Feature Models (infer)" \
+      org.opencontainers.image.description="Inference environment for heavyedge/feature-models. Includes models in '/app' directory. Does not include source code."

@@ -89,6 +89,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha,scope=feature-models
           cache-to: type=gha,mode=max,scope=feature-models
+          target: infer
           build-args: |
             IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
             IMAGE_VERSION=${{ inputs.model_revision }}
