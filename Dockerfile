@@ -50,6 +50,7 @@ COPY --from=downloader /app/_data/Dataset.csv ./_data/Dataset.csv
 COPY scripts ./scripts
 COPY notebooks ./notebooks
 COPY requirements.txt Makefile ./
+COPY .github/k8s .github/scripts ./.github/
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
@@ -67,7 +68,7 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.title="HeavyEdge Feature Models (train)" \
-      org.opencontainers.image.description="Training environment for heavyedge/feature-models. Includes source in '/app' directory. Does not include trained models."
+      org.opencontainers.image.description="Training environment for heavyedge/feature-models. Includes source and dataset in '/app' directory. Does not include trained models."
 
 
 FROM python:slim AS infer
@@ -93,7 +94,7 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.title="HeavyEdge Feature Models (infer)" \
-      org.opencontainers.image.description="Inference environment for heavyedge/feature-models. Includes trained models in '/app' directory. Does not include source."
+      org.opencontainers.image.description="Inference environment for heavyedge/feature-models. Includes trained models in '/app' directory. Does not include source and dataset."
 
 
 FROM python:slim AS dev
@@ -121,4 +122,4 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.title="HeavyEdge Feature Models (dev)" \
-      org.opencontainers.image.description="Development environment for heavyedge/feature-models. Includes source and trained models in '/app' directory."
+      org.opencontainers.image.description="Development environment for heavyedge/feature-models. Includes source and trained models in '/app' directory. Does not include dataset."
