@@ -36,6 +36,7 @@ GITHUB_APP_TOKEN
 GITHUB_REPOSITORY
 GITHUB_DISPATCH_REF
 GPU_BUILD_CHECK_RUN_ID
+CLEANUP_CHECK_RUN_ID
 GPU_BUILD_CONCLUSION
 IMAGE_TAG
 MODEL_UPLOADED
@@ -54,6 +55,7 @@ if ! cleanup_payload="$(
   jq -n \
     --arg ref "${GITHUB_DISPATCH_REF}" \
     --arg gpu_build_check_run_id "${GPU_BUILD_CHECK_RUN_ID}" \
+    --arg cleanup_check_run_id "${CLEANUP_CHECK_RUN_ID}" \
     --arg gpu_build_conclusion "${GPU_BUILD_CONCLUSION}" \
     --arg upload_model_check_run_id "${UPLOAD_MODEL_CHECK_RUN_ID:-}" \
     --arg upload_model_conclusion "${UPLOAD_MODEL_CONCLUSION:-failure}" \
@@ -64,6 +66,7 @@ if ! cleanup_payload="$(
       ref: $ref,
       inputs: {
         gpu_build_check_run_id: $gpu_build_check_run_id,
+        cleanup_check_run_id: $cleanup_check_run_id,
         gpu_build_conclusion: $gpu_build_conclusion,
         upload_model_check_run_id: $upload_model_check_run_id,
         upload_model_conclusion: $upload_model_conclusion,

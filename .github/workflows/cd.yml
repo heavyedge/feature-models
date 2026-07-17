@@ -14,10 +14,11 @@ permissions:
   actions: write
   checks: write
   contents: read
+  packages: write
 
 jobs:
 
-  dev-image:
+  build-image:
 
     runs-on: ubuntu-latest
 
@@ -35,25 +36,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker registry
-        shell: bash
-        env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          for attempt in 1 2; do
-            if printf '%s' "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USERNAME" --password-stdin; then
-              exit 0
-            fi
-
-            if [ "$attempt" -lt 2 ]; then
-              echo "Docker login failed. Retrying in 3 seconds..."
-              sleep 3
-            fi
-          done
-
-          echo "Docker login failed after 2 attempts."
-          exit 1
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Set Docker image metadata
         id: image-metadata
@@ -63,7 +50,7 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          echo "tag=${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}-dev" >> "$GITHUB_OUTPUT"
+          echo "tag=${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}-train" >> "$GITHUB_OUTPUT"
           echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
       - name: Build and push temporary Docker image
@@ -71,16 +58,16 @@ jobs:
         with:
           context: .
           push: true
-          target: dev
+          target: train
           platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=feature-models-dev
-          cache-to: type=gha,mode=max,scope=feature-models-dev
+          cache-from: type=gha,scope=feature-models-train
+          cache-to: type=gha,mode=max,scope=feature-models-train
           build-args: |
             IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
             IMAGE_REVISION=${{ github.sha }}
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}
 
   resolve-variables:
 
@@ -206,13 +193,14 @@ jobs:
   create-checks:
 
     needs:
-      - dev-image
+      - build-image
       - resolve-variables
 
     outputs:
       gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
       upload-model-check-run-id: ${{ steps.deploy-checks.outputs.upload-model-check-run-id }}
       upload-doc-check-run-id: ${{ steps.deploy-checks.outputs.upload-doc-check-run-id }}
+      cleanup-check-run-id: ${{ steps.deploy-checks.outputs.cleanup-check-run-id }}
 
     runs-on: ubuntu-latest
 
@@ -239,6 +227,7 @@ jobs:
           script: |
               const checks = [
                 ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
+                ['cleanup-check-run-id', 'CD Cleanup', 'CD cleanup is queued.'],
               ];
               if (process.env.PUSH_MODEL === '1') {
                 checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
@@ -267,7 +256,7 @@ jobs:
   deploy:
 
     needs:
-      - dev-image
+      - build-image
       - resolve-variables
       - create-checks
 
@@ -289,9 +278,9 @@ jobs:
 
       - name: Create Docker secrets
         env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_REGISTRY: ghcr.io
+          DOCKER_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.GHCR_TOKEN }}
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
         run: |
           kubectl create secret docker-registry regcred \
@@ -391,10 +380,10 @@ jobs:
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           CPU_REQUEST: ${{ steps.k8s-variables.outputs.cpu_request }}
           GPU_REQUEST: ${{ steps.k8s-variables.outputs.gpu_request }}
-          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          DOCKER_NAMESPACE: ${{ secrets.DOCKER_NAMESPACE }}
+          DOCKER_REGISTRY: ghcr.io
+          DOCKER_NAMESPACE: ${{ github.repository_owner }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
-          IMAGE_TAG: ${{ needs.dev-image.outputs.tag }}
+          IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
           DRY_BUILD: ${{ steps.k8s-variables.outputs.dry_build }}
           PUSH_MODEL: ${{ needs.resolve-variables.outputs.push_model }}
           PUSH_IMAGE: ${{ needs.resolve-variables.outputs.push_image }}
@@ -410,6 +399,7 @@ jobs:
           GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+          CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cleanup-check-run-id }}
         run: |
           template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
           envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
@@ -423,7 +413,7 @@ jobs:
   deploy-fallback:
 
     needs:
-      - dev-image
+      - build-image
       - create-checks
       - deploy
 
@@ -453,7 +443,7 @@ jobs:
           GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
           UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
-          IMAGE_TAG: ${{ needs.dev-image.outputs.tag }}
+          IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
           MODEL_UPLOADED: "false"
           PUSH_IMAGE: "0"
           PUSH_DOC: "0"

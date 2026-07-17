@@ -148,6 +148,8 @@ spec:
               value: "${UPLOAD_MODEL_CHECK_RUN_ID}"
             - name: UPLOAD_DOC_CHECK_RUN_ID
               value: "${UPLOAD_DOC_CHECK_RUN_ID}"
+            - name: CLEANUP_CHECK_RUN_ID
+              value: "${CLEANUP_CHECK_RUN_ID}"
             - name: IMAGE_TAG
               value: "${IMAGE_TAG}"
             - name: GITHUB_REF_NAME
