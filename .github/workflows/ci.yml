@@ -266,9 +266,7 @@ jobs:
 
   image-dev:
 
-      needs:
-        - image-train
-        - image-infer
+      needs: train-models
 
       runs-on: ubuntu-latest
 
