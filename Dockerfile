@@ -19,13 +19,21 @@ RUN --mount=type=secret,id=hf_token,required=false \
     && ./download.sh
 
 
-FROM scratch as doc
+FROM python:slim AS doc
+COPY --from=uv /uv /uvx /usr/local/bin/
 WORKDIR /app
 
 COPY doc ./doc
-# If built document exists in the source directory, doc/build/html is copied.
-# If not, create empty directory to aviod error when copying to the final image.
-WORKDIR doc/build/html
+COPY notebooks ./notebooks
+# If doc/build/html is empty, build the documentation.
+RUN if [ ! -s doc/build/html ]; then \
+        apt-get update \
+        && apt-get install -y --no-install-recommends make \
+        && rm -rf /var/lib/apt/lists/* \
+        && uv pip install -r doc/requirements.txt \
+        && cd doc \
+        && make html; \
+    fi
 
 
 FROM python:slim AS train
@@ -59,7 +67,7 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.description="Training environment for heavyedge/feature-models. Includes source in '/app' directory. Does not include trained models."
 
 
-FROM python:slim as infer
+FROM python:slim AS infer
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
@@ -84,7 +92,7 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.description="Inference environment for heavyedge/feature-models. Includes trained models in '/app' directory. Does not include source."
 
 
-FROM python:slim as dev
+FROM python:slim AS dev
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
