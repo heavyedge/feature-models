@@ -90,111 +90,65 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Login to Docker registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
       - name: Delete temporary Docker image
         shell: bash
         env:
-          DOCKER_REGISTRY: ghcr.io
-          DOCKER_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-          DOCKER_NAMESPACE: ${{ github.repository_owner }}
-          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
+          PACKAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           bash <<'SCRIPT'
           set -euo pipefail
 
-          if [ -z "${DOCKER_REGISTRY:-}" ] ||
-            [ -z "${DOCKER_NAMESPACE:-}" ] ||
-            [ -z "${IMAGE_NAME:-}" ] ||
+          if [ -z "${GITHUB_API_URL:-}" ] ||
+            [ -z "${GITHUB_TOKEN:-}" ] ||
+            [ -z "${PACKAGE_OWNER:-}" ] ||
+            [ -z "${PACKAGE_NAME:-}" ] ||
             [ -z "${IMAGE_TAG:-}" ]; then
-            echo "Docker registry cleanup environment is incomplete; skipping ${IMAGE_TAG:-unknown} deletion." >&2
+            echo "GitHub Packages cleanup environment is incomplete; skipping ${IMAGE_TAG:-unknown} deletion." >&2
             exit 0
           fi
 
-          if [ -z "${DOCKER_USERNAME:-}" ] || [ -z "${DOCKER_PASSWORD:-}" ]; then
-            echo "Docker registry cleanup credentials are incomplete; skipping ${IMAGE_TAG} deletion." >&2
+          package_versions_url="${GITHUB_API_URL%/}/orgs/${PACKAGE_OWNER}/packages/container/${PACKAGE_NAME}/versions"
+          version_id=""
+          page=1
+
+          while :; do
+            versions="$(curl -fsSL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              --get --data-urlencode "per_page=100" --data-urlencode "page=${page}" \
+              "${package_versions_url}")"
+            version_id="$(printf '%s' "${versions}" | jq -r --arg image_tag "${IMAGE_TAG}" \
+              '([.[] | select(.metadata.container.tags | index($image_tag)) | .id] | .[0]) // empty')"
+
+            if [ -n "${version_id}" ] || [ "$(printf '%s' "${versions}" | jq 'length')" -eq 0 ]; then
+              break
+            fi
+
+            page=$((page + 1))
+          done
+
+          if [ -z "${version_id}" ]; then
+            echo "Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG} is already absent."
             exit 0
           fi
 
-          docker_repository="${DOCKER_NAMESPACE}/${IMAGE_NAME}"
+          delete_status="$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -X DELETE "${package_versions_url}/${version_id}" || true)"
 
-          case "${DOCKER_REGISTRY}" in
-            http://* | https://*) registry_url="${DOCKER_REGISTRY%/}" ;;
-            *) registry_url="https://${DOCKER_REGISTRY%/}" ;;
-          esac
-
-          manifest_url="${registry_url}/v2/${docker_repository}/manifests/${IMAGE_TAG}"
-          headers_file="$(mktemp)"
-          trap 'rm -f "${headers_file}"' EXIT
-          accept_header="application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"
-
-          auth_status="$(curl -sS -o /dev/null -w "%{http_code}" -D "${headers_file}" \
-            -H "Accept: ${accept_header}" --head "${manifest_url}" || true)"
-
-          if [ "${auth_status}" = "404" ]; then
-            echo "Docker image tag ${docker_repository}:${IMAGE_TAG} is already absent."
+          if [ "${delete_status}" = "204" ] || [ "${delete_status}" = "404" ]; then
+            echo "Deleted Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}."
             exit 0
           fi
 
-          www_authenticate="$(awk 'BEGIN { IGNORECASE = 1 } /^www-authenticate:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "${headers_file}" | tr -d '\r')"
-          token_realm="$(printf '%s\n' "${www_authenticate}" | sed -n 's/.*realm="\([^"]*\)".*/\1/p')"
-          token_service="$(printf '%s\n' "${www_authenticate}" | sed -n 's/.*service="\([^"]*\)".*/\1/p')"
-
-          if [ -z "${token_realm}" ] || [ -z "${token_service}" ]; then
-            echo "Could not obtain a registry authentication challenge for ${docker_repository}:${IMAGE_TAG}; registry returned HTTP ${auth_status}." >&2
-            exit 1
-          fi
-
-          token_response="$(curl -fsS --user "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
-            --get --data-urlencode "service=${token_service}" \
-            --data-urlencode "scope=repository:${docker_repository}:pull,delete" \
-            "${token_realm}")"
-          registry_token="$(printf '%s' "${token_response}" | jq -r '.token // .access_token // empty')"
-
-          if [ -z "${registry_token}" ]; then
-            echo "Registry token service did not return an access token for ${docker_repository}." >&2
-            exit 1
-          fi
-
-          http_status="$(curl -sS -o /dev/null -w "%{http_code}" -D "${headers_file}" \
-            -H "Accept: ${accept_header}" \
-            -H "Authorization: Bearer ${registry_token}" --head "${manifest_url}" || true)"
-
-          if [ "${http_status}" = "404" ]; then
-            echo "Docker image tag ${docker_repository}:${IMAGE_TAG} is already absent."
-            exit 0
-          fi
-
-          if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
-            echo "Could not inspect Docker image tag ${docker_repository}:${IMAGE_TAG}; registry returned HTTP ${http_status}." >&2
-            exit 1
-          fi
-
-          digest="$(awk 'tolower($0) ~ /^docker-content-digest:/ { print $2; exit }' "${headers_file}" | tr -d '\r')"
-          if [ -z "${digest}" ]; then
-            echo "Registry did not return Docker-Content-Digest for ${docker_repository}:${IMAGE_TAG}." >&2
-            exit 1
-          fi
-
-          delete_status="$(
-            curl -sS -o /dev/null -w "%{http_code}" \
-              -H "Authorization: Bearer ${registry_token}" \
-              -X DELETE "${registry_url}/v2/${docker_repository}/manifests/${digest}" || true
-          )"
-
-          if [ "${delete_status}" = "404" ] || [ "${delete_status}" = "202" ]; then
-            echo "Deleted Docker image tag ${docker_repository}:${IMAGE_TAG}."
-            exit 0
-          fi
-
-          echo "Could not delete Docker image tag ${docker_repository}:${IMAGE_TAG}; registry returned HTTP ${delete_status}." >&2
+          echo "Could not delete Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}; GitHub API returned HTTP ${delete_status}." >&2
           exit 1
           SCRIPT
 
