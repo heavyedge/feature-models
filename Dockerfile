@@ -104,11 +104,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=doc /app ./
 COPY --from=train /app ./
 COPY --from=infer /app ./
-
-WORKDIR /workdir
+RUN rm -rf /app/_data /app/doc
+COPY --from=doc /app/doc ./doc
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
