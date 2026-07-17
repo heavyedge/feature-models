@@ -123,12 +123,15 @@ _temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.Center
 	python3 $^ --target epoch -o $@
 
 model/%.gpqr.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
+	mkdir -p $(@D)
 	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
 model/%.py: scripts/model/%.py
+	mkdir -p $(@D)
 	cp $< $@
 
 model/requirements.txt: requirements.txt
+	mkdir -p $(@D)
 	grep -E '^(numpy|torch|gpytorch-qr|gpytorch)([>=<!~,; \t]|$$)' $< > $@
 
 

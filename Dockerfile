@@ -23,14 +23,15 @@ FROM python:slim AS doc
 COPY --from=uv /uv /uvx /usr/local/bin/
 WORKDIR /app
 
+# Built documents are passed from the host to the container.
 COPY doc ./doc
 COPY notebooks ./notebooks
 # If doc/build/html is empty, build the documentation.
 RUN if [ ! -s doc/build/html ]; then \
         apt-get update \
-        && apt-get install -y --no-install-recommends make \
+        && apt-get install -y --no-install-recommends build-essential \
         && rm -rf /var/lib/apt/lists/* \
-        && uv pip install -r doc/requirements.txt \
+        && uv pip install --system -r doc/requirements.txt \
         && cd doc \
         && make html; \
     fi
@@ -46,7 +47,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=downloader /app/_data ./_data
-COPY . .
+COPY scripts ./scripts
+COPY notebooks ./notebooks
+COPY requirements.txt Makefile ./
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
@@ -71,6 +74,7 @@ FROM python:slim AS infer
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
+# Trained models are passed from the host to the container.
 COPY model ./model
 COPY --from=doc /app/doc/build/html ./doc
 
@@ -95,9 +99,14 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
 FROM python:slim AS dev
 COPY --from=uv /uv /uvx /usr/local/bin/
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-COPY --from=train . .
-COPY --from=infer . .
+COPY --from=doc /app ./
+COPY --from=train /app ./
+COPY --from=infer /app ./
 
 WORKDIR /workdir
 
