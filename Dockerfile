@@ -64,7 +64,8 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
 FROM scratch as doc
 
 COPY doc ./doc
-# Create /doc/build/html if it does not exist
+# If built document exists in the source directory, doc/build/html is copied.
+# If not, create empty directory to aviod error when copying to the final image.
 WORKDIR doc/build/html
 
 
