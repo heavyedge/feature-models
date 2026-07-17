@@ -319,7 +319,7 @@ jobs:
         - name: Test Docker image
           run: |
             docker run --rm heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
-            docker run --rm -v $PWD/_temp:/workdir heavyedge-feature-models:dev-ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
+            docker run --rm -w /workdir -v $PWD/_temp:/workdir heavyedge-feature-models:dev-ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
 
   doc:
 
