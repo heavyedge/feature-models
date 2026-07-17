@@ -1,6 +1,7 @@
 # Heavy Edge Feature Model
 
 [![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/jeesoo9595/heavyedge-features-v1)
+[![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat-square&logo=Docker&logoColor=white)](https://hub.docker.com/repository/docker/jeesoo9595/heavyedge-feature-models)
 [![Documentation](https://img.shields.io/badge/github-pages-blue?logo=github)](https://heavyedge.github.io/feature-models/)
 [![GitHub repository](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/heavyedge/feature-models)
 
@@ -23,11 +24,11 @@ Images for containerized inference are provided.
 
 The image keeps the packaged model under `/app/model` and uses `/workdir` as the intended mount point for user input and output files.
 
-Let the image reference be `heavyedge/feature-models:v1.0.0`, and assume the input file `X.npy` is prepared in the host directory.
+Assume that the input file `X.npy` is prepared in the host directory.
 The following command stores the predicted quantiles of `H` as `H.quantiles.npy` in the host directory.
 
 ```
-docker run --rm -v "$PWD:/workdir" heavyedge/feature-models:v1.0.0 \
+docker run --rm -v "$PWD:/workdir" jeesoo9595/heavyedge-feature-models \
   python3 /app/model/predict-quantiles.py X.npy \
   --target H --method delta -o H.quantiles.npy
 ```
@@ -66,11 +67,11 @@ Images for containerized training are provided and are identified by the `*-dev`
 
 The image keeps our dataset and repository source under the `/app` directory.
 
-Let the image reference be `heavyedge/feature-models:v1.0.0-dev`.
+Let the image reference be `jeesoo9595/heavyedge-feature-models:v1.0.0-dev`.
 The following command installs the prerequisite packages, trains the model, and stores the output under the `/app/model` directory.
 
 ```
-docker run heavyedge/feature-models:v1.0.0-dev sh -c 'uv pip install --system -r requirements.txt && make models'
+docker run jeesoo9595/heavyedge-feature-models:v1.0.0-dev sh -c 'uv pip install --system -r requirements.txt && make models'
 ```
 
 ### Direct installation
@@ -115,7 +116,7 @@ The HTML document is also distributed in `/app/doc` directory inside the inferen
 To view the document in a browser on the host, build the image and run:
 
 ```sh
-docker run --rm -p 8000:8000 heavyedge/feature-models:v1.0.0 -m http.server 8000 --directory /app/doc
+docker run --rm -p 8000:8000 jeesoo9595/heavyedge-feature-models:v1.0.0 -m http.server 8000 --directory /app/doc
 ```
 
 Then open <http://localhost:8000/> in the host's browser while the container is running.
