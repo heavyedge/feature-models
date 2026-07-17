@@ -1,4 +1,6 @@
 .git/
-.cache/
-__pycache__/
+**/.cache/
+**/__pycache__/
+
+doc/build/html/_sources/
 _temp/

@@ -24,7 +24,7 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 WORKDIR /app
 
 # Built documents are passed from the host to the container.
-COPY doc ./doc
+COPY doc/ ./doc/
 COPY notebooks ./notebooks
 # If doc/build/html is empty, build the documentation.
 RUN if [ ! -s doc/build/html ]; then \
