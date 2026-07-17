@@ -165,6 +165,10 @@ spec:
                   optional: true
             - name: GITHUB_REPOSITORY
               value: "${GITHUB_REPOSITORY}"
+            - name: KUBERNETES_JOB_NAME
+              value: "${JOB_NAME}"
+            - name: KUBE_NAMESPACE
+              value: "${KUBE_NAMESPACE}"
             - name: GITHUB_SHA
               value: "${GITHUB_SHA}"
             - name: GPU_BUILD_CHECK_RUN_ID

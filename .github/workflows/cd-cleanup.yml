@@ -31,7 +31,7 @@ on:
       image_tag:
         required: true
         type: string
-      kubernetes_job_log:
+      kubernetes_job_name:
         required: false
         type: string
 
@@ -42,6 +42,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          kubeconfig_path="$RUNNER_TEMP/kubeconfig"
+          echo "$KUBE_CONFIG" | base64 -d > "$kubeconfig_path"
+          chmod 600 "$kubeconfig_path"
+          echo "KUBECONFIG=$kubeconfig_path" >> "$GITHUB_ENV"
+
+      - name: Collect Kubernetes Job log
+        env:
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+          KUBERNETES_JOB_NAME: ${{ inputs.kubernetes_job_name }}
+        run: |
+          log_file="$RUNNER_TEMP/kubernetes-job.log"
+          if [ -z "$KUBERNETES_JOB_NAME" ]; then
+            echo "No Kubernetes Job was created for this deployment." > "$log_file"
+          elif kubectl logs \
+            --namespace="$KUBE_NAMESPACE" \
+            "job/$KUBERNETES_JOB_NAME" \
+            --container=build \
+            --timestamps > "$log_file" 2>&1; then
+            :
+          else
+            status=$?
+            printf 'Failed to collect logs from Kubernetes Job %s (exit %s).\n' \
+              "$KUBERNETES_JOB_NAME" "$status" >> "$log_file"
+          fi
 
       - name: Create GitHub App token for post-deploy checks
         id: app-token
@@ -60,17 +95,49 @@ jobs:
           UPLOAD_MODEL_CONCLUSION: ${{ inputs.upload_model_conclusion }}
           UPLOAD_DOC_CHECK_RUN_ID: ${{ inputs.upload_doc_check_run_id }}
           UPLOAD_DOC_CONCLUSION: ${{ inputs.upload_doc_conclusion }}
+          JOB_LOG_FILE: ${{ runner.temp }}/kubernetes-job.log
+          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
+            const { phaseLog, readCheckLog, truncateLog } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/check-log.js`
+            );
+            const secrets = [
+              process.env.GH_APP_PRIVATE_KEY,
+              process.env.GHCR_TOKEN,
+              process.env.GMAIL_APP_PASSWORD,
+              process.env.HUGGINGFACE_TOKEN,
+              process.env.KUBE_CONFIG,
+            ];
+            const jobLog = readCheckLog(process.env.JOB_LOG_FILE, secrets);
             const checks = [
-              [process.env.GPU_BUILD_CHECK_RUN_ID, process.env.GPU_BUILD_CONCLUSION],
-              [process.env.UPLOAD_MODEL_CHECK_RUN_ID, process.env.UPLOAD_MODEL_CONCLUSION],
-              [process.env.UPLOAD_DOC_CHECK_RUN_ID, process.env.UPLOAD_DOC_CONCLUSION],
+              [
+                process.env.GPU_BUILD_CHECK_RUN_ID,
+                process.env.GPU_BUILD_CONCLUSION,
+                'GPU build',
+                phaseLog(jobLog, '$ sh .github/k8s/build.sh', '$ sh .github/k8s/app-token.sh'),
+              ],
+              [
+                process.env.UPLOAD_MODEL_CHECK_RUN_ID,
+                process.env.UPLOAD_MODEL_CONCLUSION,
+                'Upload model',
+                phaseLog(jobLog, '$ sh .github/k8s/deploy.sh', '$ sh .github/scripts/deploy-dispatch.sh'),
+              ],
+              [
+                process.env.UPLOAD_DOC_CHECK_RUN_ID,
+                process.env.UPLOAD_DOC_CONCLUSION,
+                'Upload document',
+                phaseLog(jobLog, '$ sh .github/k8s/deploy.sh', '$ sh .github/scripts/deploy-dispatch.sh'),
+              ],
             ].filter(([checkRunId]) => checkRunId);
             const allowedConclusions = new Set(['success', 'failure']);
 
-            for (const [checkRunId, conclusion] of checks) {
+            for (const [checkRunId, conclusion, checkName, checkLog] of checks) {
               const normalizedConclusion = allowedConclusions.has(conclusion)
                 ? conclusion
                 : 'failure';
@@ -81,6 +148,11 @@ jobs:
                 status: 'completed',
                 conclusion: normalizedConclusion,
                 completed_at: new Date().toISOString(),
+                output: {
+                  title: checkName,
+                  summary: `Kubernetes Job result: ${normalizedConclusion}`,
+                  text: truncateLog(checkLog),
+                },
               });
             }
 
@@ -168,6 +240,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          kubeconfig_path="$RUNNER_TEMP/kubeconfig"
+          echo "$KUBE_CONFIG" | base64 -d > "$kubeconfig_path"
+          chmod 600 "$kubeconfig_path"
+          echo "KUBECONFIG=$kubeconfig_path" >> "$GITHUB_ENV"
+
+      - name: Collect Kubernetes Job log
+        env:
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+          KUBERNETES_JOB_NAME: ${{ inputs.kubernetes_job_name }}
+        run: |
+          log_file="$RUNNER_TEMP/kubernetes-job.log"
+          if [ -z "$KUBERNETES_JOB_NAME" ]; then
+            echo "No Kubernetes Job was created for this deployment." > "$log_file"
+          elif kubectl logs \
+            --namespace="$KUBE_NAMESPACE" \
+            "job/$KUBERNETES_JOB_NAME" \
+            --container=build \
+            --timestamps > "$log_file" 2>&1; then
+            :
+          else
+            status=$?
+            printf 'Failed to collect logs from Kubernetes Job %s (exit %s).\n' \
+              "$KUBERNETES_JOB_NAME" "$status" >> "$log_file"
+          fi
+
       - name: Create GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -182,10 +289,25 @@ jobs:
           CLEANUP_CHECK_RUN_ID: ${{ inputs.cleanup_check_run_id }}
           UPDATE_RESULT: ${{ needs.update-deploy-checks.result }}
           DELETE_RESULT: ${{ needs.delete-image.result }}
-          KUBERNETES_JOB_LOG: ${{ inputs.kubernetes_job_log }}
+          JOB_LOG_FILE: ${{ runner.temp }}/kubernetes-job.log
+          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
+            const { readCheckLog, truncateLog } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/check-log.js`
+            );
+            const jobLog = readCheckLog(process.env.JOB_LOG_FILE, [
+              process.env.GH_APP_PRIVATE_KEY,
+              process.env.GHCR_TOKEN,
+              process.env.GMAIL_APP_PASSWORD,
+              process.env.HUGGINGFACE_TOKEN,
+              process.env.KUBE_CONFIG,
+            ]);
             const conclusion =
               process.env.UPDATE_RESULT === 'success' &&
               process.env.DELETE_RESULT === 'success'
@@ -201,6 +323,6 @@ jobs:
               output: {
                 title: 'CD Cleanup',
                 summary: `Cleanup result: ${conclusion}`,
-                text: process.env.KUBERNETES_JOB_LOG || 'No Kubernetes Job cleanup log was captured.',
+                text: truncateLog(jobLog),
               },
             });
