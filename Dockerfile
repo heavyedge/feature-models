@@ -46,7 +46,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential ca-certificates curl git jq openssl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=downloader /app/_data ./_data
+COPY --from=downloader /app/_data/Dataset.csv ./_data/Dataset.csv
 COPY scripts ./scripts
 COPY notebooks ./notebooks
 COPY requirements.txt Makefile ./
@@ -76,7 +76,7 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 WORKDIR /app
 # Trained models are passed from the host to the container.
 COPY model ./model
-COPY --from=doc /app/doc/build/html ./doc
+COPY --from=doc /app/doc/build/html ./doc/build/html/
 
 WORKDIR /workdir
 
@@ -104,10 +104,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=train /app ./
-COPY --from=infer /app ./
-RUN rm -rf /app/_data /app/doc
-COPY --from=doc /app/doc ./doc
+COPY . .
+COPY model ./model
+COPY --from=doc /app/doc/build/html ./doc/build/html/
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
