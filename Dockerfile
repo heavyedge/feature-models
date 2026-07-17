@@ -3,8 +3,7 @@ FROM ghcr.io/astral-sh/uv:latest AS uv
 
 
 FROM python:slim AS downloader
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-WORKDIR /dataset
+WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
@@ -12,20 +11,30 @@ RUN apt-get update \
 RUN curl -LsSf https://hf.co/cli/install.sh | bash
 ENV PATH="/root/.local/bin:$PATH"
 
-COPY setup.sh .
+COPY download.sh .
 RUN --mount=type=secret,id=hf_token,required=false \
     if [ -s /run/secrets/hf_token ]; then \
         hf auth login --token "$(cat /run/secrets/hf_token)"; \
     fi \
-    && ./setup.sh
+    && ./download.sh
 
-FROM python:slim AS clear-notebooks
 
-WORKDIR /app
+FROM python:slim AS doc
 COPY --from=uv /uv /uvx /usr/local/bin/
-RUN uv --no-cache pip install --system nbstripout
+WORKDIR /app
+
+# Built documents are passed from the host to the container.
+COPY doc ./doc
 COPY notebooks ./notebooks
-RUN nbstripout notebooks/*.ipynb
+# If doc/build/html is empty, build the documentation.
+RUN if [ ! -s doc/build/html ]; then \
+        apt-get update \
+        && apt-get install -y --no-install-recommends build-essential \
+        && rm -rf /var/lib/apt/lists/* \
+        && uv pip install --system -r doc/requirements.txt \
+        && cd doc \
+        && make html; \
+    fi
 
 
 FROM python:slim AS train
@@ -37,10 +46,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential ca-certificates curl git jq openssl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=downloader /dataset/_data ./_data
-
-COPY --from=clear-notebooks /app/notebooks ./notebooks
-COPY --exclude=notebooks . .
+COPY --from=downloader /app/_data/Dataset.csv ./_data/Dataset.csv
+COPY scripts ./scripts
+COPY notebooks ./notebooks
+COPY requirements.txt Makefile ./
+COPY .github/k8s ./.github/k8s/
+COPY .github/scripts ./.github/scripts/
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
@@ -57,24 +68,17 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.title="HeavyEdge Feature Models (dev)" \
-      org.opencontainers.image.description="Image for developing heavyedge/feature-models. Includes source in '/app' directory. Does not include trained models."
+      org.opencontainers.image.title="HeavyEdge Feature Models (train)" \
+      org.opencontainers.image.description="Training environment for heavyedge/feature-models. Includes source and dataset in '/app' directory. Does not include trained models."
 
 
-FROM scratch as doc
-
-COPY doc ./doc
-# If built document exists in the source directory, doc/build/html is copied.
-# If not, create empty directory to aviod error when copying to the final image.
-WORKDIR doc/build/html
-
-
-FROM python:slim
+FROM python:slim AS infer
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
+# Trained models are passed from the host to the container.
 COPY model ./model
-COPY --from=doc /doc/build/html ./doc
+COPY --from=doc /app/doc/build/html ./doc/build/html/
 
 WORKDIR /workdir
 
@@ -90,5 +94,33 @@ LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.title="HeavyEdge Feature Models" \
-      org.opencontainers.image.description="Image for evaluating heavyedge/feature-models. Includes models in '/app' directory. Does not include source code. Use '/workdir' as volume mount point for input/output files."
+      org.opencontainers.image.title="HeavyEdge Feature Models (infer)" \
+      org.opencontainers.image.description="Inference environment for heavyedge/feature-models. Includes trained models in '/app' directory. Does not include source and dataset."
+
+
+FROM python:slim AS dev
+COPY --from=uv /uv /uvx /usr/local/bin/
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . .
+COPY model ./model
+COPY --from=doc /app/doc/build/html ./doc/build/html/
+
+ARG IMAGE_CREATED
+ARG IMAGE_VERSION
+ARG IMAGE_REVISION
+ARG IMAGE_TITLE
+ARG IMAGE_DESCRIPTION
+LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
+      org.opencontainers.image.authors="Jisoo Song <jeesoo9595@snu.ac.kr>" \
+      org.opencontainers.image.documentation="https://heavyedge.github.io/feature-models/" \
+      org.opencontainers.image.source="https://github.com/jisoosong/heavyedge/feature-models" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.title="HeavyEdge Feature Models (dev)" \
+      org.opencontainers.image.description="Development environment for heavyedge/feature-models. Includes source and trained models in '/app' directory. Does not include dataset."

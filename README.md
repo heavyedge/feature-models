@@ -83,7 +83,7 @@ Download feature data (optional):
 ```
 curl -LsSf https://hf.co/cli/install.sh | bash
 hf auth login --token [Hugging Face token]
-./setup.sh
+./download.sh
 ```
 
 > If you want to use your own dataset, prepare it in a CSV format that is compatible with ours.
@@ -167,7 +167,7 @@ A minor version change indicates that the same model is re-trained with differen
 **Patch version**
 
 A patch version change indicates metadata changes and bug fixes in auxiliary scripts that are distributed with the model.
-The trained model itself SHOULD NOT change, unless it is trained with the same data.
+The trained model itself SHOULD NOT change, unless it is retrained with the same data.
 
 - Model inference API and architecture MUST NOT change.
 - Model weights SHOULD NOT change.
