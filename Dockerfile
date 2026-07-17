@@ -50,7 +50,8 @@ COPY --from=downloader /app/_data/Dataset.csv ./_data/Dataset.csv
 COPY scripts ./scripts
 COPY notebooks ./notebooks
 COPY requirements.txt Makefile ./
-COPY .github/k8s .github/scripts ./.github/
+COPY .github/k8s ./.github/k8s/
+COPY .github/scripts ./.github/scripts/
 
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
