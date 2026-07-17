@@ -93,7 +93,7 @@ jobs:
           build-args: |
             IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
             IMAGE_VERSION=${{ inputs.model_revision }}
-            IMAGE_REVISION=${{ github.sha }}
+            IMAGE_REVISION=${{ github.event.pull_request.head.sha || github.sha }}
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           tags: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}

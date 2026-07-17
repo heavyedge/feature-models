@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -46,7 +48,7 @@ jobs:
         id: image-metadata
         shell: bash
         env:
-          GIT_SHA: ${{ github.sha }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -64,7 +66,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=feature-models-train
           build-args: |
             IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
-            IMAGE_REVISION=${{ github.sha }}
+            IMAGE_REVISION=${{ github.event.pull_request.head.sha || github.sha }}
           secrets: |
             hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
           tags: ghcr.io/${{ github.repository_owner }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}
@@ -87,6 +89,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Resolve CD flags
@@ -105,7 +108,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
-          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           RUN_ID: ${{ github.run_id }}
         shell: bash
         run: |
@@ -266,6 +269,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -348,7 +353,9 @@ jobs:
       - name: Set Kubernetes variables
         id: k8s-variables
         env:
-          GIT_SHA: ${{ github.sha }}
+          # For pull requests, github.sha is GitHub's ephemeral merge commit.
+          # Use the PR head so the Job name identifies an actual branch commit.
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
           DRY_BUILD: ${{ github.event_name == 'release' && '0' || '1' }}
@@ -391,7 +398,7 @@ jobs:
           DOC_BRANCH: ${{ needs.resolve-variables.outputs.doc_branch }}
           DOC_DIR: ${{ needs.resolve-variables.outputs.doc_dir }}
           DOC_VERSION: ${{ needs.resolve-variables.outputs.doc_version }}
-          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -425,6 +432,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Create GitHub App token for cd-cleanup dispatch
         id: app-token
