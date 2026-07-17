@@ -240,41 +240,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Configure kubeconfig
-        env:
-          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-        run: |
-          kubeconfig_path="$RUNNER_TEMP/kubeconfig"
-          echo "$KUBE_CONFIG" | base64 -d > "$kubeconfig_path"
-          chmod 600 "$kubeconfig_path"
-          echo "KUBECONFIG=$kubeconfig_path" >> "$GITHUB_ENV"
-
-      - name: Collect Kubernetes Job log
-        env:
-          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
-          KUBERNETES_JOB_NAME: ${{ inputs.kubernetes_job_name }}
-        run: |
-          log_file="$RUNNER_TEMP/kubernetes-job.log"
-          if [ -z "$KUBERNETES_JOB_NAME" ]; then
-            echo "No Kubernetes Job was created for this deployment." > "$log_file"
-          elif kubectl logs \
-            --namespace="$KUBE_NAMESPACE" \
-            "job/$KUBERNETES_JOB_NAME" \
-            --container=build \
-            --timestamps > "$log_file" 2>&1; then
-            :
-          else
-            status=$?
-            printf 'Failed to collect logs from Kubernetes Job %s (exit %s).\n' \
-              "$KUBERNETES_JOB_NAME" "$status" >> "$log_file"
-          fi
-
       - name: Create GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -289,25 +254,9 @@ jobs:
           CLEANUP_CHECK_RUN_ID: ${{ inputs.cleanup_check_run_id }}
           UPDATE_RESULT: ${{ needs.update-deploy-checks.result }}
           DELETE_RESULT: ${{ needs.delete-image.result }}
-          JOB_LOG_FILE: ${{ runner.temp }}/kubernetes-job.log
-          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
-            const { readCheckLog, truncateLog } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/check-log.js`
-            );
-            const jobLog = readCheckLog(process.env.JOB_LOG_FILE, [
-              process.env.GH_APP_PRIVATE_KEY,
-              process.env.GHCR_TOKEN,
-              process.env.GMAIL_APP_PASSWORD,
-              process.env.HUGGINGFACE_TOKEN,
-              process.env.KUBE_CONFIG,
-            ]);
             const conclusion =
               process.env.UPDATE_RESULT === 'success' &&
               process.env.DELETE_RESULT === 'success'
@@ -323,6 +272,5 @@ jobs:
               output: {
                 title: 'CD Cleanup',
                 summary: `Cleanup result: ${conclusion}`,
-                text: truncateLog(jobLog),
               },
             });
