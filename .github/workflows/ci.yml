@@ -67,7 +67,7 @@ jobs:
           run: |
             curl -LsSf https://hf.co/cli/install.sh | bash
             hf auth login --token $HUGGINGFACE_TOKEN
-            ./setup.sh
+            ./download.sh
           env:
             HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
 
@@ -136,7 +136,7 @@ jobs:
           run: |
             curl -LsSf https://hf.co/cli/install.sh | bash
             hf auth login --token $HUGGINGFACE_TOKEN
-            ./setup.sh
+            ./download.sh
           env:
             HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
 
@@ -250,7 +250,7 @@ jobs:
           run: |
             curl -LsSf https://hf.co/cli/install.sh | bash
             hf auth login --token $HUGGINGFACE_TOKEN
-            ./setup.sh
+            ./download.sh
           env:
             HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
 

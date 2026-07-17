@@ -11,12 +11,12 @@ RUN apt-get update \
 RUN curl -LsSf https://hf.co/cli/install.sh | bash
 ENV PATH="/root/.local/bin:$PATH"
 
-COPY setup.sh .
+COPY download.sh .
 RUN --mount=type=secret,id=hf_token,required=false \
     if [ -s /run/secrets/hf_token ]; then \
         hf auth login --token "$(cat /run/secrets/hf_token)"; \
     fi \
-    && ./setup.sh
+    && ./download.sh
 
 
 FROM scratch as doc

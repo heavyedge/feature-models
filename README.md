@@ -83,7 +83,7 @@ Download feature data (optional):
 ```
 curl -LsSf https://hf.co/cli/install.sh | bash
 hf auth login --token [Hugging Face token]
-./setup.sh
+./download.sh
 ```
 
 > If you want to use your own dataset, prepare it in a CSV format that is compatible with ours.

@@ -81,7 +81,7 @@ jobs:
           echo "tag=${MODEL_VERSION}" >> "$GITHUB_OUTPUT"
           echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
-      - name: Build Docker image
+      - name: Build inference image
         uses: docker/build-push-action@v6
         with:
           context: .
