@@ -75,6 +75,9 @@ _temp/X.csv: scripts/data/write-X.py _temp/Dataset.csv
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
+_temp/Xtrain.csv: _temp/X.csv
+	python3 -c "import pandas as pd; pd.read_csv('$<').drop(columns=['Slurry']).to_csv('$@', index=False)"
+
 _temp/Xpred_1D.csv: scripts/data/write-Xpred.py _temp/X.csv
 	python3 $^ --target Gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
@@ -116,13 +119,13 @@ _temp/cv.CenterGapMTGPQR_%.csv: scripts/model_selection/write-cv.gpqr.py _temp/X
 
 # Model
 
-_temp/%.prior_mean.pt: scripts/train/prior_mean.py _temp/X.csv _temp/y.csv
+_temp/%.prior_mean.pt: scripts/train/prior_mean.py _temp/Xtrain.csv _temp/y.csv
 	$(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 _temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.CenterGapMTGPQR_%.csv
 	python3 $^ --target epoch -o $@
 
-model/%.gpqr.pt: scripts/train/gpqr.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
+model/%.gpqr.pt: scripts/train/gpqr.py _temp/Xtrain.csv _temp/y.csv _temp/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
