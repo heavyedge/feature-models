@@ -58,10 +58,21 @@ spec:
                 log_file="$2"
                 shift 2
 
-                printf '$ %s\n' "$command_label" > "$log_file"
-                "$@" >> "$log_file" 2>&1
-                command_status=$?
-                cat "$log_file"
+                printf '$ %s\n' "$command_label" | tee "$log_file"
+                status_file="${log_file}.status"
+                rm -f "$status_file"
+                (
+                  "$@"
+                  command_status=$?
+                  printf '%s\n' "$command_status" > "$status_file"
+                  exit "$command_status"
+                ) 2>&1 | tee -a "$log_file"
+                if [ -s "$status_file" ]; then
+                  command_status="$(cat "$status_file")"
+                else
+                  command_status=1
+                fi
+                rm -f "$status_file"
                 return "$command_status"
               }
 
