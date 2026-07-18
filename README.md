@@ -23,7 +23,9 @@ The trained model can be acquired by either directly downloading from the [model
 ### Cloning the repository
 
 ```sh
-git@github.com:heavyedge/feature-models.git
+git clone git@github.com:heavyedge/feature-models.git
+cd feature-models
+pip install -r requirements.txt
 ```
 
 ### Direct download
@@ -42,12 +44,23 @@ pip install -r model/requirements.txt
 
 Two types of images are distributed for each release: the base image and the inference image.
 
+#### Base image
+
 Base image includes source code, documents and trained models.
 The base images are tagged by `(version)`:
 
 ```sh
 docker pull jeesoo9595/heavyedge-feature-models:latest
 ```
+
+After pulling the image, run the following command.
+It creates a container named `feature-models`, downloads dependencies and attaches to the terminal.
+
+```sh
+docker run --name feature-models -it jeesoo9595/heavyedge-feature-models:latest sh -c "uv pip install --system -r requirements.txt && /bin/bash"
+```
+
+#### Inference image
 
 Inference image is the minimum installation, including only the trained models.
 The inference images are tagged by `(version)-infer`:
@@ -56,19 +69,32 @@ The inference images are tagged by `(version)-infer`:
 docker pull jeesoo9595/heavyedge-feature-models:latest-infer
 ```
 
+After pulling the image, run the following command.
+It creates a container named `feature-models`, downloads dependencies and attaches to the terminal.
+
+```sh
+docker run --name feature-models -it jeesoo9595/heavyedge-feature-models:latest-infer sh -c "uv pip install --system -r model/requirements.txt && /bin/bash"
+```
+
 ## Usage
 
 You can use this project in three ways:
 
 1. Train the model using your own data.
 2. Do inference using the trained model.
-3. Perform advanced inference, e.g., joint probability estimation.
+3. Use advanced features, e.g., joint probability estimation.
 
-### Training
+### Training (optional)
 
 > This feature is accessible if you
 > - Cloned the repository, or
 > - Pulled the base image.
+
+To train your own model, run scripts in `scripts/train/` directory.
+You need to prepare your own dataset as csv files and pass them to the scripts.
+Refer to the recipes in `Makefile`.
+
+Alternatively, you can use the distributed pre-trained model.
 
 ### Inference
 
@@ -78,7 +104,37 @@ You can use this project in three ways:
 > - Pulled the base image, or
 > - Pulled the inference image.
 
-### Advanced inference
+For inference, you need to put trained models and inference scripts in `model/` directory.
+These files are already provided if you downloaded from the model repository or pulled the image.
+
+To perform inference, run scripts in `model/` directory.
+You need to prepare your own input data points as npy file and pass it to the script.
+Refer to the recipes in `Makefile`.
+
+### Advanced features
+
+> This feature is accessible if you
+> - Cloned the repository, or
+> - Pulled the base image.
+
+Files in `scripts/` and `notebooks/` directories provide advanced features.
+These features include models with different architectures, model selection, and joint probability estimation.
+Refer to the recipes in `Makefile` and project document.
+
+## Documentation
+
+Documentation can be found at:
+
+> https://heavyedge.github.io/feature-models/
+
+The HTML document is also distributed in `/app/doc` directory inside the inference image.
+To view the document in a browser on the host, build the image and run:
+
+```sh
+docker run --rm -p 8000:8000 jeesoo9595/heavyedge-feature-models:v1.0.0 -m http.server 8000 --directory /app/doc
+```
+
+Then open <http://localhost:8000/> in the host's browser while the container is running.
 
 ## Contributing
 
@@ -86,7 +142,7 @@ You can use this project in three ways:
 
 Configure the local git filter (run once after cloning):
 
-```
+```sh
 git config filter.nbstripout.clean "nbstripout"
 git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
@@ -96,7 +152,8 @@ git config filter.nbstripout.required true
 
 After building the model and the notebooks, run the following commands:
 
-```
+```sh
+pip install -r doc/requirements.txt
 cd doc
 make html
 ```
