@@ -39,8 +39,6 @@ GPU_BUILD_CHECK_RUN_ID
 CLEANUP_CHECK_RUN_ID
 GPU_BUILD_CONCLUSION
 IMAGE_TAG
-MODEL_UPLOADED
-PUSH_IMAGE
 "
 
 for var_name in ${required_vars}; do
@@ -86,6 +84,14 @@ if ! dispatch_workflow "cd-cleanup.yml" "${cleanup_payload}"; then
 fi
 
 if [ "${UPLOAD_DOC_CONCLUSION:-failure}" = "success" ] && [ -n "${DOC_BRANCH:-}" ]; then
+  case "${MODEL_MODE:-}" in
+    test|release|reuse) ;;
+    *)
+      echo "::error::Missing or unsupported MODEL_MODE for doc.yml dispatch." >&2
+      exit 1
+      ;;
+  esac
+
   if ! doc_payload="$(
     jq -n \
       --arg ref "${GITHUB_DISPATCH_REF}" \
@@ -93,12 +99,9 @@ if [ "${UPLOAD_DOC_CONCLUSION:-failure}" = "success" ] && [ -n "${DOC_BRANCH:-}"
       --arg push_doc "${PUSH_DOC:-0}" \
       --arg doc_dir "${DOC_DIR:-}" \
       --arg doc_version "${DOC_VERSION:-}" \
-      --arg dry_build "${DRY_BUILD:-1}" \
-      --arg model_uploaded "${MODEL_UPLOADED}" \
-      --arg push_image "${PUSH_IMAGE}" \
+      --arg model_mode "${MODEL_MODE}" \
       --arg model_revision "${MODEL_REVISION:-}" \
-      --arg repo_id "${MODEL_REPO_ID:-}" \
-      --arg source_ref "${GITHUB_DISPATCH_REF}" \
+      --arg model_repo_id "${MODEL_REPO_ID:-}" \
       '{
         ref: $ref,
         inputs: {
@@ -106,12 +109,9 @@ if [ "${UPLOAD_DOC_CONCLUSION:-failure}" = "success" ] && [ -n "${DOC_BRANCH:-}"
           push_doc: $push_doc,
           doc_dir: $doc_dir,
           doc_version: $doc_version,
-          dry_build: $dry_build,
-          model_uploaded: $model_uploaded,
-          push_image: $push_image,
+          model_mode: $model_mode,
           model_revision: $model_revision,
-          repo_id: $repo_id,
-          source_ref: $source_ref
+          model_repo_id: $model_repo_id
         }
       }'
   )"; then

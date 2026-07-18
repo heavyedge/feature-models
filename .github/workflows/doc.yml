@@ -21,32 +21,17 @@ on:
         required: false
         default: ""
         type: string
-      dry_build:
-        description: Whether the notebooks were built in dry build mode.
+      model_mode:
+        description: Model handling mode used by the Kubernetes build.
         required: true
-        type: string
-      model_uploaded:
-        description: Whether a trained model is ready for image publishing.
-        required: false
-        default: "false"
-        type: string
-      push_image:
-        description: Whether to push the published image.
-        required: false
-        default: "0"
         type: string
       model_revision:
         description: Revision of the trained model to include in the image.
         required: false
         default: ""
         type: string
-      repo_id:
+      model_repo_id:
         description: Hugging Face repository containing the trained model.
-        required: false
-        default: ""
-        type: string
-      source_ref:
-        description: Source ref to use when building the image.
         required: false
         default: ""
         type: string
@@ -55,7 +40,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: doc-${{ github.event.inputs.doc_branch }}
+  group: doc-${{ inputs.doc_branch }}
   cancel-in-progress: false
 
 jobs:
@@ -63,52 +48,43 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      doc_branch: ${{ steps.dispatch.outputs.doc_branch }}
-      push_doc: ${{ steps.dispatch.outputs.push_doc }}
-      doc_dir: ${{ steps.dispatch.outputs.doc_dir }}
-      doc_version: ${{ steps.dispatch.outputs.doc_version }}
-      dry_build: ${{ steps.dispatch.outputs.dry_build }}
       artifact_name: ${{ steps.dispatch.outputs.artifact_name }}
-      model_uploaded: ${{ steps.dispatch.outputs.model_uploaded }}
-      push_image: ${{ steps.dispatch.outputs.push_image }}
-      model_revision: ${{ steps.dispatch.outputs.model_revision }}
-      repo_id: ${{ steps.dispatch.outputs.repo_id }}
-      source_ref: ${{ steps.dispatch.outputs.source_ref }}
 
     steps:
       - name: Resolve documentation dispatch
         id: dispatch
         shell: bash
         env:
-          DOC_BRANCH: ${{ github.event.inputs.doc_branch }}
-          PUSH_DOC: ${{ github.event.inputs.push_doc }}
-          DOC_DIR: ${{ github.event.inputs.doc_dir }}
-          DOC_VERSION: ${{ github.event.inputs.doc_version }}
-          DRY_BUILD: ${{ github.event.inputs.dry_build }}
-          MODEL_UPLOADED: ${{ github.event.inputs.model_uploaded }}
-          PUSH_IMAGE: ${{ github.event.inputs.push_image }}
-          MODEL_REVISION: ${{ github.event.inputs.model_revision }}
-          REPO_ID: ${{ github.event.inputs.repo_id }}
-          SOURCE_REF: ${{ github.event.inputs.source_ref }}
+          DOC_BRANCH: ${{ inputs.doc_branch }}
+          PUSH_DOC: ${{ inputs.push_doc }}
+          DOC_DIR: ${{ inputs.doc_dir }}
+          DOC_VERSION: ${{ inputs.doc_version }}
+          MODEL_MODE: ${{ inputs.model_mode }}
+          MODEL_REVISION: ${{ inputs.model_revision }}
+          MODEL_REPO_ID: ${{ inputs.model_repo_id }}
         run: |
           if [ "${PUSH_DOC}" != "0" ] && [ "${PUSH_DOC}" != "1" ]; then
             echo "Unsupported PUSH_DOC value: ${PUSH_DOC}" >&2
             exit 1
           fi
-          if [ "${DRY_BUILD}" != "0" ] && [ "${DRY_BUILD}" != "1" ]; then
-            echo "Unsupported DRY_BUILD value: ${DRY_BUILD}" >&2
+          case "${MODEL_MODE}" in
+            test|release|reuse) ;;
+            *)
+              echo "Unsupported MODEL_MODE value: ${MODEL_MODE}" >&2
+              exit 1
+              ;;
+          esac
+          if { [ -n "${MODEL_REVISION}" ] && [ -z "${MODEL_REPO_ID}" ]; } ||
+            { [ -z "${MODEL_REVISION}" ] && [ -n "${MODEL_REPO_ID}" ]; }; then
+            echo "model_revision and model_repo_id must be provided together." >&2
             exit 1
           fi
-          if [ "${MODEL_UPLOADED}" != "true" ] && [ "${MODEL_UPLOADED}" != "false" ]; then
-            echo "Unsupported MODEL_UPLOADED value: ${MODEL_UPLOADED}" >&2
+          if [ "${MODEL_MODE}" = "reuse" ] && [ -z "${MODEL_REVISION}" ]; then
+            echo "reuse mode requires model_revision and model_repo_id." >&2
             exit 1
           fi
-          if [ "${PUSH_IMAGE}" != "0" ] && [ "${PUSH_IMAGE}" != "1" ]; then
-            echo "Unsupported PUSH_IMAGE value: ${PUSH_IMAGE}" >&2
-            exit 1
-          fi
-          if [ "${MODEL_UPLOADED}" = "true" ] && { [ -z "${MODEL_REVISION}" ] || [ -z "${REPO_ID}" ]; }; then
-            echo "Missing model_revision or repo_id for image publishing." >&2
+          if [ -n "${MODEL_REVISION}" ] && [ -z "${DOC_VERSION}" ]; then
+            echo "Missing doc_version for image publishing." >&2
             exit 1
           fi
 
@@ -135,33 +111,23 @@ jobs:
           fi
 
           artifact_name="${DOC_BRANCH//\//-}"
-          echo "doc_branch=${DOC_BRANCH}" >> "${GITHUB_OUTPUT}"
-          echo "push_doc=${PUSH_DOC}" >> "${GITHUB_OUTPUT}"
-          echo "doc_dir=${DOC_DIR}" >> "${GITHUB_OUTPUT}"
-          echo "doc_version=${DOC_VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "dry_build=${DRY_BUILD}" >> "${GITHUB_OUTPUT}"
           echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
-          echo "model_uploaded=${MODEL_UPLOADED}" >> "${GITHUB_OUTPUT}"
-          echo "push_image=${PUSH_IMAGE}" >> "${GITHUB_OUTPUT}"
-          echo "model_revision=${MODEL_REVISION}" >> "${GITHUB_OUTPUT}"
-          echo "repo_id=${REPO_ID}" >> "${GITHUB_OUTPUT}"
-          echo "source_ref=${SOURCE_REF}" >> "${GITHUB_OUTPUT}"
           echo "Documentation branch: ${DOC_BRANCH}"
           echo "Publish documentation: ${PUSH_DOC}"
           echo "Documentation directory: ${DOC_DIR}"
           echo "Documentation version: ${DOC_VERSION}"
-          echo "Dry build: ${DRY_BUILD}"
+          echo "Model mode: ${MODEL_MODE}"
 
   build-doc:
     needs: resolve
-    if: ${{ needs.resolve.outputs.push_doc == '1' || needs.resolve.outputs.model_uploaded == 'true' }}
+    if: ${{ inputs.push_doc == '1' || inputs.model_revision != '' }}
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout documentation branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve.outputs.doc_branch }}
+          ref: ${{ inputs.doc_branch }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -179,8 +145,8 @@ jobs:
 
       - name: Build Sphinx documentation
         env:
-          DRY_BUILD: ${{ needs.resolve.outputs.dry_build }}
-          DOC_VERSION: ${{ needs.resolve.outputs.doc_version }}
+          DRY_BUILD: ${{ inputs.model_mode == 'test' && '1' || '0' }}
+          DOC_VERSION: ${{ inputs.doc_version }}
         run: |
           python -m sphinx -b html doc/source doc/build/html
 
@@ -195,7 +161,7 @@ jobs:
     needs:
       - resolve
       - build-doc
-    if: ${{ needs.resolve.outputs.push_doc == '1' }}
+    if: ${{ inputs.push_doc == '1' }}
     runs-on: ubuntu-latest
     env:
       GIT_AUTHOR_NAME: heavyedge-bot
@@ -239,7 +205,7 @@ jobs:
       - name: Stage versioned documentation
         shell: bash
         run: |
-          doc_dir="${{ needs.resolve.outputs.doc_dir }}"
+          doc_dir="${{ inputs.doc_dir }}"
           rm -rf "pages-site/${doc_dir}"
           mkdir -p "pages-site/${doc_dir}"
           cp -a sphinx-html/. "pages-site/${doc_dir}/"
@@ -270,7 +236,7 @@ jobs:
       - name: Persist Pages site state
         shell: bash
         run: |
-          doc_branch="${{ needs.resolve.outputs.doc_branch }}"
+          doc_branch="${{ inputs.doc_branch }}"
           git -C pages-site config user.name "${GIT_AUTHOR_NAME}"
           git -C pages-site config user.email "${GIT_AUTHOR_EMAIL}"
           git -C pages-site checkout --orphan pages-snapshot
@@ -299,7 +265,7 @@ jobs:
         shell: bash
         env:
           GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
-          DOC_BRANCH: ${{ needs.resolve.outputs.doc_branch }}
+          DOC_BRANCH: ${{ inputs.doc_branch }}
         run: |
           auth_header="$(printf 'x-access-token:%s' "${GITHUB_APP_TOKEN}" | openssl base64 -A)"
           mkdir -p delete-doc-branch
@@ -321,7 +287,7 @@ jobs:
       - build-doc
       - publish-doc
       - delete-doc-branch
-    if: ${{ always() && needs.resolve.result == 'success' && needs.resolve.outputs.model_uploaded == 'true' && needs.build-doc.result == 'success' && needs.delete-doc-branch.result == 'success' && (needs.resolve.outputs.push_doc != '1' || needs.publish-doc.result == 'success') }}
+    if: ${{ always() && needs.resolve.result == 'success' && inputs.model_revision != '' && inputs.model_repo_id != '' && needs.build-doc.result == 'success' && needs.delete-doc-branch.result == 'success' && (inputs.push_doc != '1' || needs.publish-doc.result == 'success') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -338,10 +304,11 @@ jobs:
         env:
           ARTIFACT_NAME: sphinx-html-${{ needs.resolve.outputs.artifact_name }}
           ARTIFACT_RUN_ID: ${{ github.run_id }}
-          PUSH_IMAGE: ${{ needs.resolve.outputs.push_image }}
-          MODEL_REVISION: ${{ needs.resolve.outputs.model_revision }}
-          REPO_ID: ${{ needs.resolve.outputs.repo_id }}
-          SOURCE_REF: ${{ needs.resolve.outputs.source_ref }}
+          IMAGE_VERSION: ${{ inputs.doc_version }}
+          MODEL_MODE: ${{ inputs.model_mode }}
+          MODEL_REVISION: ${{ inputs.model_revision }}
+          MODEL_REPO_ID: ${{ inputs.model_repo_id }}
+          SOURCE_REF: ${{ github.ref_name }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
@@ -352,8 +319,10 @@ jobs:
               inputs: {
                 artifact_name: process.env.ARTIFACT_NAME,
                 artifact_run_id: process.env.ARTIFACT_RUN_ID,
-                push_image: process.env.PUSH_IMAGE,
+                push_image: '1',
+                image_version: process.env.IMAGE_VERSION,
+                model_mode: process.env.MODEL_MODE,
                 model_revision: process.env.MODEL_REVISION,
-                repo_id: process.env.REPO_ID,
+                model_repo_id: process.env.MODEL_REPO_ID,
               },
             });

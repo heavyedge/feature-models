@@ -52,10 +52,6 @@ spec:
               app_token_log_file="$job_log_dir/github-app-token.log"
               deploy_log_file="$job_log_dir/deploy.log"
               dispatch_log_file="$job_log_dir/deploy-dispatch.log"
-              export GPU_BUILD_LOG_FILE="$build_log_file"
-              export GITHUB_APP_TOKEN_LOG_FILE="$app_token_log_file"
-              export DEPLOY_LOG_FILE="$deploy_log_file"
-              export DEPLOY_DISPATCH_LOG_FILE="$dispatch_log_file"
 
               run_and_log() {
                 command_label="$1"
@@ -86,38 +82,30 @@ spec:
               upload_doc_conclusion=failure
               if [ "$build_status" -eq 0 ]; then
                 gpu_build_conclusion=success
-                case "$deploy_status" in
-                  0)
-                    upload_model_conclusion=success
-                    upload_doc_conclusion=success
-                    ;;
-                  1)
-                    upload_doc_conclusion=success
-                    ;;
-                  2)
-                    upload_model_conclusion=success
-                    ;;
-                esac
+                if [ $((deploy_status & 1)) -eq 0 ]; then
+                  upload_model_conclusion=success
+                fi
+                if [ $((deploy_status & 2)) -eq 0 ]; then
+                  upload_doc_conclusion=success
+                fi
               fi
               export GPU_BUILD_CONCLUSION="$gpu_build_conclusion"
               export UPLOAD_MODEL_CONCLUSION="$upload_model_conclusion"
               export UPLOAD_DOC_CONCLUSION="$upload_doc_conclusion"
 
-              model_uploaded=false
               model_revision=
               model_repo_id=
-              if [ "$PUSH_MODEL" = "1" ]; then
-                case "$deploy_status" in
-                  0|2)
-                    model_metadata_file="${MODEL_UPLOAD_METADATA_FILE:-/tmp/model-upload-metadata.json}"
-                    if model_revision="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_revision"])' "$model_metadata_file")" &&
-                      model_repo_id="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_repo"])' "$model_metadata_file")"; then
-                      model_uploaded=true
-                    fi
-                    ;;
-                esac
+              if [ "$MODEL_MODE" = "release" ] && [ "$upload_model_conclusion" = "success" ]; then
+                model_metadata_file="${MODEL_UPLOAD_METADATA_FILE:-/tmp/model-upload-metadata.json}"
+                if ! model_revision="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_revision"])' "$model_metadata_file")" ||
+                  ! model_repo_id="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_repo"])' "$model_metadata_file")"; then
+                  model_revision=
+                  model_repo_id=
+                fi
+              elif [ "$MODEL_MODE" = "reuse" ] && [ "$build_status" -eq 0 ]; then
+                model_revision="${MODEL_REVISION:-}"
+                model_repo_id="${MODEL_REPO_ID:-}"
               fi
-              export MODEL_UPLOADED="$model_uploaded"
               export MODEL_REVISION="$model_revision"
               export MODEL_REPO_ID="$model_repo_id"
 
@@ -138,11 +126,11 @@ spec:
                 exit_code=$((exit_code + 8))
               fi
 
+              email_status=Failed
               if [ "$exit_code" -eq 0 ]; then
-                python .github/k8s/send-email.py --status "Completed" --exit-code "$exit_code" --build-status "$build_status" --deploy-status "$deploy_status" --token-status "$token_status" --dispatch-status "$dispatch_status" || true
-              else
-                python .github/k8s/send-email.py --status "Failed" --exit-code "$exit_code" --build-status "$build_status" --deploy-status "$deploy_status" --token-status "$token_status" --dispatch-status "$dispatch_status" || true
+                email_status=Completed
               fi
+              python .github/k8s/send-email.py --status "$email_status" --exit-code "$exit_code" --build-status "$build_status" --deploy-status "$deploy_status" --token-status "$token_status" --dispatch-status "$dispatch_status" || true
 
               touch /var/run/heavyedge/deploy.done
               exit "$exit_code"
@@ -167,8 +155,6 @@ spec:
               value: "${GITHUB_REPOSITORY}"
             - name: KUBERNETES_JOB_NAME
               value: "${JOB_NAME}"
-            - name: KUBE_NAMESPACE
-              value: "${KUBE_NAMESPACE}"
             - name: GITHUB_SHA
               value: "${GITHUB_SHA}"
             - name: GPU_BUILD_CHECK_RUN_ID
@@ -192,14 +178,12 @@ spec:
                 secretKeyRef:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
-            - name: DRY_BUILD
-              value: "${DRY_BUILD}"
-            - name: PUSH_MODEL
-              value: "${PUSH_MODEL}"
-            - name: PUSH_IMAGE
-              value: "${PUSH_IMAGE}"
-            - name: MODEL_UPLOAD_METADATA_FILE
-              value: "/tmp/model-upload-metadata.json"
+            - name: MODEL_MODE
+              value: "${MODEL_MODE}"
+            - name: MODEL_REVISION
+              value: "${MODEL_REVISION}"
+            - name: MODEL_REPO_ID
+              value: "${MODEL_REPO_ID}"
             - name: PUSH_DOC
               value: "${PUSH_DOC}"
             - name: DOC_BRANCH

@@ -3,7 +3,7 @@
 set -eu
 
 model_status=0
-if [ "${PUSH_MODEL:-0}" = "1" ]; then
+if [ "${MODEL_MODE}" = "release" ]; then
   if [ -z "${GITHUB_REF_NAME:-}" ]; then
     echo "::error::Missing GITHUB_REF_NAME for model upload." >&2
     model_status=1

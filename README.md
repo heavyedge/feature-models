@@ -121,6 +121,9 @@ Files in `scripts/` and `notebooks/` directories provide advanced features.
 These features include models with different architectures, model selection, and joint probability estimation.
 Refer to the recipes in `Makefile` and project document.
 
+> **NOTE** : Advanced features are considered experimental.
+> Backward-incompatible changes may occur without versioning support.
+
 ## Documentation
 
 Documentation can be found at:
@@ -199,51 +202,53 @@ This repository follows semantic versioning with [Python version specifiers](htt
 N.N.N[{a|b|rc}N][.postN][.devN]
 ```
 
-**Major version**
+The repository versioning focuses on managing versions of trained models.
+If only the repository code is updated without changing the model, the following rules apply:
 
-A major version change indicates that a completely different model is released.
-Each major version has a dedicated repository, e.g., `heavyedge-features-v0`, `heavyedge-features-v2`, and so on.
+- `notebooks` : Treated as documentation updates, so a post-release is published.
+- `scripts` : Treated as developer features, so a developmental release is published.
 
-- Model inference API MAY change.
-- Model architecture and weights MAY change.
-- New versions of trained model and inference image MUST be released.
+Trained models are released only when the final relase or the pre-release are made.
+Inference image is released only when new trained models are released.
+Base image is always released when a new release is made in the repository.
 
-**Minor version**
+#### Major version
 
-A minor version change indicates that the same model is re-trained with different data and released.
+A major version change indicates that a new model with incompatible API is released.
+Each major version has a dedicated repository, e.g., `heavyedge-features-v0`, `heavyedge-features-v1`, and so on.
 
-- Model inference API and architecture MUST NOT change.
+- Model API MAY change.
+- Model architecture MAY change.
 - Model weights MAY change.
-- New versions of trained model and inference image MUST be released.
 
-**Patch version**
+#### Minor version
 
-A patch version change indicates metadata changes and bug fixes in auxiliary scripts that are distributed with the model.
-The trained model itself SHOULD NOT change, unless it is retrained with the same data.
+A minor version change indicates that a new model with compatible API is released.
+This can be a change in architecture or training dataset.
 
-- Model inference API and architecture MUST NOT change.
-- Model weights SHOULD NOT change.
-- New versions of trained model and inference image MUST be released.
+- Model API MUST NOT change.
+- Model architecture MAY change.
+- Model weights MAY change.
 
-**Pre-release version**
+#### Patch version
 
-A pre-release version supports testing before the final release.
+A patch version change indicates a change in hyperparameter or bug fix.
 
-- Whether the model inference API, architecture, and weights change depends on the final version that the pre-release version refers to.
-- A new version of the trained model MUST be released.
-- A new version of the inference image MAY be released.
+- Model API MUST NOT change.
+- Model architecture MUST NOT change.
+- Model weights MAY change.
 
-**Post-release version** 
+#### Pre-release version
 
-Post-release versions indicate changes that are not distributed with the model, e.g., documentation updates.
+A pre-release version is for testing before the final release.
+The scope and extent of model change depends on the final version that the pre-release version refers to.
 
-- Model inference API and architecture MUST NOT change.
-- Model weights SHOULD NOT change.
-- New versions of trained model and inference image MUST NOT be released.
+#### Post-release version
 
-**Developmental release**
+Post-release versions indicate minor changes that do not affect the software, e.g., documentation updates.
+Model MUST NOT change in any way.
 
-Developmental releases include experimental changes.
+#### Developmental release
 
-- Model inference API, architecture, and weights MAY change.
-- New versions of trained model and inference image MAY be released.
+Developmental releases include experimental changes in the advanced features.
+Model MUST NOT change in any way.
