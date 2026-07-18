@@ -5,10 +5,10 @@
 [![Documentation](https://img.shields.io/badge/github-pages-blue?logo=github)](https://heavyedge.github.io/feature-models/)
 [![GitHub repository](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/heavyedge/feature-models)
 
-Gaussian process quantile regression (GPQR) models of heavy edge shape features.
+Models the relation between process variables and heavy edge shape features.
 
 Provides:
-- GPQR models for H and phi.
+- GPR and GPQR models for H and phi.
 - Cross validation and other validation examples.
 - Yield estimation and probabilistic quality window examples.
 
