@@ -29,6 +29,9 @@ except InvalidVersion:
 if version.post is not None:
     print(f"Skipping Hugging Face upload for post release tag: {args.tag}")
     sys.exit(1)
+if version.dev is not None:
+    print(f"Skipping Hugging Face upload for dev release tag: {args.tag}")
+    sys.exit(1)
 
 HfApi = importlib.import_module("huggingface_hub").HfApi
 api = HfApi(token=os.getenv("HUGGINGFACE_TOKEN"))
