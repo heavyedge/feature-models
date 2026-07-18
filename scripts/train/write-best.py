@@ -2,14 +2,13 @@ import argparse
 import pathlib
 
 import numpy as np
-import pandas as pd
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "cv",
     type=pathlib.Path,
     nargs="+",
-    help="Cross-validation CSV files.",
+    help="Cross-validation npy files.",
 )
 parser.add_argument(
     "--target",
@@ -26,10 +25,10 @@ parser.add_argument(
 args = parser.parse_args()
 
 models = [f.stem.split(".")[1] for f in args.cv]
-cvs = [pd.read_csv(f) for f in args.cv]
+cvs = [np.load(f) for f in args.cv]
 mean_losses = [cv.mean(axis=1) for cv in cvs]
 best_model_idx = np.argmin([loss.min() for loss in mean_losses])
-best_epoch = int(np.median(np.argmin(cvs[best_model_idx].values, axis=0))) + 1
+best_epoch = int(np.median(np.argmin(cvs[best_model_idx], axis=0))) + 1
 
 if args.target == "model":
     with open(args.out, "w") as f:

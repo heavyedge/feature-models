@@ -4,6 +4,7 @@ import logging
 import pathlib
 import sys
 
+import numpy as np
 import pandas as pd
 import torch
 from cv import cv_gpqr, split_data
@@ -75,7 +76,7 @@ parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output csv file of CV of quantile predictions.",
+    help="Output npy file of CV of quantile predictions.",
 )
 args = parser.parse_args()
 
@@ -133,4 +134,4 @@ cv = cv_gpqr(
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
 
-pd.DataFrame(cv).to_csv(args.out, index=False)
+np.save(args.out, cv)
