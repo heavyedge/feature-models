@@ -10,3 +10,5 @@
    :hidden:
 
    examples
+   license
+   changelog

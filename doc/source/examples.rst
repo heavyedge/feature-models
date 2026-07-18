@@ -1,5 +1,5 @@
 Examples
---------
+========
 
 .. ifconfig:: dry_build
 
