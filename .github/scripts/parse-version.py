@@ -96,10 +96,12 @@ def main():
 
     # Every repository release publishes a base image. The inference image is
     # filtered later using push_model, because it is tied to a new trained model.
+    pull_model = int(is_release and not push_model)
     push_image = int(is_release)
     push_doc = int(is_release or is_master_push)
 
     github_output("push_model", push_model)
+    github_output("pull_model", pull_model)
     github_output("push_image", push_image)
     github_output("push_doc", push_doc)
     github_output("model_revision", model_revision)

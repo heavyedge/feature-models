@@ -118,7 +118,7 @@ spec:
                     fi
                     ;;
                 esac
-              elif [ "$build_status" -eq 0 ]; then
+              elif [ "$PULL_MODEL" = "1" ] && [ "$build_status" -eq 0 ]; then
                 model_uploaded=true
               fi
               export MODEL_UPLOADED="$model_uploaded"
@@ -201,6 +201,8 @@ spec:
               value: "${DRY_BUILD}"
             - name: PUSH_MODEL
               value: "${PUSH_MODEL}"
+            - name: PULL_MODEL
+              value: "${PULL_MODEL}"
             - name: PUSH_IMAGE
               value: "${PUSH_IMAGE}"
             - name: IMAGE_VERSION

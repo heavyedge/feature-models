@@ -6,7 +6,7 @@ if ! uv pip install --system -r requirements.txt -r notebooks/requirements.txt; 
   exit 1
 fi
 
-if [ "${PUSH_MODEL:-0}" != "1" ]; then
+if [ "${PULL_MODEL:-0}" = "1" ]; then
   if [ -z "${MODEL_REVISION:-}" ] || [ -z "${MODEL_REPO_ID:-}" ]; then
     echo "::error::Missing Hugging Face model revision or repository." >&2
     exit 2
@@ -41,9 +41,9 @@ if ! python3 scripts/cuda-preflight.py; then
   exit 5
 fi
 
-make_targets="notebooks"
-if [ "${PUSH_MODEL:-0}" = "1" ]; then
-  make_targets="models notebooks"
+make_targets="models notebooks"
+if [ "${PULL_MODEL:-0}" = "1" ]; then
+  make_targets="notebooks"
 fi
 
 if ! HEAVYEDGE_TEST_MODE=${DRY_BUILD:-1} make -j "${MAKE_JOBS}" ${make_targets}; then
