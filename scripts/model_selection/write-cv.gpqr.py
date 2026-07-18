@@ -82,7 +82,7 @@ args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
+X = torch.tensor(pd.read_csv(args.X).values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
 dim = X.shape[-1]
