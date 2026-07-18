@@ -122,7 +122,7 @@ _temp/cv.CenterGapMTGPQR_%.npy: scripts/model_selection/write-cv.gpqr.py _temp/X
 _temp/%.prior_mean.pt: scripts/train/prior_mean.py _temp/Xtrain.csv _temp/y.csv
 	$(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
-_temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.CenterGapMTGPQR_%.npy
+_temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.CenterGapMTGPQR_%.npy 0
 	python3 $^ --target epoch -o $@
 
 model/%.gpqr.pt: scripts/train/gpqr.py _temp/Xtrain.csv _temp/y.csv _temp/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
