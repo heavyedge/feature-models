@@ -23,6 +23,7 @@ model/H.gpqr.pt \
 model/phi.gpqr.pt \
 model/prior.py \
 model/scale.py \
+model/gpr.py \
 model/gpqr.py \
 model/load.py \
 model/predict-mean.py \
@@ -38,8 +39,8 @@ models: $(MODEL_FILES)
 notebooks: $(NOTEBOOKS)
 
 test:
-	$(GPU_PYTHON) -c "from model.load import load_H_models; load_H_models()"
-	$(GPU_PYTHON) -c "from model.load import load_phi_models; load_phi_models()"
+	$(GPU_PYTHON) -c "from model.load import load_GPQR_H; load_GPQR_H()"
+	$(GPU_PYTHON) -c "from model.load import load_GPQR_phi; load_GPQR_phi()"
 
 all: models notebooks
 

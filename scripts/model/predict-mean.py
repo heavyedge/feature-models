@@ -59,9 +59,9 @@ torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if args.target == "H":
-    load_models = load_module.load_H_models
+    load_models = load_module.load_GPQR_H
 elif args.target == "phi":
-    load_models = load_module.load_phi_models
+    load_models = load_module.load_GPQR_phi
 models = load_models(device=device)
 for module in models[1:]:
     module.eval()

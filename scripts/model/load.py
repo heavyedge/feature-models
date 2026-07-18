@@ -17,8 +17,8 @@ from .scale import (
 )
 
 __all__ = [
-    "load_H_models",
-    "load_phi_models",
+    "load_GPQR_H",
+    "load_GPQR_phi",
 ]
 
 
@@ -66,7 +66,7 @@ def _load_gpqr(
     return quantiles, X_scaler, y_scaler, mean, likelihood, model
 
 
-def load_H_models(path=None, device=None):
+def load_GPQR_H(path=None, device=None):
     """Return GPQR model for H.
 
     Parameters
@@ -99,7 +99,7 @@ def load_H_models(path=None, device=None):
     )
 
 
-def load_phi_models(path=None, device=None):
+def load_GPQR_phi(path=None, device=None):
     """Return GPQR model for phi.
 
     Parameters
