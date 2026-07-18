@@ -51,7 +51,7 @@ clean:
 notebooks/Crossing.%.ipynb: _temp/X.csv _temp/y.csv _temp/crossing.DirectMTGPQR_%.csv FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.CenterGapMTGPQR_%.csv _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv FORCE
+notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.CenterGapMTGPQR_%.npy _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.npy FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.npy _temp/cv.CenterGapMTGPQR_%.npy FORCE
@@ -106,10 +106,10 @@ _temp/Xpred_2D.npy: _temp/Xpred_2D.csv
 _temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/Xpred_3D-1.csv _temp/Xpred_3D-2.csv
 	$(GPU_PYTHON) $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/extrapolation.CenterGapMTGPQR_%.csv: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
+_temp/extrapolation.CenterGapMTGPQR_%.npy: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
 	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv
+_temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.npy: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv
 	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/cv.GPR_%.npy: scripts/model_selection/write-cv.gpr.py _temp/Xtrain.csv _temp/y.csv _temp/%.prior_mean.pt
