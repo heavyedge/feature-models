@@ -6,7 +6,7 @@ import sys
 
 import pandas as pd
 import torch
-from cv import quantiles_cv_gpqr, split_extrapolate_data
+from cv import cv_gpqr, split_extrapolate_data
 from gpytorch.means import ZeroMean
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
 
@@ -123,7 +123,7 @@ model = model_class(
     batch_shape=batch_shape,
 ).to(device)
 
-ev = quantiles_cv_gpqr(
+ev = cv_gpqr(
     x_train,
     y_train,
     x_test,

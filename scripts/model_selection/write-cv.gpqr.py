@@ -6,7 +6,7 @@ import sys
 
 import pandas as pd
 import torch
-from cv import quantiles_cv_gpqr, split_data
+from cv import cv_gpqr, split_data
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
@@ -118,7 +118,7 @@ model = model_class(
     batch_shape=batch_shape,
 ).to(device)
 
-cv = quantiles_cv_gpqr(
+cv = cv_gpqr(
     x_train,
     y_train,
     x_test,

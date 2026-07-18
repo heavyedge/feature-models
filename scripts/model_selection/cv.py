@@ -8,8 +8,8 @@ from sklearn.preprocessing import MinMaxScaler
 __all__ = [
     "split_data",
     "split_extrapolate_data",
-    "quantiles_cv_gpr",
-    "quantiles_cv_gpqr",
+    "cv_gpr",
+    "cv_gpqr",
 ]
 
 
@@ -51,7 +51,7 @@ def split_extrapolate_data(X, y, ratio, device):
     return x_train, y_train, x_test, y_test
 
 
-def quantiles_cv_gpr(
+def cv_gpr(
     x_train,  # (*B, N_train, D)
     y_train,  # (*B, N_train)
     x_test,  # (*B, N_test, D)
@@ -124,10 +124,10 @@ def quantiles_cv_gpr(
                 f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
             )
 
-    return np.array(test_losses)
+    return np.array(test_losses)  # (N_EPOCHS, N_FOLDS)
 
 
-def quantiles_cv_gpqr(
+def cv_gpqr(
     x_train,  # (*B, N_train, D)
     y_train,  # (*B, N_train)
     x_test,  # (*B, N_test, D)
@@ -196,4 +196,4 @@ def quantiles_cv_gpqr(
                 f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
             )
 
-    return np.array(test_losses)
+    return np.array(test_losses) # (N_EPOCHS, N_FOLDS)

@@ -6,7 +6,7 @@ import sys
 
 import pandas as pd
 import torch
-from cv import quantiles_cv_gpr, split_data
+from cv import cv_gpr, split_data
 from gpytorch.likelihoods import GaussianLikelihood
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
@@ -98,7 +98,7 @@ with torch.no_grad():
     res = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
 model = model_class(X_scaled, res, likelihood, batch_shape=batch_shape).to(device)
 
-cv = quantiles_cv_gpr(
+cv = cv_gpr(
     x_train,
     y_train,
     x_test,
