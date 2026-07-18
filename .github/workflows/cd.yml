@@ -79,6 +79,8 @@ jobs:
       push_model: ${{ steps.flags.outputs.push_model }}
       push_image: ${{ steps.flags.outputs.push_image }}
       push_doc: ${{ steps.flags.outputs.push_doc }}
+      model_revision: ${{ steps.flags.outputs.model_revision }}
+      model_repo_id: ${{ steps.flags.outputs.model_repo_id }}
       doc_branch: ${{ steps.doc-branch.outputs.doc_branch }}
       doc_dir: ${{ steps.doc-branch.outputs.doc_dir }}
       doc_version: ${{ steps.doc-branch.outputs.doc_version }}
@@ -317,7 +319,6 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create Hugging Face token secret
-        if: needs.resolve-variables.outputs.push_model == '1'
         env:
           HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
@@ -394,6 +395,9 @@ jobs:
           DRY_BUILD: ${{ steps.k8s-variables.outputs.dry_build }}
           PUSH_MODEL: ${{ needs.resolve-variables.outputs.push_model }}
           PUSH_IMAGE: ${{ needs.resolve-variables.outputs.push_image }}
+          IMAGE_VERSION: ${{ github.ref_name }}
+          MODEL_REVISION: ${{ needs.resolve-variables.outputs.model_revision }}
+          MODEL_REPO_ID: ${{ needs.resolve-variables.outputs.model_repo_id }}
           PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
           DOC_BRANCH: ${{ needs.resolve-variables.outputs.doc_branch }}
           DOC_DIR: ${{ needs.resolve-variables.outputs.doc_dir }}
@@ -455,6 +459,7 @@ jobs:
           CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cleanup-check-run-id }}
           IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
           MODEL_UPLOADED: "false"
+          TRAINED_MODEL_RELEASED: "false"
           PUSH_IMAGE: "0"
           PUSH_DOC: "0"
           DOC_BRANCH: ""
@@ -462,6 +467,7 @@ jobs:
           DOC_VERSION: ""
           MODEL_REVISION: ""
           MODEL_REPO_ID: ""
+          IMAGE_VERSION: ""
           GPU_BUILD_CONCLUSION: failure
           UPLOAD_MODEL_CONCLUSION: failure
           UPLOAD_DOC_CONCLUSION: failure

@@ -104,8 +104,9 @@ spec:
               export UPLOAD_DOC_CONCLUSION="$upload_doc_conclusion"
 
               model_uploaded=false
-              model_revision=
-              model_repo_id=
+              trained_model_released=false
+              model_revision="${MODEL_REVISION:-}"
+              model_repo_id="${MODEL_REPO_ID:-}"
               if [ "$PUSH_MODEL" = "1" ]; then
                 case "$deploy_status" in
                   0|2)
@@ -113,11 +114,15 @@ spec:
                     if model_revision="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_revision"])' "$model_metadata_file")" &&
                       model_repo_id="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_repo"])' "$model_metadata_file")"; then
                       model_uploaded=true
+                      trained_model_released=true
                     fi
                     ;;
                 esac
+              elif [ "$build_status" -eq 0 ]; then
+                model_uploaded=true
               fi
               export MODEL_UPLOADED="$model_uploaded"
+              export TRAINED_MODEL_RELEASED="$trained_model_released"
               export MODEL_REVISION="$model_revision"
               export MODEL_REPO_ID="$model_repo_id"
 
@@ -198,6 +203,12 @@ spec:
               value: "${PUSH_MODEL}"
             - name: PUSH_IMAGE
               value: "${PUSH_IMAGE}"
+            - name: IMAGE_VERSION
+              value: "${IMAGE_VERSION}"
+            - name: MODEL_REVISION
+              value: "${MODEL_REVISION}"
+            - name: MODEL_REPO_ID
+              value: "${MODEL_REPO_ID}"
             - name: MODEL_UPLOAD_METADATA_FILE
               value: "/tmp/model-upload-metadata.json"
             - name: PUSH_DOC

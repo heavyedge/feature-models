@@ -30,10 +30,20 @@ on:
         required: false
         default: "false"
         type: string
+      trained_model_released:
+        description: Whether this release published a new trained model.
+        required: false
+        default: "false"
+        type: string
       push_image:
         description: Whether to push the published image.
         required: false
         default: "0"
+        type: string
+      image_version:
+        description: Repository release version used to tag the base image.
+        required: false
+        default: ""
         type: string
       model_revision:
         description: Revision of the trained model to include in the image.
@@ -70,7 +80,9 @@ jobs:
       dry_build: ${{ steps.dispatch.outputs.dry_build }}
       artifact_name: ${{ steps.dispatch.outputs.artifact_name }}
       model_uploaded: ${{ steps.dispatch.outputs.model_uploaded }}
+      trained_model_released: ${{ steps.dispatch.outputs.trained_model_released }}
       push_image: ${{ steps.dispatch.outputs.push_image }}
+      image_version: ${{ steps.dispatch.outputs.image_version }}
       model_revision: ${{ steps.dispatch.outputs.model_revision }}
       repo_id: ${{ steps.dispatch.outputs.repo_id }}
       source_ref: ${{ steps.dispatch.outputs.source_ref }}
@@ -86,7 +98,9 @@ jobs:
           DOC_VERSION: ${{ github.event.inputs.doc_version }}
           DRY_BUILD: ${{ github.event.inputs.dry_build }}
           MODEL_UPLOADED: ${{ github.event.inputs.model_uploaded }}
+          TRAINED_MODEL_RELEASED: ${{ github.event.inputs.trained_model_released }}
           PUSH_IMAGE: ${{ github.event.inputs.push_image }}
+          IMAGE_VERSION: ${{ github.event.inputs.image_version }}
           MODEL_REVISION: ${{ github.event.inputs.model_revision }}
           REPO_ID: ${{ github.event.inputs.repo_id }}
           SOURCE_REF: ${{ github.event.inputs.source_ref }}
@@ -103,12 +117,20 @@ jobs:
             echo "Unsupported MODEL_UPLOADED value: ${MODEL_UPLOADED}" >&2
             exit 1
           fi
+          if [ "${TRAINED_MODEL_RELEASED}" != "true" ] && [ "${TRAINED_MODEL_RELEASED}" != "false" ]; then
+            echo "Unsupported TRAINED_MODEL_RELEASED value: ${TRAINED_MODEL_RELEASED}" >&2
+            exit 1
+          fi
           if [ "${PUSH_IMAGE}" != "0" ] && [ "${PUSH_IMAGE}" != "1" ]; then
             echo "Unsupported PUSH_IMAGE value: ${PUSH_IMAGE}" >&2
             exit 1
           fi
           if [ "${MODEL_UPLOADED}" = "true" ] && { [ -z "${MODEL_REVISION}" ] || [ -z "${REPO_ID}" ]; }; then
             echo "Missing model_revision or repo_id for image publishing." >&2
+            exit 1
+          fi
+          if [ "${PUSH_IMAGE}" = "1" ] && [ -z "${IMAGE_VERSION}" ]; then
+            echo "Missing image_version for image publishing." >&2
             exit 1
           fi
 
@@ -142,7 +164,9 @@ jobs:
           echo "dry_build=${DRY_BUILD}" >> "${GITHUB_OUTPUT}"
           echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
           echo "model_uploaded=${MODEL_UPLOADED}" >> "${GITHUB_OUTPUT}"
+          echo "trained_model_released=${TRAINED_MODEL_RELEASED}" >> "${GITHUB_OUTPUT}"
           echo "push_image=${PUSH_IMAGE}" >> "${GITHUB_OUTPUT}"
+          echo "image_version=${IMAGE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "model_revision=${MODEL_REVISION}" >> "${GITHUB_OUTPUT}"
           echo "repo_id=${REPO_ID}" >> "${GITHUB_OUTPUT}"
           echo "source_ref=${SOURCE_REF}" >> "${GITHUB_OUTPUT}"
@@ -154,7 +178,7 @@ jobs:
 
   build-doc:
     needs: resolve
-    if: ${{ needs.resolve.outputs.push_doc == '1' || needs.resolve.outputs.model_uploaded == 'true' }}
+    if: ${{ needs.resolve.outputs.push_doc == '1' || needs.resolve.outputs.push_image == '1' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -321,7 +345,7 @@ jobs:
       - build-doc
       - publish-doc
       - delete-doc-branch
-    if: ${{ always() && needs.resolve.result == 'success' && needs.resolve.outputs.model_uploaded == 'true' && needs.build-doc.result == 'success' && needs.delete-doc-branch.result == 'success' && (needs.resolve.outputs.push_doc != '1' || needs.publish-doc.result == 'success') }}
+    if: ${{ always() && needs.resolve.result == 'success' && needs.resolve.outputs.push_image == '1' && needs.resolve.outputs.model_uploaded == 'true' && needs.build-doc.result == 'success' && needs.delete-doc-branch.result == 'success' && (needs.resolve.outputs.push_doc != '1' || needs.publish-doc.result == 'success') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -339,6 +363,8 @@ jobs:
           ARTIFACT_NAME: sphinx-html-${{ needs.resolve.outputs.artifact_name }}
           ARTIFACT_RUN_ID: ${{ github.run_id }}
           PUSH_IMAGE: ${{ needs.resolve.outputs.push_image }}
+          IMAGE_VERSION: ${{ needs.resolve.outputs.image_version }}
+          TRAINED_MODEL_RELEASED: ${{ needs.resolve.outputs.trained_model_released }}
           MODEL_REVISION: ${{ needs.resolve.outputs.model_revision }}
           REPO_ID: ${{ needs.resolve.outputs.repo_id }}
           SOURCE_REF: ${{ needs.resolve.outputs.source_ref }}
@@ -353,6 +379,8 @@ jobs:
                 artifact_name: process.env.ARTIFACT_NAME,
                 artifact_run_id: process.env.ARTIFACT_RUN_ID,
                 push_image: process.env.PUSH_IMAGE,
+                image_version: process.env.IMAGE_VERSION,
+                trained_model_released: process.env.TRAINED_MODEL_RELEASED,
                 model_revision: process.env.MODEL_REVISION,
                 repo_id: process.env.REPO_ID,
               },

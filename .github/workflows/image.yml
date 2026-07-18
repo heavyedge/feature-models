@@ -15,6 +15,14 @@ on:
         description: Whether to push the published image.
         required: true
         type: string
+      image_version:
+        description: Repository release version used to tag the base image.
+        required: true
+        type: string
+      trained_model_released:
+        description: Whether this release published a new trained model.
+        required: true
+        type: string
       model_revision:
         description: Revision of the trained model to include in the image.
         required: true
@@ -76,9 +84,9 @@ jobs:
         id: image-metadata
         shell: bash
         env:
-          MODEL_VERSION: ${{ inputs.model_revision }}
+          IMAGE_VERSION: ${{ inputs.image_version }}
         run: |
-          echo "tag=${MODEL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${IMAGE_VERSION}" >> "$GITHUB_OUTPUT"
           echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
       - name: Build (and push) basic image
@@ -92,13 +100,14 @@ jobs:
           target: base
           build-args: |
             IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
-            IMAGE_VERSION=${{ inputs.model_revision }}
+            IMAGE_VERSION=${{ inputs.image_version }}
             IMAGE_REVISION=${{ github.event.pull_request.head.sha || github.sha }}
           tags: |
             ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}
             ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ vars.IMAGE_NAME }}:latest
 
   publish-infer:
+    if: ${{ inputs.trained_model_released == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -132,9 +141,9 @@ jobs:
         id: image-metadata
         shell: bash
         env:
-          MODEL_VERSION: ${{ inputs.model_revision }}
+          IMAGE_VERSION: ${{ inputs.image_version }}
         run: |
-          echo "tag=${MODEL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${IMAGE_VERSION}" >> "$GITHUB_OUTPUT"
           echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
       - name: Build (and push) inference image
@@ -148,7 +157,7 @@ jobs:
           target: infer
           build-args: |
             IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
-            IMAGE_VERSION=${{ inputs.model_revision }}
+            IMAGE_VERSION=${{ inputs.image_version }}
             IMAGE_REVISION=${{ github.event.pull_request.head.sha || github.sha }}
           tags: |
             ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_NAMESPACE }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}-infer

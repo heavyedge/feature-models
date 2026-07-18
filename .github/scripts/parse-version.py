@@ -2,6 +2,7 @@
 import argparse
 import os
 import re
+import subprocess
 import sys
 
 try:
@@ -24,34 +25,51 @@ def github_output(name, value):
         print(f"{name}={value}")
 
 
+def parse_release_version(tag):
+    if not VERSION_PATTERN.fullmatch(tag):
+        raise ValueError(f"Unsupported release version tag: {tag}")
+
+    version_text = tag.removeprefix("v")
+    try:
+        return Version(version_text)
+    except InvalidVersion as error:
+        raise ValueError(f"Invalid release version tag: {tag}") from error
+
+
 def trained_model_can_be_released(tag):
-    if not VERSION_PATTERN.fullmatch(tag):
-        print(f"Unsupported release version tag: {tag}", file=sys.stderr)
-        return False
-
-    version_text = tag.removeprefix("v")
-    try:
-        version = Version(version_text)
-    except InvalidVersion:
-        print(f"Invalid release version tag: {tag}", file=sys.stderr)
-        return False
-
-    return version.post is None
+    version = parse_release_version(tag)
+    return version.post is None and version.dev is None
 
 
-def inference_image_must_be_released(tag):
-    if not VERSION_PATTERN.fullmatch(tag):
-        print(f"Unsupported release version tag: {tag}", file=sys.stderr)
-        return False
+def trained_model_tag(tag):
+    version = parse_release_version(tag)
+    tag_prefix = "v" if tag.startswith("v") else ""
+    pre = "" if version.pre is None else f"{version.pre[0]}{version.pre[1]}"
+    return f"{tag_prefix}{version.major}.{version.minor}.{version.micro}{pre}"
 
-    version_text = tag.removeprefix("v")
-    try:
-        version = Version(version_text)
-    except InvalidVersion:
-        print(f"Invalid release version tag: {tag}", file=sys.stderr)
-        return False
 
-    return version.pre is None and version.post is None and version.dev is None
+def latest_trained_model_tag():
+    versions = []
+    for tag in subprocess.check_output(
+        ["git", "tag", "--merged", "HEAD", "--list"],
+        text=True,
+    ).splitlines():
+        if not VERSION_PATTERN.fullmatch(tag):
+            continue
+        version = parse_release_version(tag)
+        if version.post is not None or version.dev is not None:
+            continue
+        versions.append((version, tag))
+
+    if not versions:
+        raise ValueError("No final or pre-release trained model tag is reachable from HEAD")
+
+    return max(versions)[1]
+
+
+def model_repo_id(tag):
+    version = parse_release_version(tag)
+    return f"jeesoo9595/heavyedge-features-v{version.major}"
 
 
 def main():
@@ -62,13 +80,30 @@ def main():
 
     is_release = args.event_name == "release"
     is_master_push = args.event_name == "push" and args.ref_name == "master"
-    push_model = int(is_release and trained_model_can_be_released(args.ref_name))
-    push_image = int(is_release and inference_image_must_be_released(args.ref_name))
+
+    try:
+        model_revision = (
+            trained_model_tag(args.ref_name)
+            if is_release
+            else latest_trained_model_tag()
+        )
+        push_model = int(
+            is_release and trained_model_can_be_released(args.ref_name)
+        )
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)
+
+    # Every repository release publishes a base image. The inference image is
+    # filtered later using push_model, because it is tied to a new trained model.
+    push_image = int(is_release)
     push_doc = int(is_release or is_master_push)
 
     github_output("push_model", push_model)
     github_output("push_image", push_image)
     github_output("push_doc", push_doc)
+    github_output("model_revision", model_revision)
+    github_output("model_repo_id", model_repo_id(model_revision))
 
 
 if __name__ == "__main__":
