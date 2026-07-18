@@ -1,6 +1,6 @@
 # Heavy Edge Feature Model
 
-[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/jeesoo9595/heavyedge-features-v1)
+[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/jeesoo9595/heavyedge-features-v0)
 [![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat-square&logo=Docker&logoColor=white)](https://hub.docker.com/repository/docker/jeesoo9595/heavyedge-feature-models)
 [![Documentation](https://img.shields.io/badge/github-pages-blue?logo=github)](https://heavyedge.github.io/feature-models/)
 [![GitHub repository](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/heavyedge/feature-models)
@@ -12,95 +12,114 @@ Provides:
 - Cross validation and other validation examples.
 - Yield estimation and probabilistic quality window examples.
 
-## Usage (Inference)
+## Installation
 
-Pre-trained models for inference can be accessed via an image, or by installing directly from the [model repository](https://huggingface.co/jeesoo9595/heavyedge-features-v1).
+This repository provides model architectures, and scripts to train and evaluate the model.
+Clone the repository and execute the files in `scripts` directory.
+Refer to the `Makefile` for usage examples.
 
-### Inference image
+The trained model can be acquired by either directly downloading from the [model repository](https://huggingface.co/jeesoo9595/heavyedge-features-v0) of by pulling the Docker image that encapsulates it.
 
-Images for containerized inference are provided.
+### Cloning the repository
 
-The image keeps the packaged model under `/app/model` and uses `/workdir` as the intended mount point for user input and output files.
-
-Assume that the input file `X.npy` is prepared in the host directory.
-The following command stores the predicted quantiles of `H` as `H.quantiles.npy` in the host directory.
-
-```
-docker run --rm -v "$PWD:/workdir" jeesoo9595/heavyedge-feature-models \
-  python3 /app/model/predict-quantiles.py X.npy \
-  --target H --method delta -o H.quantiles.npy
+```sh
+git clone git@github.com:heavyedge/feature-models.git
+cd feature-models
+pip install -r requirements.txt
 ```
 
-### Direct installation
-
-Prepare the following prerequisites:
+### Direct download
 
 - [Hugging Face CLI](https://huggingface.co/docs/transformers/en/installation)
 - Python runtime
 
 Run the following commands:
 
-```
-hf download jeesoo9595/heavyedge-features-v1 --repo-type model --local-dir model
+```sh
+hf download jeesoo9595/heavyedge-features-v0 --repo-type model --local-dir model
 pip install -r model/requirements.txt
 ```
 
-Run the `model/predict-mean.py` script to evaluate the prior mean function.
-Run the `model/predict-quantiles.py` script to evaluate quantile functions.
+### Docker image
 
-## Usage (Training)
+Two types of images are distributed for each release: the base image and the inference image.
 
-Models can be trained using the developer container, which includes our dataset.
-The weights pushed to the model repository are trained using this container.
+#### Base image
 
-If you want to train the model with your own dataset, install this repository directly.
+Base image includes source code, documents and trained models.
+The base images are tagged by `(version)`:
 
-We recommend training the models in a CUDA environment.
-
-### Training image
-
-Images for containerized training are identified by the `*-train` tag.
-
-The image keeps our dataset and repository source under the `/app` directory.
-
-Let the image reference be `jeesoo9595/heavyedge-feature-models:v1.0.0-train`.
-The following command installs the prerequisite packages, trains the model, and stores the output under the `/app/model` directory.
-
-```
-docker run jeesoo9595/heavyedge-feature-models:v1.0.0-train sh -c 'uv pip install --system -r requirements.txt && make models'
+```sh
+docker pull jeesoo9595/heavyedge-feature-models:latest
 ```
 
-### Direct installation
+After pulling the image, run the following command.
+It creates a container named `feature-models`, downloads dependencies and attaches to the terminal.
 
-Install prerequisites:
-
-```
-pip install --system -r requirements.txt
-```
-
-Download feature data (optional):
-
-```
-curl -LsSf https://hf.co/cli/install.sh | bash
-hf auth login --token [Hugging Face token]
-./download.sh
+```sh
+docker run --name feature-models -it jeesoo9595/heavyedge-feature-models:latest sh -c "uv pip install --system -r requirements.txt && /bin/bash"
 ```
 
-> If you want to use your own dataset, prepare it in a CSV format that is compatible with ours.
-> Then, store it as `_temp/Dataset.csv` in the project root directory, and proceed.
+#### Inference image
 
-Train & plot performance:
+Inference image is the minimum installation, including only the trained models.
+The inference images are tagged by `(version)-infer`:
 
-```
-make models
-make notebooks
+```sh
+docker pull jeesoo9595/heavyedge-feature-models:latest-infer
 ```
 
-Testing built models:
+After pulling the image, run the following command.
+It creates a container named `feature-models`, downloads dependencies and attaches to the terminal.
 
+```sh
+docker run --name feature-models -it jeesoo9595/heavyedge-feature-models:latest-infer sh -c "uv pip install --system -r model/requirements.txt && /bin/bash"
 ```
-make test
-```
+
+## Usage
+
+You can use this project in three ways:
+
+1. Train the model using your own data.
+2. Do inference using the trained model.
+3. Use advanced features, e.g., joint probability estimation.
+
+### Training (optional)
+
+> This feature is accessible if you
+> - Cloned the repository, or
+> - Pulled the base image.
+
+To train your own model, run scripts in `scripts/train/` directory.
+You need to prepare your own dataset as csv files and pass them to the scripts.
+Refer to the recipes in `Makefile`.
+
+Alternatively, you can use the distributed pre-trained model.
+
+### Inference
+
+> This feature is accessible if you
+> - Cloned the repository, or
+> - Downloaded from the model repository, or
+> - Pulled the base image, or
+> - Pulled the inference image.
+
+For inference, you need to put trained models and inference scripts in `model/` directory.
+These files are already provided if you downloaded from the model repository or pulled the image.
+
+To perform inference, run scripts in `model/` directory.
+You need to prepare your own input data points as npy file and pass it to the script.
+Refer to the recipes in `Makefile`.
+
+### Advanced features
+
+> This feature is accessible if you
+> - Cloned the repository, or
+> - Pulled the base image.
+
+Files in `scripts/` and `notebooks/` directories provide advanced features.
+These features include models with different architectures, model selection, and joint probability estimation.
+Refer to the recipes in `Makefile` and project document.
 
 ## Documentation
 
@@ -108,24 +127,14 @@ Documentation can be found at:
 
 > https://heavyedge.github.io/feature-models/
 
-The HTML document is also distributed in `/app/doc` directory inside the inference image.
+The HTML document is also distributed in `doc/` directory inside the image.
 To view the document in a browser on the host, build the image and run:
 
 ```sh
-docker run --rm -p 8000:8000 jeesoo9595/heavyedge-feature-models:v1.0.0 -m http.server 8000 --directory /app/doc
+docker run --rm -p 8000:8000 jeesoo9595/heavyedge-feature-models:latest python -m http.server 8000 --directory ./doc
 ```
 
 Then open <http://localhost:8000/> in the host's browser while the container is running.
-
-Alternatively, you can build the document by yourself.
-After building the model and the notebooks, run the following commands:
-
-```
-cd doc
-make html
-```
-
-The main page is `doc/build/html/index.html`.
 
 ## Contributing
 
@@ -133,11 +142,54 @@ The main page is `doc/build/html/index.html`.
 
 Configure the local git filter (run once after cloning):
 
-```
+```sh
 git config filter.nbstripout.clean "nbstripout"
 git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
 ```
+
+### Downloading the dataset
+
+The default dataset can be downloaded by running the following command with Huggingface credential.
+This dataset is used to train the models that are published to the model repository.
+
+```sh
+hf auth login --token [Hugging Face token]
+./download.sh
+```
+
+### Building the model
+
+```sh
+make models
+```
+
+### Testing the built model
+
+```sh
+make test
+```
+
+### Building the document
+
+After building the models, run the following commands:
+
+```sh
+make notbooks
+pip install -r doc/requirements.txt
+cd doc
+make html
+```
+
+The main page is `doc/build/html/index.html`.
+
+### Development image
+
+The development image includes dataset and additonal files for containerized training.
+It can be built by running the `Dockerfile` with `dev` taget, passing the `hf_token` secret.
+
+The development images are tagged by `(version)-dev`, but they are never released.
+They are uploaded to private registry during CI/CD and immediately deleted afterwards.
 
 ### Versioning policy
 
@@ -150,7 +202,7 @@ N.N.N[{a|b|rc}N][.postN][.devN]
 **Major version**
 
 A major version change indicates that a completely different model is released.
-Each major version has a dedicated repository, e.g., `heavyedge-features-v1`, `heavyedge-features-v2`, and so on.
+Each major version has a dedicated repository, e.g., `heavyedge-features-v0`, `heavyedge-features-v2`, and so on.
 
 - Model inference API MAY change.
 - Model architecture and weights MAY change.
