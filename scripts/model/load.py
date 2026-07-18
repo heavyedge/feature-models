@@ -4,13 +4,13 @@ import torch
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
 
-from .gpr import (
-    GPR_H,
-    GPR_phi,
-)
 from .gpqr import (
     CenterGapMTGPQR_H,
     CenterGapMTGPQR_phi,
+)
+from .gpr import (
+    GPR_H,
+    GPR_phi,
 )
 from .prior import (
     PriorMean_H,
@@ -29,9 +29,7 @@ __all__ = [
 ]
 
 
-def _load_gpr(
-    xscaler_class, yscaler_class, mean_class, model_class, path, device=None
-):
+def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
     X = checkpoint["train_x"]
     y = checkpoint["train_y"]
