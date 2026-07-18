@@ -127,11 +127,11 @@ Documentation can be found at:
 
 > https://heavyedge.github.io/feature-models/
 
-The HTML document is also distributed in `/app/doc` directory inside the inference image.
+The HTML document is also distributed in `doc/` directory inside the image.
 To view the document in a browser on the host, build the image and run:
 
 ```sh
-docker run --rm -p 8000:8000 jeesoo9595/heavyedge-feature-models:v1.0.0 -m http.server 8000 --directory /app/doc
+docker run --rm -p 8000:8000 jeesoo9595/heavyedge-feature-models:latest python -m http.server 8000 --directory ./doc
 ```
 
 Then open <http://localhost:8000/> in the host's browser while the container is running.
@@ -148,17 +148,48 @@ git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
 ```
 
-### Building the document
+### Downloading the dataset
 
-After building the model and the notebooks, run the following commands:
+The default dataset can be downloaded by running the following command with Huggingface credential.
+This dataset is used to train the models that are published to the model repository.
 
 ```sh
+hf auth login --token [Hugging Face token]
+./download.sh
+```
+
+### Building the model
+
+```sh
+make models
+```
+
+### Testing the built model
+
+```sh
+make test
+```
+
+### Building the document
+
+After building the models, run the following commands:
+
+```sh
+make notbooks
 pip install -r doc/requirements.txt
 cd doc
 make html
 ```
 
 The main page is `doc/build/html/index.html`.
+
+### Development image
+
+The development image includes dataset and additonal files for containerized training.
+It can be built by running the `Dockerfile` with `dev` taget, passing the `hf_token` secret.
+
+The development images are tagged by `(version)-dev`, but they are never released.
+They are uploaded to private registry during CI/CD and immediately deleted afterwards.
 
 ### Versioning policy
 
