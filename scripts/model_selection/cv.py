@@ -134,7 +134,7 @@ def cv_gpr(
                 f"Mean test pinball loss: {np.mean(epoch_fold_pinball_losses):.4f}"
             )
 
-    return np.array(test_pinball_losses)  # (N_EPOCHS, N_FOLDS)
+    return np.array([test_mll_losses, test_pinball_losses])  # (2, N_EPOCHS, N_FOLDS)
 
 
 def cv_gpqr(
