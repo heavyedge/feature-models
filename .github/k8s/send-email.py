@@ -162,8 +162,9 @@ def build_message(
         if line:
             body_lines.append(line)
 
-    body_lines.append(f"Dry build: {env('DRY_BUILD', 'true')}")
-    body_lines.append(f"Push model: {env('PUSH_MODEL', 'false')}")
+    model_mode = env("MODEL_MODE", "test")
+    body_lines.append(f"Dry build: {int(model_mode == 'test')}")
+    body_lines.append(f"Push model: {int(model_mode == 'release')}")
     body_lines.append(f"Push documentation: {env('PUSH_DOC', 'false')}")
 
     msg = EmailMessage()

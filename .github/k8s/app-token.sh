@@ -90,8 +90,7 @@ if [ -z "${installation_id}" ]; then
     exit 4
   fi
   if ! installation_id="$(
-    cat "${response_file}" \
-      | python -c 'import json,sys; print(json.load(sys.stdin)["id"])'
+    python -c 'import json,sys; print(json.load(sys.stdin)["id"])' < "${response_file}"
   )"; then
     echo "::error::Failed to parse GitHub App installation ID." >&2
     rm -f "${response_file}"
@@ -113,8 +112,7 @@ if ! github_api "${response_file}" \
   exit 6
 fi
 
-if ! cat "${response_file}" \
-  | python -c 'import json,sys; print(json.load(sys.stdin)["token"])'; then
+if ! python -c 'import json,sys; print(json.load(sys.stdin)["token"])' < "${response_file}"; then
   echo "::error::Failed to parse GitHub App installation token." >&2
   rm -f "${response_file}"
   exit 7

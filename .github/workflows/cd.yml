@@ -76,12 +76,10 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      push_model: ${{ steps.flags.outputs.push_model }}
-      pull_model: ${{ steps.flags.outputs.pull_model }}
-      push_image: ${{ steps.flags.outputs.push_image }}
-      push_doc: ${{ steps.flags.outputs.push_doc }}
-      model_revision: ${{ steps.flags.outputs.model_revision }}
-      model_repo_id: ${{ steps.flags.outputs.model_repo_id }}
+      model_mode: ${{ steps.configuration.outputs.model_mode }}
+      push_doc: ${{ steps.configuration.outputs.push_doc }}
+      model_revision: ${{ steps.configuration.outputs.model_revision }}
+      model_repo_id: ${{ steps.configuration.outputs.model_repo_id }}
       doc_branch: ${{ steps.doc-branch.outputs.doc_branch }}
       doc_dir: ${{ steps.doc-branch.outputs.doc_dir }}
       doc_version: ${{ steps.doc-branch.outputs.doc_version }}
@@ -95,8 +93,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      - name: Resolve CD flags
-        id: flags
+      - name: Resolve CD configuration
+        id: configuration
         env:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
@@ -226,7 +224,7 @@ jobs:
         env:
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          PUSH_MODEL: ${{ needs.resolve-variables.outputs.push_model }}
+          MODEL_MODE: ${{ needs.resolve-variables.outputs.model_mode }}
           PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
@@ -235,7 +233,7 @@ jobs:
                 ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
                 ['cleanup-check-run-id', 'CD Cleanup', 'CD cleanup is queued.'],
               ];
-              if (process.env.PUSH_MODEL === '1') {
+              if (process.env.MODEL_MODE === 'release') {
                 checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
               }
               if (process.env.PUSH_DOC === '1') {
@@ -352,59 +350,28 @@ jobs:
             --namespace="$KUBE_NAMESPACE" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Set Kubernetes variables
-        id: k8s-variables
-        env:
-          # For pull requests, github.sha is GitHub's ephemeral merge commit.
-          # Use the PR head so the Job name identifies an actual branch commit.
-          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          RUN_ID: ${{ github.run_id }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-          DRY_BUILD: ${{ github.event_name == 'release' && '0' || '1' }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          job_name="heavyedge-feature-models-${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}"
-
-          if [ "$DRY_BUILD" = "1" ]; then
-            cpu_request="1"
-            gpu_request="1"
-          else
-            cpu_request="2"
-            gpu_request="2"
-          fi
-
-          {
-            echo "job_name=${job_name}"
-            echo "cpu_request=${cpu_request}"
-            echo "gpu_request=${gpu_request}"
-            echo "dry_build=${DRY_BUILD}"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Deploy to Kubernetes
         shell: bash
         env:
-          JOB_NAME: ${{ steps.k8s-variables.outputs.job_name }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
           KUBE_USERNAME: ${{ secrets.KUBE_USERNAME }}
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
-          CPU_REQUEST: ${{ steps.k8s-variables.outputs.cpu_request }}
-          GPU_REQUEST: ${{ steps.k8s-variables.outputs.gpu_request }}
+          CPU_REQUEST: ${{ needs.resolve-variables.outputs.model_mode == 'test' && '1' || '2' }}
+          GPU_REQUEST: ${{ needs.resolve-variables.outputs.model_mode == 'test' && '1' || '2' }}
           DOCKER_REGISTRY: ghcr.io
           DOCKER_NAMESPACE: ${{ github.repository_owner }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
-          DRY_BUILD: ${{ steps.k8s-variables.outputs.dry_build }}
-          PUSH_MODEL: ${{ needs.resolve-variables.outputs.push_model }}
-          PULL_MODEL: ${{ needs.resolve-variables.outputs.pull_model }}
-          PUSH_IMAGE: ${{ needs.resolve-variables.outputs.push_image }}
-          IMAGE_VERSION: ${{ github.ref_name }}
+          MODEL_MODE: ${{ needs.resolve-variables.outputs.model_mode }}
           MODEL_REVISION: ${{ needs.resolve-variables.outputs.model_revision }}
           MODEL_REPO_ID: ${{ needs.resolve-variables.outputs.model_repo_id }}
           PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
           DOC_BRANCH: ${{ needs.resolve-variables.outputs.doc_branch }}
           DOC_DIR: ${{ needs.resolve-variables.outputs.doc_dir }}
           DOC_VERSION: ${{ needs.resolve-variables.outputs.doc_version }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -414,13 +381,15 @@ jobs:
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
           CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cleanup-check-run-id }}
         run: |
+          job_name="heavyedge-feature-models-${GITHUB_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}"
+          export JOB_NAME="$job_name"
           template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
           envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
           kubectl wait \
             --namespace="$KUBE_NAMESPACE" \
             --for=create \
             "pod" \
-            --selector="job-name=${JOB_NAME}" \
+            --selector="job-name=${job_name}" \
             --timeout=120s
 
   deploy-fallback:
@@ -460,16 +429,6 @@ jobs:
           UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
           CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cleanup-check-run-id }}
           IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
-          MODEL_UPLOADED: "false"
-          TRAINED_MODEL_RELEASED: "false"
-          PUSH_IMAGE: "0"
-          PUSH_DOC: "0"
-          DOC_BRANCH: ""
-          DOC_DIR: ""
-          DOC_VERSION: ""
-          MODEL_REVISION: ""
-          MODEL_REPO_ID: ""
-          IMAGE_VERSION: ""
           GPU_BUILD_CONCLUSION: failure
           UPLOAD_MODEL_CONCLUSION: failure
           UPLOAD_DOC_CONCLUSION: failure

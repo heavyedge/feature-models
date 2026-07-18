@@ -2,7 +2,6 @@ name: CD Cleanup
 
 permissions:
   contents: read
-  packages: write
 
 on:
   workflow_dispatch:
@@ -153,10 +152,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Delete temporary Docker image
         shell: bash
         env:
@@ -166,7 +161,6 @@ jobs:
           PACKAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          bash <<'SCRIPT'
           set -euo pipefail
 
           if [ -z "${GITHUB_API_URL:-}" ] ||
@@ -217,7 +211,6 @@ jobs:
 
           echo "Could not delete Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}; GitHub API returned HTTP ${delete_status}." >&2
           exit 1
-          SCRIPT
 
   finalize-cleanup-check:
 
