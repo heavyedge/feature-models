@@ -66,7 +66,7 @@ notebooks/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.Cen
 notebooks/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.npy _temp/cv.CenterGapMTGPQR_%.npy FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-notebooks/Quantiles.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.prior_mean.Xpred_1D.npy _temp/phi.prior_mean.Xpred_1D.npy _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy FORCE
+notebooks/Models.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.prior_mean.Xpred_1D.npy _temp/phi.prior_mean.Xpred_1D.npy _temp/H.mean.Xpred_1D.npy _temp/phi.mean.Xpred_1D.npy _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 notebooks/Window.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_2D.csv _temp/delaunay.Xpred_2D.npy _temp/H.prior_mean.Xpred_2D.npy _temp/phi.prior_mean.Xpred_2D.npy _temp/H.quantiles.Xpred_2D.npy _temp/phi.quantiles.Xpred_2D.npy _temp/H.marginal.Xpred_2D.npy _temp/phi.marginal.Xpred_2D.npy _temp/joint_probability.Xpred_2D.npy FORCE
@@ -162,6 +162,9 @@ _temp/%.prior_mean.Xpred_1D.npy: model/predict-prior_mean.py _temp/Xpred_1D.npy 
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
 _temp/%.prior_mean.Xpred_2D.npy: model/predict-prior_mean.py _temp/Xpred_2D.npy $(MODEL_FILES)
+	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
+
+_temp/%.mean.Xpred_1D.npy: model/predict-mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
 _temp/%.quantiles.X.npy: model/predict-quantiles.py _temp/X.npy $(MODEL_FILES)

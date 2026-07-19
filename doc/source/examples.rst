@@ -32,5 +32,5 @@ Examples
    :maxdepth: 1
    :caption: Model results
 
-   notebooks/Quantiles.ipynb
+   notebooks/Models.ipynb
    notebooks/Window.ipynb
