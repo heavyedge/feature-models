@@ -4,9 +4,10 @@ import logging
 import pathlib
 import sys
 
+import numpy as np
 import pandas as pd
 import torch
-from cv import quantiles_cv_gpr, split_data
+from cv import cv_gpr, split_data
 from gpytorch.likelihoods import GaussianLikelihood
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
@@ -63,13 +64,13 @@ parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output csv file of CV of quantile prediction.",
+    help="Output npy file of CV of quantile prediction.",
 )
 args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
+X = torch.tensor(pd.read_csv(args.X).values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
 dim = X.shape[-1]
@@ -98,7 +99,7 @@ with torch.no_grad():
     res = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
 model = model_class(X_scaled, res, likelihood, batch_shape=batch_shape).to(device)
 
-cv = quantiles_cv_gpr(
+cv = cv_gpr(
     x_train,
     y_train,
     x_test,
@@ -113,4 +114,4 @@ cv = quantiles_cv_gpr(
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
 
-pd.DataFrame(cv).to_csv(args.out, index=False)
+np.save(args.out, cv)

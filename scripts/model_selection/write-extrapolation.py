@@ -4,9 +4,10 @@ import logging
 import pathlib
 import sys
 
+import numpy as np
 import pandas as pd
 import torch
-from cv import quantiles_cv_gpqr, split_extrapolate_data
+from cv import cv_gpqr, split_extrapolate_data
 from gpytorch.means import ZeroMean
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
 
@@ -75,7 +76,7 @@ parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output csv file of extrapolation CV.",
+    help="Output npy file of extrapolation CV.",
 )
 args = parser.parse_args()
 
@@ -123,7 +124,7 @@ model = model_class(
     batch_shape=batch_shape,
 ).to(device)
 
-ev = quantiles_cv_gpqr(
+ev = cv_gpqr(
     x_train,
     y_train,
     x_test,
@@ -137,5 +138,4 @@ ev = quantiles_cv_gpqr(
     n_epochs=args.n_epochs,
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
-
-pd.DataFrame(ev).to_csv(args.out, index=False)
+np.save(args.out, ev)
