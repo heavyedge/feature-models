@@ -17,6 +17,8 @@ GPU_JUPYTER ?= $(GPU_RUN) jupyter
 
 NOTEBOOKS := $(wildcard notebooks/*)
 MODEL_FILES := \
+model/H.prior_mean.pt \
+model/phi.prior_mean.pt \
 model/H.gpr.pt \
 model/phi.gpr.pt \
 model/H.gpqr.pt \
@@ -106,38 +108,38 @@ _temp/Xpred_2D.npy: _temp/Xpred_2D.csv
 
 # Model selection
 
-_temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt _temp/Xpred_3D-1.csv _temp/Xpred_3D-2.csv
+_temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv model/%.prior_mean.pt _temp/Xpred_3D-1.csv _temp/Xpred_3D-2.csv
 	$(GPU_PYTHON) $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/extrapolation.CenterGapMTGPQR_%.npy: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv _temp/%.prior_mean.pt
+_temp/extrapolation.CenterGapMTGPQR_%.npy: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv model/%.prior_mean.pt
 	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.npy: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv
 	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/cv.GPR_%.npy: scripts/model_selection/write-cv.gpr.py _temp/Xtrain.csv _temp/y.csv _temp/%.prior_mean.pt
+_temp/cv.GPR_%.npy: scripts/model_selection/write-cv.gpr.py _temp/Xtrain.csv _temp/y.csv model/%.prior_mean.pt
 	$(GPU_PYTHON) $^ --target $* --model GPR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/cv.CenterGapMTGPQR_%.npy: scripts/model_selection/write-cv.gpqr.py _temp/Xtrain.csv _temp/y.csv _temp/%.prior_mean.pt
+_temp/cv.CenterGapMTGPQR_%.npy: scripts/model_selection/write-cv.gpqr.py _temp/Xtrain.csv _temp/y.csv model/%.prior_mean.pt
 	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 
 # Model
 
-_temp/%.prior_mean.pt: scripts/train/prior_mean.py _temp/Xtrain.csv _temp/y.csv
+model/%.prior_mean.pt: scripts/train/prior_mean.py _temp/Xtrain.csv _temp/y.csv
 	$(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 _temp/best-config.%.mean.epoch: scripts/train/write-best.py _temp/cv.GPR_%.npy
 	python3 $^ --target epoch -o $@ 0
 
-model/%.gpr.pt: scripts/train/gpr.py _temp/Xtrain.csv _temp/y.csv _temp/%.prior_mean.pt _temp/best-config.%.mean.epoch
+model/%.gpr.pt: scripts/train/gpr.py _temp/Xtrain.csv _temp/y.csv model/%.prior_mean.pt _temp/best-config.%.mean.epoch
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(lastword $^)) -o $@
 
 _temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.CenterGapMTGPQR_%.npy
 	python3 $^ --target epoch -o $@ 0
 
-model/%.gpqr.pt: scripts/train/gpqr.py _temp/Xtrain.csv _temp/y.csv _temp/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
+model/%.gpqr.pt: scripts/train/gpqr.py _temp/Xtrain.csv _temp/y.csv model/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
