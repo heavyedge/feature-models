@@ -158,10 +158,10 @@ model/requirements.txt: requirements.txt
 
 # Prediction
 
-_temp/%.prior_mean.Xpred_1D.npy: model/predict-mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
+_temp/%.prior_mean.Xpred_1D.npy: model/predict-prior_mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.prior_mean.Xpred_2D.npy: model/predict-mean.py _temp/Xpred_2D.npy $(MODEL_FILES)
+_temp/%.prior_mean.Xpred_2D.npy: model/predict-prior_mean.py _temp/Xpred_2D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
 _temp/%.quantiles.X.npy: model/predict-quantiles.py _temp/X.npy $(MODEL_FILES)
