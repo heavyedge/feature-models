@@ -22,11 +22,20 @@ from .scale import (
 )
 
 __all__ = [
+    "load_PriorMean_H",
+    "load_PriorMean_phi",
     "load_GPR_H",
     "load_GPR_phi",
     "load_GPQR_H",
     "load_GPQR_phi",
 ]
+
+
+def _load_prior_mean(model_class, path, device=None):
+    state_dict = torch.load(path, map_location=device, weights_only=False)
+    model = model_class().to(device)
+    model.load_state_dict(state_dict)
+    return model
 
 
 def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, device=None):
@@ -108,6 +117,40 @@ def _load_gpqr(
         likelihood.to(device)
         model.to(device)
     return quantiles, X_scaler, y_scaler, mean, likelihood, model
+
+
+def load_PriorMean_H(path=None, device=None):
+    """Return prior mean model for H.
+
+    Parameters
+    ----------
+    path : str or Path, optional
+    device : torch.device, optional
+        Device to run the model on. If None, uses CUDA if available, else CPU.
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if path is None:
+        path = Path(__file__).parent / "H.prior_mean.pt"
+    return _load_prior_mean(PriorMean_H, path, device=device)
+
+
+def load_PriorMean_phi(path=None, device=None):
+    """Return prior mean model for phi.
+
+    Parameters
+    ----------
+    path : str or Path, optional
+    device : torch.device, optional
+        Device to run the model on. If None, uses CUDA if available, else CPU.
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if path is None:
+        path = Path(__file__).parent / "phi.prior_mean.pt"
+    return _load_prior_mean(PriorMean_phi, path, device=device)
 
 
 def load_GPR_H(path=None, device=None):

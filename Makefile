@@ -41,6 +41,8 @@ models: $(MODEL_FILES)
 notebooks: $(NOTEBOOKS)
 
 test:
+	$(GPU_PYTHON) -c "from model.load import load_PriorMean_H; load_PriorMean_H()"
+	$(GPU_PYTHON) -c "from model.load import load_PriorMean_phi; load_PriorMean_phi()"
 	$(GPU_PYTHON) -c "from model.load import load_GPR_H; load_GPR_H()"
 	$(GPU_PYTHON) -c "from model.load import load_GPR_phi; load_GPR_phi()"
 	$(GPU_PYTHON) -c "from model.load import load_GPQR_H; load_GPQR_H()"
