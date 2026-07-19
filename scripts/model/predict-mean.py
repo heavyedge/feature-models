@@ -7,7 +7,7 @@ MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 
 parser = argparse.ArgumentParser(
-    description="Predict prior mean from a trained model.",
+    description="Predict posterior distribution of mean from GPR.",
 )
 parser.add_argument(
     "X",
@@ -28,7 +28,15 @@ parser.add_argument(
     help="Number of samples to process at once.",
 )
 parser.add_argument(
-    "-o", "--out", type=pathlib.Path, required=True, help="Output npy file."
+    "-o",
+    "--out",
+    type=pathlib.Path,
+    required=True,
+    help=(
+        "Output npy file. "
+        "The output shape is (2, *B, N), where the first dimension corresponds to "
+        "the mean and standard deviation of the posterior distribution."
+    ),
 )
 args = parser.parse_args()
 
@@ -48,13 +56,13 @@ torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if args.target == "H":
-    load_models = load_module.load_GPQR_H
+    load_models = load_module.load_GPR_H
 elif args.target == "phi":
-    load_models = load_module.load_GPQR_phi
+    load_models = load_module.load_GPR_phi
 models = load_models(device=device)
 for module in models[1:]:
     module.eval()
-_, _, _, mean, _, _ = models
+X_scaler, y_scaler, mean, likelihood, model = models
 
 X = np.load(args.X)
 X_flattened = torch.tensor(
@@ -65,8 +73,19 @@ ret = []
 with torch.no_grad():
     for i in range(0, X_flattened.shape[0], args.chunk_size):
         X_pred = X_flattened[i : i + args.chunk_size]
-        pred_mean = mean(X_pred)
-        ret.append(pred_mean.cpu().numpy())
-ret = np.concatenate(ret, axis=0)
+        X_scaled = X_scaler(X_pred)
+        scaled_res_posterior = model(X_scaled)
 
-np.save(args.out, ret.reshape(*X.shape[:-1]))
+        scaled_res_mean = scaled_res_posterior.mean.unsqueeze(-1)
+        residual_mean = y_scaler.inverse_transform(scaled_res_mean).squeeze(-1)
+        residual_std = (
+            scaled_res_posterior.variance.sqrt().unsqueeze(-1)
+            * y_scaler.X_scale.abs().unsqueeze(-2)
+        ).squeeze(-1)
+
+        posterior_mean = mean(X_pred) + residual_mean
+        ret.append(torch.stack((posterior_mean, residual_std)).cpu().numpy())
+
+ret = np.concatenate(ret, axis=1)
+
+np.save(args.out, ret.reshape(2, *X.shape[:-1]))
