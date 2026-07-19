@@ -15,6 +15,7 @@ pip install -r requirements.txt
 
 Usage:
 
+Run `predict-prior_mean.py` script to evaluate prior mean function.
 Run `predict-mean.py` script to evaluate prior mean function.
 Run `predict-quantiles.py` script to evaluate quantile funtions.
 

@@ -29,6 +29,7 @@ model/scale.py \
 model/gpr.py \
 model/gpqr.py \
 model/load.py \
+model/predict-prior_mean.py \
 model/predict-mean.py \
 model/predict-quantiles.py \
 model/requirements.txt
