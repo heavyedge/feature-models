@@ -46,6 +46,9 @@ except ImportError:
     setup_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.setup")
     setup_module.setup(MODEL_MODULE_PATH)
 
+    import numpy as np
+    import torch
+
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
 
 torch.manual_seed(42)
