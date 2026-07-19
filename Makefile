@@ -24,6 +24,7 @@ model/phi.gpr.pt \
 model/H.gpqr.pt \
 model/phi.gpqr.pt \
 model/prior.py \
+model/setup.py \
 model/scale.py \
 model/gpr.py \
 model/gpqr.py \

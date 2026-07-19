@@ -35,22 +35,8 @@ try:
     import numpy as np
     import torch
 except ImportError:
-    import shutil
-    import subprocess
-
-    requirements = str(MODEL_MODULE_PATH / "requirements.txt")
-    uv = shutil.which("uv")
-    if uv is not None:
-        subprocess.check_call(
-            [uv, "pip", "install", "--python", sys.executable, "-r", requirements]
-        )
-    else:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "-r", requirements]
-        )
-
-    import numpy as np
-    import torch
+    setup_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.setup")
+    setup_module.setup(MODEL_MODULE_PATH)
 
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
