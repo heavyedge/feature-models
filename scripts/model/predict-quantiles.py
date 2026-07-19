@@ -4,6 +4,7 @@ import pathlib
 import sys
 
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 
 parser = argparse.ArgumentParser(
     description="Predict quantiles from a trained model.",
@@ -45,7 +46,6 @@ except ImportError:
     setup_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.setup")
     setup_module.setup(MODEL_MODULE_PATH)
 
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
 
 torch.manual_seed(42)
