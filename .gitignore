@@ -1,8 +1,5 @@
 _data
 _temp
-_artifacts
-model/*
-!model/README.md
 
 doc/source/notebooks/
 
