@@ -13,6 +13,11 @@ requirements_pid=$!
 
 (
     "$HOME/.local/bin/hf" download heavyedge/profiles --repo-type dataset --revision v1.0.0rc3 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
+    uv pip install --system -r libs/profile-dataset/requirements.txt -r libs/profile-dataset/examples/requirements.txt
+    mkdir -p _data/v1/dimless/
+    for dataset in _data/v1/process_variables/*.csv; do
+        papermill libs/profile-dataset/examples/v1/dimless.ipynb - -p pv_path "$dataset" -p metadata_path _data/v1/datapackage.json -p out_path "_data/v1/dimless/$(basename "$dataset")" > /dev/null 2>&1
+    done
 ) &
 pv_pid=$!
 
