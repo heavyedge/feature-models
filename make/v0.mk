@@ -49,12 +49,19 @@ test-v0:
 
 # Data
 
-_temp/Dataset.csv: scripts/data/filter-dataset.py _data/Dataset.csv
+_temp/v0/X.csv: scripts/v0/data/write-X.py _data/v1/process_variables.csv _data/v1/dimless.csv
 	mkdir -p $(@D)
 	python3 $^ -o $@
 
-_temp/X.csv: scripts/data/write-X.py _temp/Dataset.csv
-	python3 $^ -o $@
+
+
+
+
+
+
+
+
+
 
 _temp/y.csv: _temp/Dataset.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
