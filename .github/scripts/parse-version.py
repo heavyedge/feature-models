@@ -62,7 +62,7 @@ def main():
             else:
                 model_mode = "reuse"
                 model_revision = trained_model_tag(args.ref_name, version)
-                model_repo_id = f"jeesoo9595/heavyedge-features-v{version.major}"
+                model_repo_id = f"heavyedge/feature-model-v{version.major}"
         except ValueError as error:
             print(error, file=sys.stderr)
             sys.exit(1)

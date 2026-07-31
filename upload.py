@@ -22,7 +22,7 @@ api = HfApi(token=os.getenv("HUGGINGFACE_TOKEN"))
 
 VERSION = args.tag
 MAJOR_VERSION = f"v{version.major}"
-REPO = f"jeesoo9595/heavyedge-classify-{MAJOR_VERSION}"
+REPO = f"heavyedge/feature-model-{MAJOR_VERSION}"
 
 shutil.rmtree("models/__pycache__", ignore_errors=True)
 

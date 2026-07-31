@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use `heavyedge/profiles:v1.0.0rc3` for process variable data.
 - Use `heavyedge/shape-features:v1.0.0a4` for shape feature data.
+- Model repository is changed to `heavyedge/feature-model`.
 
 ## [0.1.0] - 2026-07-19
 

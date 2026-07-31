@@ -1,6 +1,6 @@
 # Heavy Edge Feature Model
 
-[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/jeesoo9595/heavyedge-features-v0)
+[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/heavyedge/feature-model-v0)
 [![Documentation](https://img.shields.io/badge/github-pages-blue?logo=github)](https://heavyedge.github.io/feature-models/)
 [![GitHub repository](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/heavyedge/feature-models)
 
@@ -55,7 +55,7 @@ You need:
 Run the following command:
 
 ```sh
-hf download jeesoo9595/heavyedge-features-v0 --repo-type model --local-dir models/v0
+hf download heavyedge/feature-model-v0 --repo-type model --local-dir models/v0
 ```
 
 You may change the reposotiry name and local path to download other models.
