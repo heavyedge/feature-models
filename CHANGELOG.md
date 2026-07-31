@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Model: `gpytorch-qr==0.8.0`
 - Dataset:
-  - `heavyedge/heavyedge-profiles:v1.0.0rc2`
-  - `jeesoo9595/heavyedge-features:v1.0.0a4`
+  - `heavyedge/profiles:v1.0.0rc3`
+  - `heavyedge/shape-features:v1.0.0a4`
 
 ### Changed
 
-- Use `heavyedge/heavyedge-profiles:v1.0.0rc2` for process variable data.
-- Use `jeesoo9595/heavyedge-features:v1.0.0a4` for shape feature data.
+- Use `heavyedge/profiles:v1.0.0rc3` for process variable data.
+- Use `heavyedge/shape-features:v1.0.0a4` for shape feature data.
 
 ## [0.1.0] - 2026-07-19
 
