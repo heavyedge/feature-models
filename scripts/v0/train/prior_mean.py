@@ -1,15 +1,10 @@
 import argparse
-import importlib
 import logging
 import pathlib
-import sys
 
+import model.prior as model_module  # Needs PYTHONPATH=scripts/v0
 import pandas as pd
 import torch
-
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -44,8 +39,8 @@ y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]
 
-model_class = getattr(model_module, args.model)
-model = model_class(batch_shape=batch_shape).to(device)
+PriorMean = getattr(model_module, args.model)
+model = PriorMean(batch_shape=batch_shape).to(device)
 
 # Train
 model.train()

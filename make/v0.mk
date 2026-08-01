@@ -74,6 +74,13 @@ _temp/v0/Xpred_3D-1.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
 _temp/v0/Xpred_3D-2.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number cosine_of_contact_angle --start=-2 --stop=2 --ngrid=$(N_GRID_2) -o $@
 
+# Prior mean
+
+# ex) models/v0/H.prior_mean.pt
+models/v0/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
+	mkdir -p $(@D)
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+
 # Model selection
 
 _temp/crossing.DirectMTGPQR_%.csv: scripts/model_selection/write-crossing.py _temp/X.csv _temp/y.csv model/%.prior_mean.pt _temp/Xpred_3D-1.csv _temp/Xpred_3D-2.csv
@@ -93,9 +100,6 @@ _temp/cv.CenterGapMTGPQR_%.npy: scripts/model_selection/write-cv.gpqr.py _temp/X
 
 
 # Model
-
-model/%.prior_mean.pt: scripts/train/prior_mean.py _temp/Xtrain.csv _temp/y.csv
-	$(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 _temp/best-config.%.mean.epoch: scripts/train/write-best.py _temp/cv.GPR_%.npy
 	python3 $^ --target epoch -o $@ 0

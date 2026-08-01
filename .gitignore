@@ -1,5 +1,6 @@
 _data
 _temp
+models/v*
 doc/source/notebooks/
 
 # Byte-compiled / optimized / DLL files
