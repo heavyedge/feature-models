@@ -67,7 +67,13 @@ grids = [np.linspace(r[0], r[1], n) for r, n in zip(ranges, args.ngrid)]
 mesh_array = np.stack(np.meshgrid(*grids, indexing="ij"), axis=-1)
 
 other_columns = [col for col in X.columns if col not in args.target]
-other_values = X[other_columns].drop_duplicates().reset_index(drop=True)
+if other_columns:
+    other_values = X[other_columns].drop_duplicates().reset_index(drop=True)
+else:
+    # A DataFrame with no columns retains every input row through
+    # drop_duplicates().  For a full-dimensional grid there is instead one
+    # empty combination of fixed features.
+    other_values = pd.DataFrame(index=[0])
 
 grid_shape = mesh_array.shape[:-1]  # e.g. (200, 200)
 G = int(np.prod(grid_shape)) if grid_shape else 1

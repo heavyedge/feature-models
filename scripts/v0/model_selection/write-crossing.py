@@ -78,9 +78,7 @@ y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 X_tests = []
 for path in args.X_test:
     Xtest_df = pd.read_csv(path, index_col=[0, 1, 2])
-    Xtest_arr = Xtest_df.groupby(level=[0, 1, 2]).first().values
-    print(Xtest_arr.shape)
-    X_tests.append(torch.tensor(Xtest_arr).float().to(device))
+    X_tests.append(torch.tensor(Xtest_df.values).float().to(device))
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]
