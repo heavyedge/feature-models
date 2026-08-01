@@ -1,18 +1,15 @@
 import argparse
-import importlib
 import logging
 import pathlib
-import sys
 
+import model.gpqr as model_module  # Needs PYTHONPATH=scripts/v0
+import model.prior as prior_module  # Needs PYTHONPATH=scripts/v0
+import model.scale as scaler_module  # Needs PYTHONPATH=scripts/v0
 import numpy as np
 import pandas as pd
 import torch
 from cv import cv_gpqr, split_data
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
-
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -76,7 +73,7 @@ parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output npy file of CV of quantile predictions.",
+    help="Output csv file of CV of quantile predictions.",
 )
 args = parser.parse_args()
 
@@ -91,13 +88,13 @@ batch_shape = torch.Size([args.num_folds])
 x_train, y_train, x_test, y_test = split_data(
     X.cpu().numpy(), y.cpu().numpy(), args.num_folds, device
 )
-X_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
 X_scaler.train()
 X_scaled = X_scaler(X)
 
-mean_class = getattr(model_module, "PriorMean_" + args.target)
+mean_class = getattr(prior_module, "PriorMean_" + args.target)
 mean = mean_class(batch_shape=batch_shape).to(device)
 mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 mean.eval()
@@ -134,4 +131,13 @@ cv = cv_gpqr(
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
 
-np.save(args.out, cv)
+_, n_epochs, n_folds = cv.shape
+cv_df = pd.DataFrame(
+    {
+        "epoch": np.repeat(np.arange(1, n_epochs + 1), n_folds),
+        "fold": np.tile(np.arange(1, n_folds + 1), n_epochs),
+        "test_mll_loss": cv[0].reshape(-1),
+        "test_pinball_loss": cv[1].reshape(-1),
+    }
+)
+cv_df.to_csv(args.out, index=False)

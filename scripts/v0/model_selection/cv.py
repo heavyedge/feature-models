@@ -162,7 +162,8 @@ def cv_gpqr(
         lr=learning_rate,
     )
 
-    test_losses = []
+    test_mll_losses = []
+    test_pinball_losses = []
     for i in range(n_epochs):
         X_scaler.train()
         y_scaler.train()
@@ -184,26 +185,33 @@ def cv_gpqr(
         model.eval()
         likelihood.eval()
         with torch.no_grad():
-            test_output = model.quantiles(X_scaler(x_test))
             test_res = y_scaler((y_test - mean(x_test)).unsqueeze(-1)).squeeze(-1)
-            epoch_fold_losses = []
-            for test_res_fold, output_fold in zip(test_res, test_output):
+
+            test_posterior = model(X_scaler(x_test))
+            test_mll_loss = -mll(test_posterior, test_res)
+            epoch_fold_mll_losses = test_mll_loss.detach().cpu().numpy().tolist()
+            test_mll_losses.append(epoch_fold_mll_losses)
+
+            test_quantiles = model.quantiles(X_scaler(x_test))
+            epoch_fold_pinball_losses = []
+            for test_res_fold, pinball_fold in zip(test_res, test_quantiles):
                 pinball_losses = []
                 for j, q in enumerate(quantiles):
-                    test_loss = mean_pinball_loss(
+                    test_pinball_loss = mean_pinball_loss(
                         test_res_fold.cpu().numpy(),
-                        output_fold[:, j].cpu().numpy(),
+                        pinball_fold[:, j].cpu().numpy(),
                         alpha=q.item(),
                     )
-                    pinball_losses.append(test_loss)
-                epoch_fold_losses.append(np.mean(pinball_losses))
-            test_losses.append(epoch_fold_losses)
+                    pinball_losses.append(test_pinball_loss)
+                epoch_fold_pinball_losses.append(np.mean(pinball_losses))
+            test_pinball_losses.append(epoch_fold_pinball_losses)
 
         if (i + 1) % 100 == 0:
             logger(
                 f"Epoch {i+1}/{n_epochs}, "
                 f"Train Loss: {train_loss.mean().item():.4f}, "
-                f"Mean test pinball loss: {np.mean(epoch_fold_losses):.4f}"
+                f"Mean test mll loss: {np.mean(epoch_fold_mll_losses):.4f}, "
+                f"Mean test pinball loss: {np.mean(epoch_fold_pinball_losses):.4f}"
             )
 
-    return np.array([test_losses])  # (1, N_EPOCHS, N_FOLDS)
+    return np.array([test_mll_losses, test_pinball_losses])  # (2, N_EPOCHS, N_FOLDS)

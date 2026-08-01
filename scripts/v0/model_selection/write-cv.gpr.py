@@ -111,7 +111,7 @@ cv = cv_gpr(
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
 
-n_epochs, n_folds = cv.shape[1:]
+_, n_epochs, n_folds = cv.shape
 cv_df = pd.DataFrame(
     {
         "epoch": np.repeat(np.arange(1, n_epochs + 1), n_folds),
