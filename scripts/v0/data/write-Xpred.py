@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 
 TARGET_COLUMNS = [
-    "Gap_to_thickness_ratio",
-    "Capillary_number",
-    "Cos_theta",
+    "gap_to_thickness_ratio",
+    "capillary_number",
+    "cosine_of_contact_angle",
 ]
 
 parser = argparse.ArgumentParser(description="Construct Xpred grid")

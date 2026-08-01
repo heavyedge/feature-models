@@ -56,36 +56,23 @@ _temp/v0/X.csv: scripts/v0/data/write-X.py _data/v1/dimless.csv
 _temp/v0/y.csv: scripts/v0/data/write-y.py _temp/v0/X.csv _data/v1/shape_features/mean_profiles.csv
 	python3 $^ -o $@
 
+_temp/v0/Xtrain.csv: _temp/v0/X.csv
+	python3 -c "import pandas as pd; pd.read_csv('$<')[['gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']].to_csv('$@', index=False)"
 
+_temp/v0/ytrain.csv: _temp/v0/y.csv
+	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
+_temp/v0/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
+	python3 $^ --target gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
+_temp/v0/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
+	python3 $^ --target gap_to_thickness_ratio capillary_number --ngrid $(N_GRID_1) -o $@
 
+_temp/v0/Xpred_3D-1.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
+	python3 $^ --target gap_to_thickness_ratio capillary_number cosine_of_contact_angle --start=0 --stop=1 --ngrid=$(N_GRID_2) -o $@
 
-
-
-_temp/Xtrain.csv: _temp/X.csv
-	python3 -c "import pandas as pd; pd.read_csv('$<').drop(columns=['Slurry']).to_csv('$@', index=False)"
-
-_temp/Xpred_1D.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ --target Gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
-
-_temp/Xpred_2D.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ --target Gap_to_thickness_ratio Capillary_number --ngrid $(N_GRID_1) -o $@
-
-_temp/Xpred_3D-1.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=0 --stop=1 --ngrid=$(N_GRID_2) -o $@
-
-_temp/Xpred_3D-2.csv: scripts/data/write-Xpred.py _temp/X.csv
-	python3 $^ --target Gap_to_thickness_ratio Capillary_number Cos_theta --start=-2 --stop=2 --ngrid=$(N_GRID_2) -o $@
-
-_temp/X.npy: _temp/X.csv
-	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<').drop(columns=['Slurry']).to_numpy())"
-
-_temp/Xpred_1D.npy: _temp/Xpred_1D.csv
-	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<', index_col=[0, 1, 2, 3]).to_numpy())"
-
-_temp/Xpred_2D.npy: _temp/Xpred_2D.csv
-	python3 -c "import pandas as pd; import numpy as np; np.save('$@', pd.read_csv('$<', index_col=[0, 1, 2, 3]).to_numpy())"
+_temp/v0/Xpred_3D-2.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
+	python3 $^ --target gap_to_thickness_ratio capillary_number cosine_of_contact_angle --start=-2 --stop=2 --ngrid=$(N_GRID_2) -o $@
 
 # Model selection
 
