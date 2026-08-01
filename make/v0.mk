@@ -100,14 +100,14 @@ _temp/v0/cv.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-cv.gpqr.py _
 
 # Model
 
-_temp/best-config.%.mean.epoch: scripts/train/write-best.py _temp/cv.GPR_%.npy
+_temp/v0/best-config.%.mean.epoch: scripts/v0/train/write-best.py _temp/v0/cv.GPR_%.csv
 	python3 $^ --target epoch -o $@ 0
 
-models/%.gpr.pt: scripts/train/gpr.py _temp/Xtrain.csv _temp/y.csv models/%.prior_mean.pt _temp/best-config.%.mean.epoch
+models/v0/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/%.prior_mean.pt _temp/v0/best-config.%.mean.epoch
 	mkdir -p $(@D)
-	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(lastword $^)) -o $@
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(lastword $^)) -o $@
 
-_temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.CenterGapMTGPQR_%.npy
+_temp/v0/best-config.%.quantiles.epoch: scripts/v0/train/write-best.py _temp/v0/cv.CenterGapMTGPQR_%.csv
 	python3 $^ --target epoch -o $@ 0
 
 models/%.gpqr.pt: scripts/train/gpqr.py _temp/Xtrain.csv _temp/y.csv models/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
