@@ -1,17 +1,14 @@
 import argparse
-import importlib
 import logging
 import pathlib
-import sys
 
+import model.gpqr_other as model_module  # Needs PYTHONPATH=scripts/v0
+import model.prior as prior_module  # Needs PYTHONPATH=scripts/v0
+import model.scale as scaler_module  # Needs PYTHONPATH=scripts/v0
 import pandas as pd
 import torch
 from crossing import quantile_crossing
 from gpytorch_qr.likelihoods import DirectQuantileLikelihood
-
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -75,25 +72,26 @@ args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
+X = torch.tensor(pd.read_csv(args.X).values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
 X_tests = []
 for path in args.X_test:
-    Xtest_df = pd.read_csv(path, index_col=[0, 1, 2, 3])
+    Xtest_df = pd.read_csv(path, index_col=[0, 1, 2])
     Xtest_arr = Xtest_df.groupby(level=[0, 1, 2]).first().values
+    print(Xtest_arr.shape)
     X_tests.append(torch.tensor(Xtest_arr).float().to(device))
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]
 
-X_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
 X_scaler.train()
 X_scaled = X_scaler(X)
 
-mean_class = getattr(model_module, "PriorMean_" + args.target)
+mean_class = getattr(prior_module, "PriorMean_" + args.target)
 mean = mean_class(batch_shape=batch_shape).to(device)
 mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 
