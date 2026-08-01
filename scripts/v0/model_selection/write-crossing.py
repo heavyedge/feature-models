@@ -5,6 +5,7 @@ import pathlib
 import model.gpqr_other as model_module  # Needs PYTHONPATH=scripts/v0
 import model.prior as prior_module  # Needs PYTHONPATH=scripts/v0
 import model.scale as scaler_module  # Needs PYTHONPATH=scripts/v0
+import numpy as np
 import pandas as pd
 import torch
 from crossing import quantile_crossing
@@ -121,12 +122,16 @@ crs, mcs, mxs = quantile_crossing(
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
 
-data = dict()
-for i, cr in enumerate(crs):
-    data[f"crossing_rate_{i}"] = cr
-for i, mc in enumerate(mcs):
-    data[f"mean_crossing_{i}"] = mc
-for i, mx in enumerate(mxs):
-    data[f"max_crossing_{i}"] = mx
-
-pd.DataFrame(data).to_csv(args.out, index=False)
+# The returned arrays have shape (N_TESTS, N_EPOCHS).  Store one
+# test/epoch combination per row, matching the other model-selection outputs.
+n_tests, n_epochs = crs.shape
+crossing_df = pd.DataFrame(
+    {
+        "epoch": np.tile(np.arange(1, n_epochs + 1), n_tests),
+        "test": np.repeat(np.arange(1, n_tests + 1), n_epochs),
+        "crossing_rate": crs.reshape(-1),
+        "mean_crossing": mcs.reshape(-1),
+        "max_crossing": mxs.reshape(-1),
+    }
+)
+crossing_df.to_csv(args.out, index=False)
