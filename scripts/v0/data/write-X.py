@@ -6,14 +6,13 @@ import numpy as np
 import pandas as pd
 
 parser = argparse.ArgumentParser()
-parser.add_argument("pv", type=pathlib.Path, help="Process variables csv file.")
 parser.add_argument(
     "dimless", type=pathlib.Path, help="Dimensionless variables csv file."
 )
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
 
-df = pd.concat([pd.read_csv(args.pv)[["slurry"]], pd.read_csv(args.dimless)], axis=1)
+df = pd.read_csv(args.dimless)
 
 groups = df.groupby(
     [
@@ -46,6 +45,13 @@ for i, (_, subdf) in enumerate(groups):
         indices.extend(subdf.index.tolist())
 idxs = np.sort(indices)
 
-df.iloc[idxs][
-    ["slurry", "gap_to_thickness_ratio", "capillary_number", "cosine_of_contact_angle"]
-].to_csv(args.out, index=False)
+out_df = df.iloc[idxs][
+    [
+        "name",
+        "slurry",
+        "gap_to_thickness_ratio",
+        "capillary_number",
+        "cosine_of_contact_angle",
+    ]
+]
+out_df.to_csv(args.out)

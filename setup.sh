@@ -31,7 +31,7 @@ python3 -c '
 from pathlib import Path
 import pandas as pd
 
-pvs = sorted(Path("_data/v1/process_variables").glob("*.csv"))
+pvs = sorted(Path("_data/v1/process_variables/").glob("*.csv"))
 df = pd.concat(
     [pd.read_csv(f, dtype=str).assign(name=lambda df: f"{f.stem}/" + df["name"]) for f in pvs],
     ignore_index=True,
@@ -41,3 +41,27 @@ df.to_csv("_data/v1/process_variables.csv", index=False)
 
 uv pip install --system -r libs/profile-dataset/requirements.txt -r libs/profile-dataset/examples/requirements.txt
 papermill libs/profile-dataset/examples/v1/dimless.ipynb - -p pv_path _data/v1/process_variables.csv -p metadata_path _data/v1/datapackage.json -p out_path "_data/v1/dimless.csv" > /dev/null 2>&1
+
+python3 -c '
+from pathlib import Path
+import pandas as pd
+
+pvs = sorted(Path("_data/v1/shape_features/mean_profiles/").glob("*.csv"))
+df = pd.concat(
+    [pd.read_csv(f, dtype=str).assign(name=lambda df: f"{f.stem}/" + df["name"]) for f in pvs],
+    ignore_index=True,
+)
+df.to_csv("_data/v1/shape_features/mean_profiles.csv", index=False)
+'
+
+python3 -c '
+from pathlib import Path
+import pandas as pd
+
+pvs = sorted(Path("_data/v1/shape_features/profiles/").glob("*.csv"))
+df = pd.concat(
+    [pd.read_csv(f, dtype=str).assign(name=lambda df: f"{f.stem}/" + df["name"]) for f in pvs],
+    ignore_index=True,
+)
+df.to_csv("_data/v1/shape_features/profiles.csv", index=False)
+'

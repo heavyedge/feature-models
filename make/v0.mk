@@ -49,8 +49,11 @@ test-v0:
 
 # Data
 
-_temp/v0/X.csv: scripts/v0/data/write-X.py _data/v1/process_variables.csv _data/v1/dimless.csv
+_temp/v0/X.csv: scripts/v0/data/write-X.py _data/v1/dimless.csv
 	mkdir -p $(@D)
+	python3 $^ -o $@
+
+_temp/v0/y.csv: scripts/v0/data/write-y.py _temp/v0/X.csv _data/v1/shape_features/mean_profiles.csv
 	python3 $^ -o $@
 
 
@@ -59,12 +62,6 @@ _temp/v0/X.csv: scripts/v0/data/write-X.py _data/v1/process_variables.csv _data/
 
 
 
-
-
-
-
-_temp/y.csv: _temp/Dataset.csv
-	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
 _temp/Xtrain.csv: _temp/X.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<').drop(columns=['Slurry']).to_csv('$@', index=False)"
