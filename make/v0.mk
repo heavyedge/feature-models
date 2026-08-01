@@ -18,22 +18,22 @@ GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
 GPU_JUPYTER ?= $(GPU_RUN) jupyter
 
 MODEL_FILES := \
-model/H.prior_mean.pt \
-model/phi.prior_mean.pt \
-model/H.gpr.pt \
-model/phi.gpr.pt \
-model/H.gpqr.pt \
-model/phi.gpqr.pt \
-model/prior.py \
-model/setup.py \
-model/scale.py \
-model/gpr.py \
-model/gpqr.py \
-model/load.py \
-model/predict-prior_mean.py \
-model/predict-mean.py \
-model/predict-quantiles.py \
-model/requirements.txt
+models/H.prior_mean.pt \
+models/phi.prior_mean.pt \
+models/H.gpr.pt \
+models/phi.gpr.pt \
+models/H.gpqr.pt \
+models/phi.gpqr.pt \
+models/prior.py \
+models/setup.py \
+models/scale.py \
+models/gpr.py \
+models/gpqr.py \
+models/load.py \
+models/predict-prior_mean.py \
+models/predict-mean.py \
+models/predict-quantiles.py \
+models/requirements.txt
 
 models-v0: $(MODEL_FILES)
 
@@ -86,16 +86,16 @@ models/v0/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _t
 _temp/v0/crossing.DirectMTGPQR_%.csv: scripts/v0/model_selection/write-crossing.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/%.prior_mean.pt _temp/v0/Xpred_3D-1.csv _temp/v0/Xpred_3D-2.csv
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/extrapolation.CenterGapMTGPQR_%.npy: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv model/%.prior_mean.pt
-	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
+_temp/v0/extrapolation.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/%.prior_mean.pt
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.npy: scripts/model_selection/write-extrapolation.py _temp/X.csv _temp/y.csv
-	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
+_temp/v0/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/cv.GPR_%.npy: scripts/model_selection/write-cv.gpr.py _temp/Xtrain.csv _temp/y.csv model/%.prior_mean.pt
+_temp/cv.GPR_%.npy: scripts/model_selection/write-cv.gpr.py _temp/Xtrain.csv _temp/y.csv models/%.prior_mean.pt
 	$(GPU_PYTHON) $^ --target $* --model GPR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/cv.CenterGapMTGPQR_%.npy: scripts/model_selection/write-cv.gpqr.py _temp/Xtrain.csv _temp/y.csv model/%.prior_mean.pt
+_temp/cv.CenterGapMTGPQR_%.npy: scripts/model_selection/write-cv.gpqr.py _temp/Xtrain.csv _temp/y.csv models/%.prior_mean.pt
 	$(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 
@@ -104,44 +104,44 @@ _temp/cv.CenterGapMTGPQR_%.npy: scripts/model_selection/write-cv.gpqr.py _temp/X
 _temp/best-config.%.mean.epoch: scripts/train/write-best.py _temp/cv.GPR_%.npy
 	python3 $^ --target epoch -o $@ 0
 
-model/%.gpr.pt: scripts/train/gpr.py _temp/Xtrain.csv _temp/y.csv model/%.prior_mean.pt _temp/best-config.%.mean.epoch
+models/%.gpr.pt: scripts/train/gpr.py _temp/Xtrain.csv _temp/y.csv models/%.prior_mean.pt _temp/best-config.%.mean.epoch
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(lastword $^)) -o $@
 
 _temp/best-config.%.quantiles.epoch: scripts/train/write-best.py _temp/cv.CenterGapMTGPQR_%.npy
 	python3 $^ --target epoch -o $@ 0
 
-model/%.gpqr.pt: scripts/train/gpqr.py _temp/Xtrain.csv _temp/y.csv model/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
+models/%.gpqr.pt: scripts/train/gpqr.py _temp/Xtrain.csv _temp/y.csv models/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
-model/%.py: scripts/model/%.py
+models/%.py: scripts/models/%.py
 	mkdir -p $(@D)
 	cp $< $@
 
-model/requirements.txt: requirements.txt
+models/requirements.txt: requirements.txt
 	mkdir -p $(@D)
 	grep -E '^(numpy|torch|gpytorch-qr|gpytorch)([>=<!~,; \t]|$$)' $< > $@
 
 
 # Prediction
 
-_temp/%.prior_mean.Xpred_1D.npy: model/predict-prior_mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
+_temp/%.prior_mean.Xpred_1D.npy: models/predict-prior_mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.prior_mean.Xpred_2D.npy: model/predict-prior_mean.py _temp/Xpred_2D.npy $(MODEL_FILES)
+_temp/%.prior_mean.Xpred_2D.npy: models/predict-prior_mean.py _temp/Xpred_2D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.mean.Xpred_1D.npy: model/predict-mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
+_temp/%.mean.Xpred_1D.npy: models/predict-mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.quantiles.X.npy: model/predict-quantiles.py _temp/X.npy $(MODEL_FILES)
+_temp/%.quantiles.X.npy: models/predict-quantiles.py _temp/X.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.Xpred_1D.npy: model/predict-quantiles.py _temp/Xpred_1D.npy $(MODEL_FILES)
+_temp/%.quantiles.Xpred_1D.npy: models/predict-quantiles.py _temp/Xpred_1D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.Xpred_2D.npy: model/predict-quantiles.py _temp/Xpred_2D.npy $(MODEL_FILES)
+_temp/%.quantiles.Xpred_2D.npy: models/predict-quantiles.py _temp/Xpred_2D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 

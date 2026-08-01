@@ -1,19 +1,15 @@
 import argparse
-import importlib
 import logging
 import pathlib
-import sys
 
-import numpy as np
+import model.gpqr as model_module  # Needs PYTHONPATH=scripts/v0
+import model.prior as prior_module  # Needs PYTHONPATH=scripts/v0
+import model.scale as scaler_module  # Needs PYTHONPATH=scripts/v0
 import pandas as pd
 import torch
 from cv import cv_gpqr, split_extrapolate_data
 from gpytorch.means import ZeroMean
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
-
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -21,6 +17,8 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
+
+torch.manual_seed(42)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -76,14 +74,13 @@ parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output npy file of extrapolation CV.",
+    help="Output csv file of extrapolation CV.",
 )
 args = parser.parse_args()
 
-torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-X = torch.tensor(pd.read_csv(args.X).drop(columns="Slurry").values).float().to(device)
+X = torch.tensor(pd.read_csv(args.X).values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
 dim = X.shape[-1]
@@ -92,15 +89,15 @@ batch_shape = torch.Size([1])
 x_train, y_train, x_test, y_test = split_extrapolate_data(
     X.cpu().numpy(), y.cpu().numpy(), args.split_ratio, device
 )
-x_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+x_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
 x_scaler.train()
 y_scaler.train()
 x_scaled = x_scaler(x_train)
 
 if args.prior_mean is not None:
-    mean_class = getattr(model_module, "PriorMean_" + args.target)
+    mean_class = getattr(prior_module, "PriorMean_" + args.target)
     mean = mean_class(batch_shape=batch_shape).to(device)
     mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 else:
@@ -124,7 +121,7 @@ model = model_class(
     batch_shape=batch_shape,
 ).to(device)
 
-ev = cv_gpqr(
+(ev,) = cv_gpqr(
     x_train,
     y_train,
     x_test,
@@ -138,4 +135,4 @@ ev = cv_gpqr(
     n_epochs=args.n_epochs,
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
-np.save(args.out, ev)
+pd.DataFrame(ev, columns=["test_pinball_loss"]).to_csv(args.out, index=False)
