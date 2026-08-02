@@ -61,6 +61,9 @@ _temp/v0/Xtrain.csv: _temp/v0/X.csv
 _temp/v0/ytrain.csv: _temp/v0/y.csv
 	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
 
+_temp/v0/Xpred.csv: _temp/v0/Xtrain.csv
+	python3 -c "import pandas as pd; X = pd.read_csv('$<'); cols = ['gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']; idx = pd.DataFrame({col + '_idx': X[col].map({value: i for i, value in enumerate(sorted(X[col].unique()))}) for col in cols}); pd.concat([idx, X], axis=1).to_csv('$@', index=False)"
+
 _temp/v0/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
 	python3 $^ --target gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
@@ -129,13 +132,13 @@ _temp/v0/%.prior_mean.Xpred_2D.csv: models/v0/predict-prior_mean.py _temp/v0/Xpr
 _temp/v0/%.mean.Xpred_1D.csv: models/v0/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.quantiles.X.npy: models/predict-quantiles.py _temp/X.npy $(MODEL_FILES)
+_temp/v0/%.quantiles.X.csv: models/v0/predict-quantiles.py _temp/v0/Xpred.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.Xpred_1D.npy: models/predict-quantiles.py _temp/Xpred_1D.npy $(MODEL_FILES)
+_temp/v0/%.quantiles.Xpred_1D.csv: models/v0/predict-quantiles.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/%.quantiles.Xpred_2D.npy: models/predict-quantiles.py _temp/Xpred_2D.npy $(MODEL_FILES)
+_temp/v0/%.quantiles.Xpred_2D.csv: models/v0/predict-quantiles.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 # Window prediction

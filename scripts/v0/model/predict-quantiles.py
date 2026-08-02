@@ -13,7 +13,7 @@ parser.add_argument(
     "X",
     type=pathlib.Path,
     help=(
-        "Input npy file, shape: (*B, N, D). "
+        "Input csv file, shape: (N, D). "
         "The first three dimensions must be "
         "the Gap-to-thickness ratio, "
         "the Capillary number, and "
@@ -35,25 +35,25 @@ parser.add_argument(
     help="Number of samples to process at once.",
 )
 parser.add_argument(
-    "-o", "--out", type=pathlib.Path, required=True, help="Output npy file."
+    "-o", "--out", type=pathlib.Path, required=True, help="Output csv file."
 )
 args = parser.parse_args()
 
 try:
     import numpy as np
+    import pandas as pd
     import torch
 except ImportError:
     setup_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.setup")
     setup_module.setup(MODEL_MODULE_PATH)
 
     import numpy as np
+    import pandas as pd
     import torch
 
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
 
 torch.manual_seed(42)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if args.target == "H":
@@ -63,11 +63,12 @@ elif args.target == "phi":
 models = load_models(device=device)
 for module in models[1:]:
     module.eval()
-_, X_scaler, y_scaler, mean, likelihood, model = models
+quantile_levels, X_scaler, y_scaler, mean, likelihood, model = models
 
-X = np.load(args.X)
-X_flattened = torch.tensor(
-    X.reshape(-1, X.shape[-1]), dtype=torch.float32, device=device
+X = torch.tensor(
+    pd.read_csv(args.X, index_col=[0, 1, 2]).values,
+    dtype=torch.float32,
+    device=device,
 )
 
 if args.method == "delta":
@@ -82,14 +83,20 @@ else:
 
 ret = []
 with torch.no_grad():
-    for i in range(0, X_flattened.shape[0], args.chunk_size):
-        X_pred = X_flattened[i : i + args.chunk_size]
+    for i in range(0, X.shape[0], args.chunk_size):
+        X_pred = X[i : i + args.chunk_size]
         X_scaled = X_scaler(X_pred)
         scaled_res_quantiles = quantiles(X_scaled)
         pred_res = y_scaler.inverse_transform(scaled_res_quantiles)
         pred_mean = mean(X_pred).reshape(-1, 1)
         pred_quantiles = pred_res + pred_mean
         ret.append(pred_quantiles.cpu().numpy())
-ret = np.concatenate(ret, axis=0)
+ret = np.concatenate(ret, axis=0)  # (N, n_quantiles)
 
-np.save(args.out, ret.reshape(*X.shape[:-1], -1))
+quantile_levels = quantile_levels.detach().cpu().numpy()
+pd.DataFrame(
+    {
+        f"{args.target} ({quantile_level:.0%})": ret[:, i]
+        for i, quantile_level in enumerate(quantile_levels)
+    }
+).to_csv(args.out, index=False)

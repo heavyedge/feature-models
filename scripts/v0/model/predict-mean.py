@@ -32,11 +32,7 @@ parser.add_argument(
     "--out",
     type=pathlib.Path,
     required=True,
-    help=(
-        "Output csv file. "
-        "The output shape is (N, 2), where the first dimension corresponds to "
-        "the mean and standard deviation of the posterior distribution."
-    ),
+    help="Output csv file.",
 )
 args = parser.parse_args()
 
