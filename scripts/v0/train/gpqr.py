@@ -1,18 +1,15 @@
 import argparse
-import importlib
 import logging
 import pathlib
-import sys
 
+import model.gpqr as model_module  # Needs PYTHONPATH=scripts/v0
+import model.prior as prior_module  # Needs PYTHONPATH=scripts/v0
+import model.scale as scaler_module  # Needs PYTHONPATH=scripts/v0
 import pandas as pd
 import torch
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
 from save import save_gpqr
-
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent.parent / "model"
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
-model_module = importlib.import_module(MODEL_MODULE_PATH.name)
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -72,13 +69,13 @@ dim = X.shape[-1]
 num_data = X.shape[-2]
 batch_shape = X.shape[:-2]
 
-X_scaler = model_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-y_scaler = model_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
 X_scaler.train()
 X_scaled = X_scaler(X)
 
-mean_class = getattr(model_module, "PriorMean_" + args.target)
+mean_class = getattr(prior_module, "PriorMean_" + args.target)
 mean = mean_class(batch_shape=batch_shape).to(device)
 mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 mean.eval()

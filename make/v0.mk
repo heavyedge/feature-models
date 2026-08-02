@@ -110,9 +110,9 @@ models/v0/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.
 _temp/v0/best-config.%.quantiles.epoch: scripts/v0/train/write-best.py _temp/v0/cv.CenterGapMTGPQR_%.csv
 	python3 $^ --target epoch -o $@ 0
 
-models/%.gpqr.pt: scripts/train/gpqr.py _temp/Xtrain.csv _temp/y.csv models/%.prior_mean.pt _temp/best-config.%.quantiles.epoch
+models/v0/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/%.prior_mean.pt _temp/v0/best-config.%.quantiles.epoch
 	mkdir -p $(@D)
-	$(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
 models/%.py: scripts/models/%.py
 	mkdir -p $(@D)
