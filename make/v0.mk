@@ -18,34 +18,33 @@ GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
 GPU_JUPYTER ?= $(GPU_RUN) jupyter
 
 MODEL_FILES := \
-models/H.prior_mean.pt \
-models/phi.prior_mean.pt \
-models/H.gpr.pt \
-models/phi.gpr.pt \
-models/H.gpqr.pt \
-models/phi.gpqr.pt \
-models/prior.py \
-models/setup.py \
-models/scale.py \
-models/gpr.py \
-models/gpqr.py \
-models/load.py \
-models/predict-prior_mean.py \
-models/predict-mean.py \
-models/predict-quantiles.py \
-models/requirements.txt
+models/v0/H.prior_mean.pt \
+models/v0/phi.prior_mean.pt \
+models/v0/H.gpr.pt \
+models/v0/phi.gpr.pt \
+models/v0/H.gpqr.pt \
+models/v0/phi.gpqr.pt \
+models/v0/prior.py \
+models/v0/setup.py \
+models/v0/scale.py \
+models/v0/gpr.py \
+models/v0/gpqr.py \
+models/v0/load.py \
+models/v0/predict-prior_mean.py \
+models/v0/predict-mean.py \
+models/v0/predict-quantiles.py
 
 models-v0: $(MODEL_FILES)
 
 examples-v0: $(wildcard examples/v0/*)
 
 test-v0:
-	$(GPU_PYTHON) -c "from model.load import load_PriorMean_H; load_PriorMean_H()"
-	$(GPU_PYTHON) -c "from model.load import load_PriorMean_phi; load_PriorMean_phi()"
-	$(GPU_PYTHON) -c "from model.load import load_GPR_H; load_GPR_H()"
-	$(GPU_PYTHON) -c "from model.load import load_GPR_phi; load_GPR_phi()"
-	$(GPU_PYTHON) -c "from model.load import load_GPQR_H; load_GPQR_H()"
-	$(GPU_PYTHON) -c "from model.load import load_GPQR_phi; load_GPQR_phi()"
+	$(GPU_PYTHON) -c "from models.v0.load import load_PriorMean_H; load_PriorMean_H()"
+	$(GPU_PYTHON) -c "from models.v0.load import load_PriorMean_phi; load_PriorMean_phi()"
+	$(GPU_PYTHON) -c "from models.v0.load import load_GPR_H; load_GPR_H()"
+	$(GPU_PYTHON) -c "from models.v0.load import load_GPR_phi; load_GPR_phi()"
+	$(GPU_PYTHON) -c "from models.v0.load import load_GPQR_H; load_GPQR_H()"
+	$(GPU_PYTHON) -c "from models.v0.load import load_GPQR_phi; load_GPQR_phi()"
 
 # Data
 
@@ -114,13 +113,9 @@ models/v0/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrai
 	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
-models/%.py: scripts/models/%.py
+models/v0/%.py: scripts/v0/model/%.py
 	mkdir -p $(@D)
 	cp $< $@
-
-models/requirements.txt: requirements.txt
-	mkdir -p $(@D)
-	grep -E '^(numpy|torch|gpytorch-qr|gpytorch)([>=<!~,; \t]|$$)' $< > $@
 
 
 # Prediction

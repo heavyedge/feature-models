@@ -1,0 +1,4 @@
+numpy
+torch
+gpytorch
+gpytorch-qr==0.8.0

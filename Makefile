@@ -14,6 +14,7 @@ examples: examples-v0
 tests: test-v0
 
 clean:
-	rm -rf _temp
+	shopt -s globstar nullglob
+	rm -rf _temp models/**/*.pt models/**/*.py
 
 include make/v0.mk

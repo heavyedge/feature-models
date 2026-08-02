@@ -1,6 +1,8 @@
 _data
 _temp
-models/v*
+models/**/*.pt
+models/**/*.py
+models/**/.gitattributes
 doc/source/notebooks/
 
 # Byte-compiled / optimized / DLL files
