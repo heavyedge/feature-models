@@ -126,7 +126,7 @@ _temp/v0/%.prior_mean.Xpred_1D.csv: models/v0/predict-prior_mean.py _temp/v0/Xpr
 _temp/v0/%.prior_mean.Xpred_2D.csv: models/v0/predict-prior_mean.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.mean.Xpred_1D.npy: models/predict-mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
+_temp/v0/%.mean.Xpred_1D.csv: models/v0/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
 _temp/%.quantiles.X.npy: models/predict-quantiles.py _temp/X.npy $(MODEL_FILES)
@@ -137,7 +137,6 @@ _temp/%.quantiles.Xpred_1D.npy: models/predict-quantiles.py _temp/Xpred_1D.npy $
 
 _temp/%.quantiles.Xpred_2D.npy: models/predict-quantiles.py _temp/Xpred_2D.npy $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
-
 
 # Window prediction
 

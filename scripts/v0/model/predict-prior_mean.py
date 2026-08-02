@@ -56,7 +56,11 @@ elif args.target == "phi":
 model = load_model(device=device)
 model.eval()
 
-X = pd.read_csv(args.X, index_col=[0, 1, 2]).values
+X = torch.tensor(
+    pd.read_csv(args.X, index_col=[0, 1, 2]).values,
+    dtype=torch.float32,
+    device=device,
+)
 
 ret = []
 with torch.no_grad():

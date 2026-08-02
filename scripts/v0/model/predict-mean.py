@@ -13,7 +13,7 @@ parser.add_argument(
     "X",
     type=pathlib.Path,
     help=(
-        "Input npy file, shape: (*B, N, D). "
+        "Input csv file, shape: (N, D). "
         "The first three dimensions must be "
         "the Gap-to-thickness ratio, "
         "the Capillary number, and "
@@ -33,8 +33,8 @@ parser.add_argument(
     type=pathlib.Path,
     required=True,
     help=(
-        "Output npy file. "
-        "The output shape is (2, *B, N), where the first dimension corresponds to "
+        "Output csv file. "
+        "The output shape is (N, 2), where the first dimension corresponds to "
         "the mean and standard deviation of the posterior distribution."
     ),
 )
@@ -42,12 +42,14 @@ args = parser.parse_args()
 
 try:
     import numpy as np
+    import pandas as pd
     import torch
 except ImportError:
     setup_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.setup")
     setup_module.setup(MODEL_MODULE_PATH)
 
     import numpy as np
+    import pandas as pd
     import torch
 
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
@@ -64,15 +66,16 @@ for module in models[1:]:
     module.eval()
 X_scaler, y_scaler, mean, likelihood, model = models
 
-X = np.load(args.X)
-X_flattened = torch.tensor(
-    X.reshape(-1, X.shape[-1]), dtype=torch.float32, device=device
+X = torch.tensor(
+    pd.read_csv(args.X, index_col=[0, 1, 2]).values,
+    dtype=torch.float32,
+    device=device,
 )
 
 ret = []
 with torch.no_grad():
-    for i in range(0, X_flattened.shape[0], args.chunk_size):
-        X_pred = X_flattened[i : i + args.chunk_size]
+    for i in range(0, X.shape[0], args.chunk_size):
+        X_pred = X[i : i + args.chunk_size]
         X_scaled = X_scaler(X_pred)
         scaled_res_posterior = model(X_scaled)
 
@@ -85,7 +88,6 @@ with torch.no_grad():
 
         posterior_mean = mean(X_pred) + residual_mean
         ret.append(torch.stack((posterior_mean, residual_std)).cpu().numpy())
-
 ret = np.concatenate(ret, axis=1)
-
-np.save(args.out, ret.reshape(2, *X.shape[:-1]))
+df = pd.DataFrame(ret.T, columns=[f"{args.target}_mean", f"{args.target}_std"])
+df.to_csv(args.out, index=False)
