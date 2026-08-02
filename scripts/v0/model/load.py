@@ -132,7 +132,7 @@ def load_PriorMean_H(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "H.prior_mean.pt"
+        path = Path(__file__).parent / "feature_models" / "H.prior_mean.pt"
     return _load_prior_mean(PriorMean_H, path, device=device)
 
 
@@ -149,7 +149,7 @@ def load_PriorMean_phi(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "phi.prior_mean.pt"
+        path = Path(__file__).parent / "feature_models" / "phi.prior_mean.pt"
     return _load_prior_mean(PriorMean_phi, path, device=device)
 
 
@@ -174,7 +174,7 @@ def load_GPR_H(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "H.gpr.pt"
+        path = Path(__file__).parent / "feature_models" / "H.gpr.pt"
     return _load_gpr(
         MinMaxScaler,
         StandardScaler,
@@ -206,7 +206,7 @@ def load_GPR_phi(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "phi.gpr.pt"
+        path = Path(__file__).parent / "feature_models" / "phi.gpr.pt"
     return _load_gpr(
         MinMaxScaler,
         StandardScaler,
@@ -239,7 +239,7 @@ def load_GPQR_H(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "H.gpqr.pt"
+        path = Path(__file__).parent / "feature_models" / "H.gpqr.pt"
     return _load_gpqr(
         MinMaxScaler,
         StandardScaler,
@@ -272,7 +272,7 @@ def load_GPQR_phi(path=None, device=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
-        path = Path(__file__).parent / "phi.gpqr.pt"
+        path = Path(__file__).parent / "feature_models" / "phi.gpqr.pt"
     return _load_gpqr(
         MinMaxScaler,
         StandardScaler,
