@@ -13,7 +13,7 @@ parser.add_argument(
     "X",
     type=pathlib.Path,
     help=(
-        "Input npy file, shape: (*B, N, D). "
+        "Input csv file, shape: (N, D). "
         "The first three dimensions must be "
         "the Gap-to-thickness ratio, "
         "the Capillary number, and "
@@ -28,18 +28,20 @@ parser.add_argument(
     help="Number of samples to process at once.",
 )
 parser.add_argument(
-    "-o", "--out", type=pathlib.Path, required=True, help="Output npy file."
+    "-o", "--out", type=pathlib.Path, required=True, help="Output csv file."
 )
 args = parser.parse_args()
 
 try:
     import numpy as np
+    import pandas as pd
     import torch
 except ImportError:
     setup_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.setup")
     setup_module.setup(MODEL_MODULE_PATH)
 
     import numpy as np
+    import pandas as pd
     import torch
 
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
@@ -54,17 +56,15 @@ elif args.target == "phi":
 model = load_model(device=device)
 model.eval()
 
-X = np.load(args.X)
-X_flattened = torch.tensor(
-    X.reshape(-1, X.shape[-1]), dtype=torch.float32, device=device
-)
+X = pd.read_csv(args.X, index_col=[0, 1, 2]).values
 
 ret = []
 with torch.no_grad():
-    for i in range(0, X_flattened.shape[0], args.chunk_size):
-        X_pred = X_flattened[i : i + args.chunk_size]
+    for i in range(0, X.shape[0], args.chunk_size):
+        X_pred = torch.tensor(
+            X[i : i + args.chunk_size], dtype=torch.float32, device=device
+        )
         pred_mean = model(X_pred)
         ret.append(pred_mean.cpu().numpy())
 ret = np.concatenate(ret, axis=0)
-
-np.save(args.out, ret.reshape(*X.shape[:-1]))
+pd.DataFrame({args.target: ret}).to_csv(args.out)

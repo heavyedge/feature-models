@@ -120,10 +120,10 @@ models/v0/%.py: scripts/v0/model/%.py
 
 # Prediction
 
-_temp/%.prior_mean.Xpred_1D.npy: models/predict-prior_mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
+_temp/v0/%.prior_mean.Xpred_1D.csv: models/v0/predict-prior_mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/%.prior_mean.Xpred_2D.npy: models/predict-prior_mean.py _temp/Xpred_2D.npy $(MODEL_FILES)
+_temp/v0/%.prior_mean.Xpred_2D.csv: models/v0/predict-prior_mean.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
 _temp/%.mean.Xpred_1D.npy: models/predict-mean.py _temp/Xpred_1D.npy $(MODEL_FILES)
