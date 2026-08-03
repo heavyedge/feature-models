@@ -76,6 +76,9 @@ _temp/v0/Xpred_3D-1.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
 _temp/v0/Xpred_3D-2.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number cosine_of_contact_angle --start=-2 --stop=2 --ngrid=$(N_GRID_2) -o $@
 
+_temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.csv _temp/v0/Xpred_2D.csv
+	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
+
 # Prior mean
 
 # ex) models/v0/feature_models/H.prior_mean.pt
@@ -143,22 +146,22 @@ _temp/v0/%.quantiles.Xpred_2D.csv: models/v0/predict-quantiles.py _temp/v0/Xpred
 
 # Window prediction
 
-_temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.csv _temp/v0/Xpred_2D.csv
-	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
-
-_temp/%.pit.Xpred_2D.npy: scripts/joint/write-pit.py _temp/y.csv _temp/%.quantiles.X.npy
+_temp/v0/%.pit.csv: scripts/v0/joint/write-pit.py _temp/v0/ytrain.csv _temp/v0/%.quantiles.X.csv
 	python3 $^ --target $* --quantiles $(QUANTILES) -o $@
 
-_temp/H.marginal.Xpred_2D.npy: scripts/joint/write-marginal.py _temp/H.quantiles.Xpred_2D.npy
+_temp/v0/H.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v0/H.quantiles.Xpred_2D.csv
 	python3 $^ --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
-_temp/phi.marginal.Xpred_2D.npy: scripts/joint/write-marginal.py _temp/phi.quantiles.Xpred_2D.npy
+_temp/v0/phi.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v0/phi.quantiles.Xpred_2D.csv
 	python3 $^ --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
-_temp/%.pit_marginal.Xpred_2D.npz: _temp/%.pit.Xpred_2D.npy _temp/%.marginal.Xpred_2D.npy
-	python3 -c "import numpy as np; pit, marginal = map(np.load, '$^'.split(' ')); np.savez('$@', pit=pit, marginal=marginal)"
+_temp/v0/H_phi.pit.csv: _temp/v0/H.pit.csv _temp/v0/phi.pit.csv
+	python3 -c "import pandas as pd; pit_H, pit_phi = map(lambda f: pd.read_csv(f).values, '$^'.split(' ')); pd.DataFrame({'H': pit_H.flatten(), 'phi': pit_phi.flatten()}).to_csv('$@', index=False)"
 
-_temp/joint_probability.Xpred_2D.npy: scripts/joint/write-joint.py _temp/Xpred_2D.csv _temp/H.pit_marginal.Xpred_2D.npz _temp/phi.pit_marginal.Xpred_2D.npz
+_temp/v0/H_phi.marginal.Xpred_2D.csv: _temp/v0/H.marginal.Xpred_2D.csv _temp/v0/phi.marginal.Xpred_2D.csv
+	python3 -c "import pandas as pd; marginal_H, marginal_phi = map(lambda f: pd.read_csv(f).values, '$^'.split(' ')); pd.DataFrame({'H': marginal_H.flatten(), 'phi': marginal_phi.flatten()}).to_csv('$@', index=False)"
+
+_temp/v0/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v0/H_phi.pit.csv _temp/v0/Xpred_2D.csv _temp/v0/H_phi.marginal.Xpred_2D.csv
 	python3 $^ -o $@
 
 # Examples

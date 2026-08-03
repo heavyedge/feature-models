@@ -21,19 +21,17 @@ parser.add_argument(
     help="Quantile levels for the model.",
 )
 parser.add_argument(
-    "-o", "--out", type=pathlib.Path, required=True, help="Output npz file."
+    "-o", "--out", type=pathlib.Path, required=True, help="Output csv file."
 )
 args = parser.parse_args()
 
 Y_train = pd.read_csv(args.Y)[args.target].to_numpy()
-train_quantiles = np.load(args.train_quantiles)
+train_quantiles = pd.read_csv(args.train_quantiles).values
 quantile_levels = np.array(args.quantiles)
-
 
 u_train = quantile_pit(
     train_quantiles.reshape(-1, train_quantiles.shape[-1]),
     quantile_levels,
     Y_train,
 )
-
-np.save(args.out, u_train)
+pd.DataFrame(dict(pit=u_train)).to_csv(args.out, index=False)

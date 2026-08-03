@@ -2,13 +2,14 @@ import argparse
 import pathlib
 
 import numpy as np
+import pandas as pd
 from pit import quantile_interpolation
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "pred_quantiles",
     type=pathlib.Path,
-    help="npy file of quantile predictions on the prediction grid",
+    help="csv file of quantile predictions on the prediction grid",
 )
 parser.add_argument(
     "--quantiles",
@@ -24,11 +25,11 @@ parser.add_argument(
     help="Threshold for marginal CDF computation",
 )
 parser.add_argument(
-    "-o", "--out", type=pathlib.Path, required=True, help="Output npy file."
+    "-o", "--out", type=pathlib.Path, required=True, help="Output csv file."
 )
 args = parser.parse_args()
 
-pred_quantiles = np.load(args.pred_quantiles)
+pred_quantiles = pd.read_csv(args.pred_quantiles).values
 quantile_levels = np.array(args.quantiles)
 
 threshold = args.threshold
@@ -37,5 +38,5 @@ marginal = quantile_interpolation(
     quantile_levels,
     threshold=threshold,
 )
-
-np.save(args.out, marginal)
+df = pd.DataFrame(dict(marginal_prob=marginal))
+df.to_csv(args.out, index=False)

@@ -6,36 +6,36 @@ import pandas as pd
 from copula import empirical_copula
 
 parser = argparse.ArgumentParser()
+parser.add_argument("pit", type=pathlib.Path, help="PIT csv file.")
 parser.add_argument("X_pred", type=pathlib.Path, help="Prediction grid csv file.")
 parser.add_argument(
-    "pit_marginal",
+    "marginal",
     type=pathlib.Path,
-    nargs="+",
-    help="PIT and marginal distribution npz files.",
+    help="Marginal probability csv files.",
 )
 parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output npy file of joint distribution.",
+    help="Output csv file of joint probability.",
 )
 args = parser.parse_args()
 
 index_col_pred = [
-    "Gap_to_thickness_ratio_idx",
-    "Capillary_number_idx",
-    "Cos_theta_idx",
-    "Slurry",
+    "gap_to_thickness_ratio_idx",
+    "capillary_number_idx",
+    "cosine_of_contact_angle_idx",
 ]
 Xpred = pd.read_csv(args.X_pred, index_col=index_col_pred)
-pit = np.column_stack([np.load(p)["pit"] for p in args.pit_marginal])
-marginal = np.column_stack([np.load(p)["marginal"] for p in args.pit_marginal])
 
-Slurries = Xpred.index.get_level_values("Slurry")
+pit = pd.read_csv(args.pit).values
+marginal = pd.read_csv(args.marginal).values
+
+# Slurries = Xpred.index.get_level_values("Slurry")
 
 joint_probs = np.empty(len(Xpred), dtype=float)
-for slurry in Slurries.unique():
-    ok = Slurries == slurry
-    marginal_slurry = marginal[ok]
-    joint_probs[ok] = empirical_copula(pit, marginal_slurry)
-np.save(args.out, joint_probs)
+for cos in Xpred["cosine_of_contact_angle"].unique():
+    ok = Xpred["cosine_of_contact_angle"] == cos
+    joint_probs[ok] = empirical_copula(pit, marginal[ok])
+df = pd.DataFrame(dict(joint_prob=joint_probs), index=Xpred.index)
+df.to_csv(args.out, index=True)
