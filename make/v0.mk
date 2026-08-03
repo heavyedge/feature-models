@@ -143,8 +143,8 @@ _temp/v0/%.quantiles.Xpred_2D.csv: models/v0/predict-quantiles.py _temp/v0/Xpred
 
 # Window prediction
 
-_temp/delaunay.Xpred_2D.npy: scripts/data/compute-Delaunay.py _temp/X.csv _temp/Xpred_2D.csv
-	python3 $^ --grid Gap_to_thickness_ratio Capillary_number -o $@
+_temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.csv _temp/v0/Xpred_2D.csv
+	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
 
 _temp/%.pit.Xpred_2D.npy: scripts/joint/write-pit.py _temp/y.csv _temp/%.quantiles.X.npy
 	python3 $^ --target $* --quantiles $(QUANTILES) -o $@

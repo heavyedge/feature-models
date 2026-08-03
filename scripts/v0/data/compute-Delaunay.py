@@ -12,33 +12,30 @@ parser.add_argument(
     "--grid",
     type=str,
     nargs="+",
-    choices=["Gap_to_thickness_ratio", "Capillary_number", "Cos_theta"],
+    choices=["gap_to_thickness_ratio", "capillary_number", "cosine_of_contact_angle"],
     help="Grid columns to use for Delaunay triangulation.",
 )
-parser.add_argument("-o", "--out", type=pathlib.Path, help="Output npy file.")
+parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
 
-index_col_true = ["Slurry"]
+index_col_true = [0, "slurry", "name"]
 Xtrue = pd.read_csv(args.X_true, index_col=index_col_true)
 index_col_pred = [
-    "Gap_to_thickness_ratio_idx",
-    "Capillary_number_idx",
-    "Cos_theta_idx",
-    "Slurry",
+    "gap_to_thickness_ratio_idx",
+    "capillary_number_idx",
+    "cosine_of_contact_angle_idx",
 ]
 Xpred = pd.read_csv(args.X_pred, index_col=index_col_pred)
 
-Xtrue_Slurries = Xtrue.index.get_level_values("Slurry")
-Xpred_Slurries = Xpred.index.get_level_values("Slurry")
-
 simplices = np.zeros(len(Xpred), dtype=bool)
-for slurry in Xtrue_Slurries.unique():
-    xtrue_ok = Xtrue_Slurries == slurry
+for cos in Xtrue["cosine_of_contact_angle"].unique():
+    xtrue_ok = Xtrue["cosine_of_contact_angle"] == cos
     xtrue = Xtrue[xtrue_ok][args.grid]
     delaunay = Delaunay(xtrue.to_numpy())
 
-    xpred_ok = Xpred_Slurries == slurry
+    xpred_ok = Xpred["cosine_of_contact_angle"] == cos
     xpred = Xpred[xpred_ok][args.grid]
     simplices[xpred_ok] = delaunay.find_simplex(xpred.to_numpy()) != -1
 
-np.save(args.out, simplices)
+df = pd.DataFrame(simplices, columns=["in_simplex"], index=Xpred.index)
+df.to_csv(args.out, index=True)
