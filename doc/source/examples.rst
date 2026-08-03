@@ -12,25 +12,25 @@ Examples
    :maxdepth: 1
    :caption: Quantile crossing test
 
-   notebooks/Crossing.H.ipynb
-   notebooks/Crossing.phi.ipynb
+   examples/v0/Crossing.H.ipynb
+   examples/v0/Crossing.phi.ipynb
 
 .. toctree::
    :maxdepth: 1
    :caption: Quantile extrapolation test
 
-   notebooks/Extrapolation.H.ipynb
+   examples/v0/Extrapolation.H.ipynb
 
 .. toctree::
    :maxdepth: 1
    :caption: Pinball loss cross validation
 
-   notebooks/CV.H.ipynb
-   notebooks/CV.phi.ipynb
+   examples/v0/CV.H.ipynb
+   examples/v0/CV.phi.ipynb
 
 .. toctree::
    :maxdepth: 1
    :caption: Model results
 
-   notebooks/Models.ipynb
-   notebooks/Window.ipynb
+   examples/v0/Models.ipynb
+   examples/v0/Window.ipynb

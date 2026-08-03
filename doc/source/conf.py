@@ -6,14 +6,14 @@
 import os
 import shutil
 
-notebooks_source = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "notebooks")
+examples_source = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "examples")
 )
-notebooks_dest = os.path.abspath(os.path.join(os.path.dirname(__file__), "notebooks"))
+examples_dest = os.path.abspath(os.path.join(os.path.dirname(__file__), "examples"))
 
-if os.path.exists(notebooks_dest):
-    shutil.rmtree(notebooks_dest)
-shutil.copytree(notebooks_source, notebooks_dest)
+if os.path.exists(examples_dest):
+    shutil.rmtree(examples_dest)
+shutil.copytree(examples_source, examples_dest)
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
