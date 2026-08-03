@@ -169,7 +169,7 @@ examples/v0/Crossing.ipynb: _temp/v0/crossing.DirectMTGPQR_H.csv _temp/v0/crossi
 examples/v0/Extrapolation.ipynb: _temp/v0/extrapolation.CenterGapMTGPQR_H.csv _temp/v0/extrapolation.CenterGapMTGPQR_H_ConstantMean.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-examples/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.npy _temp/cv.CenterGapMTGPQR_%.npy .FORCE
+examples/v0/CV.ipynb: _temp/v0/cv.GPR_H.csv _temp/v0/cv.CenterGapMTGPQR_H.csv _temp/v0/cv.GPR_phi.csv _temp/v0/cv.CenterGapMTGPQR_phi.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/Models.ipynb: _temp/X.csv _temp/y.csv _temp/Xpred_1D.csv _temp/H.prior_mean.Xpred_1D.npy _temp/phi.prior_mean.Xpred_1D.npy _temp/H.mean.Xpred_1D.npy _temp/phi.mean.Xpred_1D.npy _temp/H.quantiles.Xpred_1D.npy _temp/phi.quantiles.Xpred_1D.npy .FORCE
