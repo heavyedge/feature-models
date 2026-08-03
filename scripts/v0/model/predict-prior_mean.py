@@ -71,4 +71,4 @@ with torch.no_grad():
         pred_mean = model(X_pred)
         ret.append(pred_mean.cpu().numpy())
 ret = np.concatenate(ret, axis=0)
-pd.DataFrame({args.target: ret}).to_csv(args.out)
+pd.DataFrame({args.target: ret}).to_csv(args.out, index=False)
