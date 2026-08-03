@@ -166,7 +166,7 @@ _temp/v0/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v
 examples/v0/Crossing.ipynb: _temp/v0/crossing.DirectMTGPQR_H.csv _temp/v0/crossing.DirectMTGPQR_phi.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-examples/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.CenterGapMTGPQR_%.npy _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.npy .FORCE
+examples/v0/Extrapolation.ipynb: _temp/v0/extrapolation.CenterGapMTGPQR_H.csv _temp/v0/extrapolation.CenterGapMTGPQR_H_ConstantMean.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/CV.%.ipynb: _temp/X.csv _temp/y.csv _temp/cv.GPR_%.npy _temp/cv.CenterGapMTGPQR_%.npy .FORCE

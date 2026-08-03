@@ -5,6 +5,7 @@ import pathlib
 import model.gpqr as model_module  # Needs PYTHONPATH=scripts/v0
 import model.prior as prior_module  # Needs PYTHONPATH=scripts/v0
 import model.scale as scaler_module  # Needs PYTHONPATH=scripts/v0
+import numpy as np
 import pandas as pd
 import torch
 from cv import cv_gpqr, split_extrapolate_data
@@ -121,7 +122,7 @@ model = model_class(
     batch_shape=batch_shape,
 ).to(device)
 
-(ev,) = cv_gpqr(
+ev = cv_gpqr(
     x_train,
     y_train,
     x_test,
@@ -135,4 +136,13 @@ model = model_class(
     n_epochs=args.n_epochs,
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
-pd.DataFrame(ev, columns=["test_pinball_loss"]).to_csv(args.out, index=False)
+_, n_epochs, n_folds = ev.shape
+ev_df = pd.DataFrame(
+    {
+        "epoch": np.repeat(np.arange(1, n_epochs + 1), n_folds),
+        "fold": np.tile(np.arange(1, n_folds + 1), n_epochs),
+        "test_mll_loss": ev[0].reshape(-1),
+        "test_pinball_loss": ev[1].reshape(-1),
+    }
+)
+ev_df.to_csv(args.out, index=False)
