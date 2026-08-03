@@ -38,7 +38,7 @@ models-v0: $(MODEL_FILES)
 
 examples-v0: $(wildcard examples/v0/*)
 
-test-v0:
+test-v0: $(MODEL_FILES)
 	$(GPU_PYTHON) -c "from models.v0.load import load_PriorMean_H; load_PriorMean_H()"
 	$(GPU_PYTHON) -c "from models.v0.load import load_PriorMean_phi; load_PriorMean_phi()"
 	$(GPU_PYTHON) -c "from models.v0.load import load_GPR_H; load_GPR_H()"
@@ -166,7 +166,7 @@ _temp/v0/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v
 
 # Examples
 
-examples/Crossing.%.ipynb: _temp/X.csv _temp/y.csv _temp/crossing.DirectMTGPQR_%.csv .FORCE
+examples/v0/Crossing.ipynb: _temp/v0/crossing.DirectMTGPQR_H.csv _temp/v0/crossing.DirectMTGPQR_phi.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/Extrapolation.%.ipynb: _temp/X.csv _temp/y.csv _temp/extrapolation.CenterGapMTGPQR_%.npy _temp/extrapolation.CenterGapMTGPQR_%_ConstantMean.npy .FORCE
