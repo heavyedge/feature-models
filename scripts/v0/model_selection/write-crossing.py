@@ -39,8 +39,7 @@ parser.add_argument(
 parser.add_argument(
     "X_test",
     type=pathlib.Path,
-    nargs="+",
-    help="Predictor csv files for testing.",
+    help="Predictor csv file for testing.",
 )
 parser.add_argument("--target", required=True)
 parser.add_argument("--model", required=True)
@@ -76,10 +75,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 X = torch.tensor(pd.read_csv(args.X).values).float().to(device)
 y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
 
-X_tests = []
-for path in args.X_test:
-    Xtest_df = pd.read_csv(path, index_col=[0, 1, 2])
-    X_tests.append(torch.tensor(Xtest_df.values).float().to(device))
+X_test = (
+    torch.tensor(pd.read_csv(args.X_test, index_col=[0, 1, 2]).values)
+    .float()
+    .to(device)
+)
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]
@@ -112,7 +112,7 @@ model = model_class(
 crs, mcs, mxs = quantile_crossing(
     X,
     y,
-    X_tests,
+    X_test,
     X_scaler,
     y_scaler,
     mean,
@@ -121,17 +121,12 @@ crs, mcs, mxs = quantile_crossing(
     n_epochs=args.n_epochs,
     logger=lambda msg: logger.info(f"{args.out}: {msg}"),
 )
-
-# The returned arrays have shape (N_TESTS, N_EPOCHS).  Store one
-# test/epoch combination per row, matching the other model-selection outputs.
-n_tests, n_epochs = crs.shape
 crossing_df = pd.DataFrame(
-    {
-        "epoch": np.tile(np.arange(1, n_epochs + 1), n_tests),
-        "test": np.repeat(np.arange(1, n_tests + 1), n_epochs),
-        "crossing_rate": crs.reshape(-1),
-        "mean_crossing": mcs.reshape(-1),
-        "max_crossing": mxs.reshape(-1),
-    }
+    dict(
+        epoch=np.arange(1, args.n_epochs + 1),
+        crossing_rate=crs,
+        mean_crossing=mcs,
+        max_crossing=mxs,
+    )
 )
 crossing_df.to_csv(args.out, index=False)

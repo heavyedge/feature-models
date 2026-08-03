@@ -6,6 +6,7 @@ models/**/.gitattributes
 doc/source/notebooks/
 
 slurm*
+sbatch*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -70,11 +70,8 @@ _temp/v0/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
 _temp/v0/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number --ngrid $(N_GRID_1) -o $@
 
-_temp/v0/Xpred_3D-1.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
+_temp/v0/Xpred_3D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number cosine_of_contact_angle --start=0 --stop=1 --ngrid=$(N_GRID_2) -o $@
-
-_temp/v0/Xpred_3D-2.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
-	python3 $^ --target gap_to_thickness_ratio capillary_number cosine_of_contact_angle --start=-2 --stop=2 --ngrid=$(N_GRID_2) -o $@
 
 _temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.csv _temp/v0/Xpred_2D.csv
 	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
@@ -88,7 +85,7 @@ models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v
 
 # Model selection
 
-_temp/v0/crossing.DirectMTGPQR_%.csv: scripts/v0/model_selection/write-crossing.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/Xpred_3D-1.csv _temp/v0/Xpred_3D-2.csv
+_temp/v0/crossing.DirectMTGPQR_%.csv: scripts/v0/model_selection/write-crossing.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/Xpred_3D.csv
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 _temp/v0/extrapolation.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
