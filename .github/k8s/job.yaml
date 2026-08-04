@@ -33,9 +33,11 @@ spec:
             requests:
               memory: "16Gi"
               cpu: "${CPU_REQUEST}"
+              nvidia.com/gpu: "${GPU_REQUEST}"
             limits:
               memory: "16Gi"
               cpu: "${CPU_REQUEST}"
+              nvidia.com/gpu: "${GPU_REQUEST}"
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -170,8 +172,6 @@ spec:
               value: "${DEPLOY_MODE}"
             - name: MAKE_JOBS
               value: "${MAKE_JOBS}"
-            - name: TRAIN_JOBS
-              value: "${TRAIN_JOBS}"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
