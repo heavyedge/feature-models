@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 pip install uv
 curl -LsSf https://hf.co/cli/install.sh | bash
 "$HOME/.local/bin/hf" auth login --token "$HUGGINGFACE_TOKEN"
