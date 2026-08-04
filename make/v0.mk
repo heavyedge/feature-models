@@ -85,31 +85,36 @@ models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v
 
 # Model selection
 
-_temp/v0/crossing.DirectMTGPQR_%.csv: scripts/v0/model_selection/write-crossing.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/Xpred_3D.csv
+benchmarks/v0/crossing.DirectMTGPQR_%.csv: scripts/v0/model_selection/write-crossing.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/Xpred_3D.csv
+	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/v0/extrapolation.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
+benchmarks/v0/extrapolation.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
+	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/v0/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
+benchmarks/v0/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
+	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/v0/cv.GPR_%.csv: scripts/v0/model_selection/write-cv.gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
+benchmarks/v0/cv.GPR_%.csv: scripts/v0/model_selection/write-cv.gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
+	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model GPR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
 
-_temp/v0/cv.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-cv.gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
+benchmarks/v0/cv.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-cv.gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
+	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
 # Model
 
-_temp/v0/best-config.%.mean.epoch: scripts/v0/train/write-best.py _temp/v0/cv.GPR_%.csv
+_temp/v0/best-config.%.mean.epoch: scripts/v0/train/write-best.py benchmarks/v0/cv.GPR_%.csv
 	python3 $^ --target epoch -o $@ 0
 
 models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/best-config.%.mean.epoch
 	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(lastword $^)) -o $@
 
-_temp/v0/best-config.%.quantiles.epoch: scripts/v0/train/write-best.py _temp/v0/cv.CenterGapMTGPQR_%.csv
+_temp/v0/best-config.%.quantiles.epoch: scripts/v0/train/write-best.py benchmarks/v0/cv.CenterGapMTGPQR_%.csv
 	python3 $^ --target epoch -o $@ 0
 
 models/v0/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/best-config.%.quantiles.epoch
@@ -163,13 +168,13 @@ _temp/v0/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v
 
 # Examples
 
-examples/v0/Crossing.ipynb: _temp/v0/crossing.DirectMTGPQR_H.csv _temp/v0/crossing.DirectMTGPQR_phi.csv .FORCE
+examples/v0/Crossing.ipynb: benchmarks/v0/crossing.DirectMTGPQR_H.csv benchmarks/v0/crossing.DirectMTGPQR_phi.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-examples/v0/Extrapolation.ipynb: _temp/v0/extrapolation.CenterGapMTGPQR_H.csv _temp/v0/extrapolation.CenterGapMTGPQR_H_ConstantMean.csv .FORCE
+examples/v0/Extrapolation.ipynb: benchmarks/v0/extrapolation.CenterGapMTGPQR_H.csv benchmarks/v0/extrapolation.CenterGapMTGPQR_H_ConstantMean.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-examples/v0/CV.ipynb: _temp/v0/cv.GPR_H.csv _temp/v0/cv.CenterGapMTGPQR_H.csv _temp/v0/cv.GPR_phi.csv _temp/v0/cv.CenterGapMTGPQR_phi.csv .FORCE
+examples/v0/CV.ipynb: benchmarks/v0/cv.GPR_H.csv benchmarks/v0/cv.CenterGapMTGPQR_H.csv benchmarks/v0/cv.GPR_phi.csv benchmarks/v0/cv.CenterGapMTGPQR_phi.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v0/Models.ipynb: _temp/v0/X.csv _temp/v0/y.csv _temp/v0/Xpred_1D.csv _temp/v0/H.prior_mean.Xpred_1D.csv _temp/v0/phi.prior_mean.Xpred_1D.csv _temp/v0/H.mean.Xpred_1D.csv _temp/v0/phi.mean.Xpred_1D.csv _temp/v0/H.quantiles.Xpred_1D.csv _temp/v0/phi.quantiles.Xpred_1D.csv .FORCE

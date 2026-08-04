@@ -1,5 +1,6 @@
 _data
 _temp
+benchmarks
 models/**/*.pt
 models/**/*.py
 models/**/.gitattributes
