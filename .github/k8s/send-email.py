@@ -14,10 +14,13 @@ def env(name, default=""):
 
 class BuildStatus(IntEnum):
     SUCCESS = 0
-    SETUP_FAILED = 1
-    BUILD_FAILED = 2
-    TEST_FAILED = 3
-    DOC_BUILD_FAILED = 4
+    DEPENDENCY_INSTALL_FAILED = 1
+    CUDA_DEVICE_DISCOVERY_FAILED = 2
+    MAKE_JOBS_DISCOVERY_FAILED = 3
+    CUDA_PREFLIGHT_FAILED = 4
+    TRAIN_FAILED = 5
+    TEST_FAILED = 6
+    EXAMPLE_FAILED = 7
 
 
 class DeployStatus(IntFlag):
