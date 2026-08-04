@@ -38,12 +38,14 @@ COPY . .
 ARG IMAGE_CREATED
 ARG IMAGE_VERSION
 ARG IMAGE_REVISION
+ARG IMAGE_REF_NAME
 LABEL org.opencontainers.image.created="${IMAGE_CREATED}" \
       org.opencontainers.image.authors="Jisoo Song <jeesoo9595@snu.ac.kr>" \
       org.opencontainers.image.source="https://github.com/heavyedge/feature-models" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${IMAGE_REVISION}" \
       org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.ref.name="${IMAGE_REF_NAME}" \
       org.opencontainers.image.title="HeavyEdge Feature Models (dev)" \
       org.opencontainers.image.description="Development environment for heavyedge/feature-models."
 

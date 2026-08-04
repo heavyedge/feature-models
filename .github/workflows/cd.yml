@@ -63,6 +63,8 @@ jobs:
           provenance: false
           cache-from: type=gha,scope=feature-model-dev
           cache-to: type=gha,mode=max,scope=feature-model-dev
+          build-args: |
+            IMAGE_REF_NAME=${{ steps.image-metadata.outputs.tag }}
           tags: ghcr.io/${{ github.repository_owner }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}
 
   resolve-variables:
@@ -328,7 +330,7 @@ jobs:
           DOCKER_NAMESPACE: ${{ github.repository_owner }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
-          MARJOR_VERSION: ${{ needs.resolve-variables.outputs.major_version }}
+          MAJOR_VERSION: ${{ needs.resolve-variables.outputs.major_version }}
           BUILD_MODE: ${{ needs.resolve-variables.outputs.build_mode }}
           DEPLOY_MODE: ${{ needs.resolve-variables.outputs.deploy_mode }}
           MAKE_JOBS: ${{ vars.MAKE_JOBS }}

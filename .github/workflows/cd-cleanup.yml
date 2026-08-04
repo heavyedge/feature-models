@@ -171,6 +171,7 @@ jobs:
 
           package_versions_url="${GITHUB_API_URL%/}/orgs/${PACKAGE_OWNER}/packages/container/${PACKAGE_NAME}/versions"
           version_id=""
+          version_tags=""
           page=1
 
           while :; do
@@ -180,8 +181,12 @@ jobs:
               -H "X-GitHub-Api-Version: 2022-11-28" \
               --get --data-urlencode "per_page=100" --data-urlencode "page=${page}" \
               "${package_versions_url}")"
-            version_id="$(printf '%s' "${versions}" | jq -r --arg image_tag "${IMAGE_TAG}" \
-              '([.[] | select(.metadata.container.tags | index($image_tag)) | .id] | .[0]) // empty')"
+            matching_version="$(printf '%s' "${versions}" | jq -c --arg image_tag "${IMAGE_TAG}" \
+              '([.[] | select(.metadata.container.tags | index($image_tag)) | { id, tags: .metadata.container.tags }] | .[0]) // empty')"
+            if [ -n "${matching_version}" ]; then
+              version_id="$(printf '%s' "${matching_version}" | jq -r '.id')"
+              version_tags="$(printf '%s' "${matching_version}" | jq -c '.tags')"
+            fi
 
             if [ -n "${version_id}" ] || [ "$(printf '%s' "${versions}" | jq 'length')" -eq 0 ]; then
               break
@@ -192,6 +197,12 @@ jobs:
 
           if [ -z "${version_id}" ]; then
             echo "Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG} is already absent."
+            exit 0
+          fi
+
+          if ! jq -e --arg image_tag "${IMAGE_TAG}" \
+            'length == 1 and .[0] == $image_tag' <<< "${version_tags}" > /dev/null; then
+            echo "Docker image version ${version_id} has additional tags (${version_tags}); skipping deletion to preserve them." >&2
             exit 0
           fi
 
@@ -206,31 +217,13 @@ jobs:
             -X DELETE "${package_versions_url}/${version_id}" || true)"
 
           if [ "${delete_status}" = "204" ] || [ "${delete_status}" = "404" ]; then
-            echo "Deleted Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}."
+            echo "Deleted Docker image version for ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}."
             exit 0
           fi
 
           error_message="$(jq -r '.message // empty' "${delete_response}" 2>/dev/null || true)"
-          if [ "${delete_status}" = "400" ] &&
-            [ "${error_message}" = "You cannot delete the last tagged version of a package. You must delete the package instead." ]; then
-            package_url="${GITHUB_API_URL%/}/orgs/${PACKAGE_OWNER}/packages/container/${PACKAGE_NAME}"
-            package_delete_status="$(curl -sS -D "${delete_headers}" -o "${delete_response}" -w "%{http_code}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${PACKAGE_TOKEN}" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              -X DELETE "${package_url}" || true)"
-
-            if [ "${package_delete_status}" = "204" ] || [ "${package_delete_status}" = "404" ]; then
-              echo "Deleted last Docker image tag by deleting package ${PACKAGE_OWNER}/${PACKAGE_NAME}."
-              exit 0
-            fi
-
-            delete_status="${package_delete_status}"
-            error_message="$(jq -r '.message // empty' "${delete_response}" 2>/dev/null || true)"
-          fi
-
           request_id="$(awk 'BEGIN { IGNORECASE = 1 } /^x-github-request-id:/ { print $2 }' "${delete_headers}" | tr -d '\r' | tail -n 1)"
-          echo "Could not delete Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}; GitHub API returned HTTP ${delete_status}${error_message:+: ${error_message}}${request_id:+ (request ID: ${request_id})}." >&2
+          echo "Could not delete Docker image version for ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}; GitHub API returned HTTP ${delete_status}${error_message:+: ${error_message}}${request_id:+ (request ID: ${request_id})}." >&2
           exit 1
 
   finalize-cleanup-check:
