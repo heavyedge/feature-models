@@ -24,27 +24,26 @@ models/v0/feature_models/H.gpr.pt \
 models/v0/feature_models/phi.gpr.pt \
 models/v0/feature_models/H.gpqr.pt \
 models/v0/feature_models/phi.gpqr.pt \
-models/v0/prior.py \
-models/v0/setup.py \
-models/v0/scale.py \
-models/v0/gpr.py \
-models/v0/gpqr.py \
-models/v0/load.py \
-models/v0/predict-prior_mean.py \
-models/v0/predict-mean.py \
-models/v0/predict-quantiles.py
+models/v0/feature_models/prior.py \
+models/v0/feature_models/scale.py \
+models/v0/feature_models/gpr.py \
+models/v0/feature_models/gpqr.py \
+models/v0/feature_models/load.py \
+models/v0/feature_models/predict-prior_mean.py \
+models/v0/feature_models/predict-mean.py \
+models/v0/feature_models/predict-quantiles.py
 
 models-v0: $(MODEL_FILES)
 
 examples-v0: $(wildcard examples/v0/*)
 
 test-v0: $(MODEL_FILES)
-	$(GPU_PYTHON) -c "from models.v0.load import load_PriorMean_H; load_PriorMean_H()"
-	$(GPU_PYTHON) -c "from models.v0.load import load_PriorMean_phi; load_PriorMean_phi()"
-	$(GPU_PYTHON) -c "from models.v0.load import load_GPR_H; load_GPR_H()"
-	$(GPU_PYTHON) -c "from models.v0.load import load_GPR_phi; load_GPR_phi()"
-	$(GPU_PYTHON) -c "from models.v0.load import load_GPQR_H; load_GPQR_H()"
-	$(GPU_PYTHON) -c "from models.v0.load import load_GPQR_phi; load_GPQR_phi()"
+	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_PriorMean_H; load_PriorMean_H()"
+	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_PriorMean_phi; load_PriorMean_phi()"
+	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPR_H; load_GPR_H()"
+	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPR_phi; load_GPR_phi()"
+	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPQR_H; load_GPQR_H()"
+	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPQR_phi; load_GPQR_phi()"
 
 # Data
 
@@ -121,29 +120,29 @@ models/v0/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv
 	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
 
-models/v0/%.py: scripts/v0/model/%.py
+models/v0/feature_models/%.py: scripts/v0/model/%.py
 	mkdir -p $(@D)
 	cp $< $@
 
 
 # Prediction
 
-_temp/v0/%.prior_mean.Xpred_1D.csv: models/v0/predict-prior_mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
+_temp/v0/%.prior_mean.Xpred_1D.csv: models/v0/feature_models/predict-prior_mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/v0/%.prior_mean.Xpred_2D.csv: models/v0/predict-prior_mean.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
+_temp/v0/%.prior_mean.Xpred_2D.csv: models/v0/feature_models/predict-prior_mean.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/v0/%.mean.Xpred_1D.csv: models/v0/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
+_temp/v0/%.mean.Xpred_1D.csv: models/v0/feature_models/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/v0/%.quantiles.X.csv: models/v0/predict-quantiles.py _temp/v0/Xpred.csv $(MODEL_FILES)
+_temp/v0/%.quantiles.X.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/v0/%.quantiles.Xpred_1D.csv: models/v0/predict-quantiles.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
+_temp/v0/%.quantiles.Xpred_1D.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/v0/%.quantiles.Xpred_2D.csv: models/v0/predict-quantiles.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
+_temp/v0/%.quantiles.Xpred_2D.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 # Window prediction

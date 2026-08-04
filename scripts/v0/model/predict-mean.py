@@ -3,6 +3,10 @@ import importlib
 import pathlib
 import sys
 
+import numpy as np
+import pandas as pd
+import torch
+
 MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
 
@@ -35,18 +39,6 @@ parser.add_argument(
     help="Output csv file.",
 )
 args = parser.parse_args()
-
-try:
-    import numpy as np
-    import pandas as pd
-    import torch
-except ImportError:
-    setup_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.setup")
-    setup_module.setup(MODEL_MODULE_PATH)
-
-    import numpy as np
-    import pandas as pd
-    import torch
 
 load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
 
