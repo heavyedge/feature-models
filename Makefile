@@ -5,7 +5,7 @@
 # Dummy target to ensure that prerequisite files are built.
 .FORCE:
 
-all: models examples tests
+all: models examples
 
 models: models-v0
 
