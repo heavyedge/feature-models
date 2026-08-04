@@ -48,5 +48,6 @@ else
   else
     echo "Uploaded ${asset_name} to release ${GITHUB_REF_NAME}."
   fi
+fi
 
 exit "$deploy_status"
