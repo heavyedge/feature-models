@@ -45,8 +45,10 @@ jobs:
 
     steps:
 
-      - name: get repo
-        uses: actions/checkout@v3
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
       - name: set up Python
         uses: actions/setup-python@v4
@@ -157,7 +159,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: trained-models
+          name: models
           path: models
 
       - name: install package
