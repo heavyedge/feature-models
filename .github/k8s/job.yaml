@@ -154,11 +154,6 @@ spec:
               value: "${GITHUB_DISPATCH_REF}"
             - name: SMTP_NOTIFY_RECIPIENT
               value: "${SMTP_NOTIFY_RECIPIENT}"
-            - name: LABELS_V1_GDRIVE
-              valueFrom:
-                secretKeyRef:
-                  name: gdrive
-                  key: LABELS_V1_GDRIVE
             - name: HUGGINGFACE_TOKEN
               valueFrom:
                 secretKeyRef:
