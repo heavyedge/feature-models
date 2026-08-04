@@ -159,6 +159,11 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          name: data
+          path: _data/v1
+
+      - uses: actions/download-artifact@v4
+        with:
           name: models
           path: models
 
