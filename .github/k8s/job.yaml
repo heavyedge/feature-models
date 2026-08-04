@@ -162,18 +162,12 @@ spec:
                 secretKeyRef:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
+            - name: MAJOR_VERSION
+              value: "${MAJOR_VERSION}"
             - name: BUILD_MODE
               value: "${BUILD_MODE}"
             - name: DEPLOY_MODE
               value: "${DEPLOY_MODE}"
-            - name: DOC_BUILD_MODE
-              value: "${DOC_BUILD_MODE}"
-            - name: DOC_DEPLOY_MODE
-              value: "${DOC_DEPLOY_MODE}"
-            - name: UPSTREAM_REVISION
-              value: "${UPSTREAM_REVISION}"
-            - name: UPSTREAM_REPO_ID
-              value: "${UPSTREAM_REPO_ID}"
             - name: MAKE_JOBS
               value: "${MAKE_JOBS}"
             - name: TRAIN_JOBS

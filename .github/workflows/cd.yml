@@ -69,12 +69,9 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
+      major_version: ${{ steps.configuration.outputs.major_version }}
       build_mode: ${{ steps.configuration.outputs.build_mode }}
       deploy_mode: ${{ steps.configuration.outputs.deploy_mode }}
-      doc_build_mode: ${{ steps.configuration.outputs.doc_build_mode }}
-      doc_deploy_mode: ${{ steps.configuration.outputs.doc_deploy_mode }}
-      upstream_revision: ${{ steps.configuration.outputs.upstream_revision }}
-      upstream_repo_id: ${{ steps.configuration.outputs.upstream_repo_id }}
       email_recipient: ${{ steps.email.outputs.email }}
 
     steps:
@@ -281,16 +278,6 @@ jobs:
             --namespace="$KUBE_NAMESPACE" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Create Google Drive link secret
-        env:
-          LABELS_V1_GDRIVE: ${{ secrets.LABELS_V1_GDRIVE }}
-          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
-        run: |
-          kubectl create secret generic gdrive \
-            --from-literal=LABELS_V1_GDRIVE="$LABELS_V1_GDRIVE" \
-            --namespace="$KUBE_NAMESPACE" \
-            --dry-run=client -o yaml | kubectl apply -f -
-
       - name: Create Hugging Face token secret
         env:
           HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
@@ -339,15 +326,12 @@ jobs:
           DOCKER_NAMESPACE: ${{ github.repository_owner }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
+          MARJOR_VERSION: ${{ needs.resolve-variables.outputs.major_version }}
           BUILD_MODE: ${{ needs.resolve-variables.outputs.build_mode }}
           DEPLOY_MODE: ${{ needs.resolve-variables.outputs.deploy_mode }}
-          DOC_BUILD_MODE: ${{ needs.resolve-variables.outputs.doc_build_mode }}
-          DOC_DEPLOY_MODE: ${{ needs.resolve-variables.outputs.doc_deploy_mode }}
           MAKE_JOBS: ${{ vars.MAKE_JOBS }}
           TRAIN_JOBS: ${{ vars.TRAIN_JOBS }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
-          UPSTREAM_REVISION: ${{ needs.resolve-variables.outputs.upstream_revision }}
-          UPSTREAM_REPO_ID: ${{ needs.resolve-variables.outputs.upstream_repo_id }}
           GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           SMTP_NOTIFY_RECIPIENT: ${{ needs.resolve-variables.outputs.email_recipient }}
