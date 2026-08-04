@@ -69,8 +69,8 @@ jobs:
         with:
           name: data
           path: |
-            _data/v1/dimless.csv
-            _data/v1/shape_features/mean_profiles.csv
+            _data/v1/dimless/**
+            _data/v1/shape_features/**
           retention-days: 1
 
       - uses: actions/upload-artifact@v4
