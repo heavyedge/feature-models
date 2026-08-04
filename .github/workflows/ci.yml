@@ -159,11 +159,6 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: data
-          path: _data/v1
-
-      - uses: actions/download-artifact@v4
-        with:
           name: models
           path: models
 
@@ -174,4 +169,4 @@ jobs:
           done
 
       - name: test models in inference environment
-        run: make tests
+        run: HEAVYEDGE_TEST_MODE=1 make tests
