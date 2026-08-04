@@ -35,9 +35,9 @@ required_vars="
 GITHUB_APP_TOKEN
 GITHUB_REPOSITORY
 GITHUB_DISPATCH_REF
-GPU_BUILD_CHECK_RUN_ID
+BUILD_CHECK_RUN_ID
 CLEANUP_CHECK_RUN_ID
-GPU_BUILD_CONCLUSION
+BUILD_CONCLUSION
 IMAGE_TAG
 "
 
@@ -52,25 +52,25 @@ done
 if ! cleanup_payload="$(
   jq -n \
     --arg ref "${GITHUB_DISPATCH_REF}" \
-    --arg gpu_build_check_run_id "${GPU_BUILD_CHECK_RUN_ID}" \
+    --arg build_check_run_id "${BUILD_CHECK_RUN_ID}" \
     --arg cleanup_check_run_id "${CLEANUP_CHECK_RUN_ID}" \
-    --arg gpu_build_conclusion "${GPU_BUILD_CONCLUSION}" \
-    --arg upload_model_check_run_id "${UPLOAD_MODEL_CHECK_RUN_ID:-}" \
-    --arg upload_model_conclusion "${UPLOAD_MODEL_CONCLUSION:-failure}" \
-    --arg upload_doc_check_run_id "${UPLOAD_DOC_CHECK_RUN_ID:-}" \
-    --arg upload_doc_conclusion "${UPLOAD_DOC_CONCLUSION:-failure}" \
+    --arg build_conclusion "${BUILD_CONCLUSION}" \
+    --arg deploy_check_run_id "${DEPLOY_CHECK_RUN_ID:-}" \
+    --arg deploy_conclusion "${DEPLOY_CONCLUSION:-failure}" \
+    --arg doc_deploy_check_run_id "${DOC_DEPLOY_CHECK_RUN_ID:-}" \
+    --arg doc_deploy_conclusion "${DOC_DEPLOY_CONCLUSION:-failure}" \
     --arg image_tag "${IMAGE_TAG}" \
     --arg kubernetes_job_name "${KUBERNETES_JOB_NAME:-}" \
     '{
       ref: $ref,
       inputs: {
-        gpu_build_check_run_id: $gpu_build_check_run_id,
+        build_check_run_id: $build_check_run_id,
         cleanup_check_run_id: $cleanup_check_run_id,
-        gpu_build_conclusion: $gpu_build_conclusion,
-        upload_model_check_run_id: $upload_model_check_run_id,
-        upload_model_conclusion: $upload_model_conclusion,
-        upload_doc_check_run_id: $upload_doc_check_run_id,
-        upload_doc_conclusion: $upload_doc_conclusion,
+        build_conclusion: $build_conclusion,
+        deploy_check_run_id: $deploy_check_run_id,
+        deploy_conclusion: $deploy_conclusion,
+        doc_deploy_check_run_id: $doc_deploy_check_run_id,
+        doc_deploy_conclusion: $doc_deploy_conclusion,
         image_tag: $image_tag,
         kubernetes_job_name: $kubernetes_job_name
       }
@@ -83,46 +83,4 @@ if ! dispatch_workflow "cd-cleanup.yml" "${cleanup_payload}"; then
   exit 3
 fi
 
-if [ "${UPLOAD_DOC_CONCLUSION:-failure}" = "success" ] && [ -n "${DOC_BRANCH:-}" ]; then
-  case "${MODEL_MODE:-}" in
-    test|release|reuse) ;;
-    *)
-      echo "::error::Missing or unsupported MODEL_MODE for doc.yml dispatch." >&2
-      exit 1
-      ;;
-  esac
-
-  if ! doc_payload="$(
-    jq -n \
-      --arg ref "${GITHUB_DISPATCH_REF}" \
-      --arg doc_branch "${DOC_BRANCH}" \
-      --arg push_doc "${PUSH_DOC:-0}" \
-      --arg doc_dir "${DOC_DIR:-}" \
-      --arg doc_version "${DOC_VERSION:-}" \
-      --arg model_mode "${MODEL_MODE}" \
-      --arg model_revision "${MODEL_REVISION:-}" \
-      --arg model_repo_id "${MODEL_REPO_ID:-}" \
-      '{
-        ref: $ref,
-        inputs: {
-          doc_branch: $doc_branch,
-          push_doc: $push_doc,
-          doc_dir: $doc_dir,
-          doc_version: $doc_version,
-          model_mode: $model_mode,
-          model_revision: $model_revision,
-          model_repo_id: $model_repo_id
-        }
-      }'
-  )"; then
-    exit 2
-  fi
-
-  if ! dispatch_workflow "doc.yml" "${doc_payload}"; then
-    exit 3
-  fi
-else
-  echo "Skipping doc.yml dispatch because no documentation branch was pushed."
-fi
-
-echo "Dispatched post-deploy workflows for image tag ${IMAGE_TAG} on ref ${GITHUB_DISPATCH_REF}."
+echo "Dispatched post-deploy workflows on ref ${GITHUB_DISPATCH_REF}."

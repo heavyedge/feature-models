@@ -6,8 +6,7 @@ metadata:
   annotations:
     creator: "${KUBE_USERNAME}"
 spec:
-  ttlSecondsAfterFinished: 1800
-  activeDeadlineSeconds: 21600
+  ttlSecondsAfterFinished: ${TTL_SECONDS_AFTER_FINISHED}
   backoffLimit: 0
   template:
     metadata:
@@ -32,13 +31,11 @@ spec:
           imagePullPolicy: Always
           resources:
             requests:
-              memory: "4Gi"
+              memory: "16Gi"
               cpu: "${CPU_REQUEST}"
-              nvidia.com/gpu: "${GPU_REQUEST}"
             limits:
               memory: "16Gi"
               cpu: "${CPU_REQUEST}"
-              nvidia.com/gpu: "${GPU_REQUEST}"
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -46,82 +43,55 @@ spec:
 
               python .github/k8s/send-email.py --status "Started" || true
 
-              job_log_dir="${JOB_LOG_DIR:-/tmp/heavyedge-deploy-logs}"
-              mkdir -p "$job_log_dir"
-              build_log_file="$job_log_dir/gpu-build.log"
-              app_token_log_file="$job_log_dir/github-app-token.log"
-              deploy_log_file="$job_log_dir/deploy.log"
-              dispatch_log_file="$job_log_dir/deploy-dispatch.log"
-
-              run_and_log() {
-                command_label="$1"
-                log_file="$2"
-                shift 2
-
-                printf '$ %s\n' "$command_label" | tee "$log_file"
-                status_file="${log_file}.status"
-                rm -f "$status_file"
-                (
-                  "$@"
-                  command_status=$?
-                  printf '%s\n' "$command_status" > "$status_file"
-                  exit "$command_status"
-                ) 2>&1 | tee -a "$log_file"
-                if [ -s "$status_file" ]; then
-                  command_status="$(cat "$status_file")"
-                else
-                  command_status=1
-                fi
-                rm -f "$status_file"
-                return "$command_status"
-              }
-
+              build_log_dir="$(mktemp -d)"
+              build_log_pipe="$build_log_dir/output"
+              mkfifo "$build_log_pipe"
+              tee < "$build_log_pipe" &
+              build_log_pid=$!
               build_status=0
-              run_and_log "sh .github/k8s/build.sh" "$build_log_file" sh .github/k8s/build.sh || build_status=$?
+              sh .github/k8s/build.sh >"$build_log_pipe" 2>&1 || build_status=$?
+              wait "$build_log_pid" || true
+              rm -rf "$build_log_dir"
+              if [ "$build_status" -eq 0 ]; then
+                build_conclusion=success
+              else
+                build_conclusion=failure
+              fi
+              export BUILD_CONCLUSION="$build_conclusion"
 
               token_status=0
-              printf '%s\n' '$ sh .github/k8s/app-token.sh' > "$app_token_log_file"
-              GITHUB_APP_TOKEN="$(sh .github/k8s/app-token.sh 2>> "$app_token_log_file")" || token_status=$?
-              cat "$app_token_log_file"
+              GITHUB_APP_TOKEN="$(sh .github/k8s/app-token.sh)" || token_status=$?
               export GITHUB_APP_TOKEN
 
-              deploy_status=0
-              run_and_log "sh .github/k8s/deploy.sh" "$deploy_log_file" sh .github/k8s/deploy.sh || deploy_status=$?
-
-              gpu_build_conclusion=failure
-              upload_model_conclusion=failure
-              upload_doc_conclusion=failure
-              if [ "$build_status" -eq 0 ]; then
-                gpu_build_conclusion=success
-                if [ $((deploy_status & 1)) -eq 0 ]; then
-                  upload_model_conclusion=success
+              deploy_conclusion=success
+              doc_deploy_conclusion=success
+              if [ "$build_status" -ne 0 ]; then
+                deploy_status=1
+                deploy_conclusion=skipped
+                doc_deploy_conclusion=skipped
+                echo "Skipping deployment because the build failed."
+              else
+                deploy_log_dir="$(mktemp -d)"
+                deploy_log_pipe="$deploy_log_dir/output"
+                mkfifo "$deploy_log_pipe"
+                tee < "$deploy_log_pipe" &
+                deploy_log_pid=$!
+                deploy_status=0
+                sh .github/k8s/deploy.sh >"$deploy_log_pipe" 2>&1 || deploy_status=$?
+                wait "$deploy_log_pid" || true
+                rm -rf "$deploy_log_dir"
+                if [ $((deploy_status & 2)) -ne 0 ]; then
+                  deploy_conclusion=failure
                 fi
-                if [ $((deploy_status & 2)) -eq 0 ]; then
-                  upload_doc_conclusion=success
+                if [ $((deploy_status & 4)) -ne 0 ]; then
+                  doc_deploy_conclusion=failure
                 fi
               fi
-              export GPU_BUILD_CONCLUSION="$gpu_build_conclusion"
-              export UPLOAD_MODEL_CONCLUSION="$upload_model_conclusion"
-              export UPLOAD_DOC_CONCLUSION="$upload_doc_conclusion"
-
-              model_revision=
-              model_repo_id=
-              if [ "$MODEL_MODE" = "release" ] && [ "$upload_model_conclusion" = "success" ]; then
-                model_metadata_file="${MODEL_UPLOAD_METADATA_FILE:-/tmp/model-upload-metadata.json}"
-                if ! model_revision="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_revision"])' "$model_metadata_file")" ||
-                  ! model_repo_id="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model_repo"])' "$model_metadata_file")"; then
-                  model_revision=
-                  model_repo_id=
-                fi
-              elif [ "$MODEL_MODE" = "reuse" ] && [ "$build_status" -eq 0 ]; then
-                model_revision="${MODEL_REVISION:-}"
-                model_repo_id="${MODEL_REPO_ID:-}"
-              fi
-              export MODEL_REVISION="$model_revision"
-              export MODEL_REPO_ID="$model_repo_id"
+              export DEPLOY_CONCLUSION="$deploy_conclusion"
+              export DOC_DEPLOY_CONCLUSION="$doc_deploy_conclusion"
 
               dispatch_status=0
-              run_and_log "sh .github/scripts/deploy-dispatch.sh" "$dispatch_log_file" sh .github/scripts/deploy-dispatch.sh || dispatch_status=$?
+              sh .github/scripts/deploy-dispatch.sh || dispatch_status=$?
 
               exit_code=0
               if [ "$build_status" -ne 0 ]; then
@@ -130,7 +100,7 @@ spec:
               if [ "$token_status" -ne 0 ]; then
                 exit_code=$((exit_code + 2))
               fi
-              if [ "$deploy_status" -ne 0 ]; then
+              if [ $((deploy_status & 6)) -ne 0 ]; then
                 exit_code=$((exit_code + 4))
               fi
               if [ "$dispatch_status" -ne 0 ]; then
@@ -141,7 +111,7 @@ spec:
               if [ "$exit_code" -eq 0 ]; then
                 email_status=Completed
               fi
-              python .github/k8s/send-email.py --status "$email_status" --exit-code "$exit_code" --build-status "$build_status" --deploy-status "$deploy_status" --token-status "$token_status" --dispatch-status "$dispatch_status" || true
+              python .github/k8s/send-email.py --status "$email_status" --exit-code "$exit_code" --build-status "$build_status" --deploy-status "$deploy_status" || true
 
               touch /var/run/heavyedge/deploy.done
               exit "$exit_code"
@@ -166,14 +136,12 @@ spec:
               value: "${GITHUB_REPOSITORY}"
             - name: KUBERNETES_JOB_NAME
               value: "${JOB_NAME}"
-            - name: GITHUB_SHA
-              value: "${GITHUB_SHA}"
-            - name: GPU_BUILD_CHECK_RUN_ID
-              value: "${GPU_BUILD_CHECK_RUN_ID}"
-            - name: UPLOAD_MODEL_CHECK_RUN_ID
-              value: "${UPLOAD_MODEL_CHECK_RUN_ID}"
-            - name: UPLOAD_DOC_CHECK_RUN_ID
-              value: "${UPLOAD_DOC_CHECK_RUN_ID}"
+            - name: BUILD_CHECK_RUN_ID
+              value: "${BUILD_CHECK_RUN_ID}"
+            - name: DEPLOY_CHECK_RUN_ID
+              value: "${DEPLOY_CHECK_RUN_ID}"
+            - name: DOC_DEPLOY_CHECK_RUN_ID
+              value: "${DOC_DEPLOY_CHECK_RUN_ID}"
             - name: CLEANUP_CHECK_RUN_ID
               value: "${CLEANUP_CHECK_RUN_ID}"
             - name: IMAGE_TAG
@@ -184,25 +152,32 @@ spec:
               value: "${GITHUB_DISPATCH_REF}"
             - name: SMTP_NOTIFY_RECIPIENT
               value: "${SMTP_NOTIFY_RECIPIENT}"
+            - name: LABELS_V1_GDRIVE
+              valueFrom:
+                secretKeyRef:
+                  name: gdrive
+                  key: LABELS_V1_GDRIVE
             - name: HUGGINGFACE_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: huggingface-token
                   key: HUGGINGFACE_TOKEN
-            - name: MODEL_MODE
-              value: "${MODEL_MODE}"
-            - name: MODEL_REVISION
-              value: "${MODEL_REVISION}"
-            - name: MODEL_REPO_ID
-              value: "${MODEL_REPO_ID}"
-            - name: PUSH_DOC
-              value: "${PUSH_DOC}"
-            - name: DOC_BRANCH
-              value: "${DOC_BRANCH}"
-            - name: DOC_DIR
-              value: "${DOC_DIR}"
-            - name: DOC_VERSION
-              value: "${DOC_VERSION}"
+            - name: BUILD_MODE
+              value: "${BUILD_MODE}"
+            - name: DEPLOY_MODE
+              value: "${DEPLOY_MODE}"
+            - name: DOC_BUILD_MODE
+              value: "${DOC_BUILD_MODE}"
+            - name: DOC_DEPLOY_MODE
+              value: "${DOC_DEPLOY_MODE}"
+            - name: UPSTREAM_REVISION
+              value: "${UPSTREAM_REVISION}"
+            - name: UPSTREAM_REPO_ID
+              value: "${UPSTREAM_REPO_ID}"
+            - name: MAKE_JOBS
+              value: "${MAKE_JOBS}"
+            - name: TRAIN_JOBS
+              value: "${TRAIN_JOBS}"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge

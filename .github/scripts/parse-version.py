@@ -35,7 +35,7 @@ def parse_release_version(tag):
         raise ValueError(f"Invalid release version tag: {tag}") from error
 
 
-def trained_model_tag(tag, version):
+def parse_tag(tag, version):
     tag_prefix = "v" if tag.startswith("v") else ""
     pre = "" if version.pre is None else f"{version.pre[0]}{version.pre[1]}"
     return f"{tag_prefix}{version.major}.{version.minor}.{version.micro}{pre}"
@@ -48,31 +48,40 @@ def main():
     args = parser.parse_args()
 
     is_release = args.event_name == "release"
-    is_master_push = args.event_name == "push" and args.ref_name == "master"
 
-    # test: push/PR, release: final/pre, reuse: post/dev
-    model_mode = "test"
-    model_revision = ""
-    model_repo_id = ""
+    build_mode = "test"  # build: final/pre, pull: post, test: dev/push&PR
+    deploy_mode = "false"  # true: final/pre/post, false: post/dev/push&PR
+    doc_build_mode = "test"  # build: final/pre/post, test: dev/push&PR
+    doc_deploy_mode = "false"  # true: final/pre/post, false: dev/push&PR
+    upstream_revision = ""
+    upstream_repo_id = ""
     if is_release:
         try:
             version = parse_release_version(args.ref_name)
-            if version.post is None and version.dev is None:
-                model_mode = "release"
+            if version.dev is not None:
+                pass
+            elif version.post is not None:
+                build_mode = "pull"
+                upstream_revision = parse_tag(args.ref_name, version)
+                upstream_repo_id = f"heavyedge/feature-model-v{version.major}"
+                deploy_mode = "true"
+                doc_build_mode = "build"
+                doc_deploy_mode = "true"
             else:
-                model_mode = "reuse"
-                model_revision = trained_model_tag(args.ref_name, version)
-                model_repo_id = f"heavyedge/feature-model-v{version.major}"
+                build_mode = "build"
+                deploy_mode = "true"
+                doc_build_mode = "build"
+                doc_deploy_mode = "true"
         except ValueError as error:
             print(error, file=sys.stderr)
             sys.exit(1)
 
-    push_doc = int(is_release or is_master_push)
-
-    github_output("model_mode", model_mode)
-    github_output("push_doc", push_doc)
-    github_output("model_revision", model_revision)
-    github_output("model_repo_id", model_repo_id)
+    github_output("build_mode", build_mode)
+    github_output("deploy_mode", deploy_mode)
+    github_output("doc_build_mode", doc_build_mode)
+    github_output("doc_deploy_mode", doc_deploy_mode)
+    github_output("upstream_revision", upstream_revision)
+    github_output("upstream_repo_id", upstream_repo_id)
 
 
 if __name__ == "__main__":
