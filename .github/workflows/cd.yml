@@ -322,6 +322,7 @@ jobs:
           TTL_SECONDS_AFTER_FINISHED: ${{ vars.TTL_SECONDS_AFTER_FINISHED }}
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           CPU_REQUEST: ${{ vars.CPU_REQUEST }}
+          GPU_REQUEST: ${{ vars.GPU_REQUEST }}
           DOCKER_REGISTRY: ghcr.io
           DOCKER_NAMESPACE: ${{ github.repository_owner }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
