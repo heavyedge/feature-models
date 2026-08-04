@@ -18,3 +18,4 @@ clean:
 	rm -rf _temp models/**/*.pt models/**/*.py
 
 include make/v0.mk
+include make/v1.mk
