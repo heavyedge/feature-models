@@ -163,7 +163,10 @@ jobs:
           path: models
 
       - name: install package
-        run: uv pip install --system -r model/requirements.txt
+        run: |
+          for requirements in models/v*/requirements.txt; do
+            uv pip install --system -r "$requirements"
+          done
 
       - name: test models in inference environment
-        run: make test
+        run: make tests
