@@ -1,2 +1,0 @@
-hf download jeesoo9595/heavyedge-features-v1 --repo-type dataset --revision v1.3.0 --local-dir _data
-rm -rf _data/.cache

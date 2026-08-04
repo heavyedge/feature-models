@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
 import os
 import smtplib
 import sys
 from email.message import EmailMessage
 from enum import IntEnum, IntFlag
-from pathlib import Path
 
 
 def env(name, default=""):
@@ -20,13 +18,16 @@ class BuildStatus(IntEnum):
     CUDA_DEVICE_DISCOVERY_FAILED = 2
     MAKE_JOBS_DISCOVERY_FAILED = 3
     CUDA_PREFLIGHT_FAILED = 4
-    BUILD_FAILED = 5
+    TRAIN_FAILED = 5
+    TEST_FAILED = 6
+    EXAMPLE_FAILED = 7
 
 
-class DeployStatus(IntEnum):
+class DeployStatus(IntFlag):
     SUCCESS = 0
-    MODEL_UPLOAD_FAILED = 1
-    DOC_UPLOAD_FAILED = 2
+    SKIPPED = 1
+    DEPLOY_FAILED = 2
+    DOC_DEPLOY_FAILED = 4
 
 
 class TokenStatus(IntEnum):
@@ -55,31 +56,6 @@ class ContainerExitCode(IntFlag):
     DISPATCH_FAILED = 8
 
 
-STATUS_DESCRIPTION_SECTIONS = {
-    BuildStatus: "build",
-    DeployStatus: "deploy",
-    TokenStatus: "token",
-    DispatchStatus: "dispatch",
-}
-
-
-def load_status_descriptions():
-    path = Path(__file__).with_name("status-descriptions.json")
-    with path.open(encoding="utf-8") as f:
-        raw_descriptions = json.load(f)
-
-    descriptions = {}
-    for enum_class, section in STATUS_DESCRIPTION_SECTIONS.items():
-        descriptions[enum_class] = {
-            enum_class(int(key)): description
-            for key, description in raw_descriptions[section].items()
-        }
-    return descriptions
-
-
-STATUS_DESCRIPTIONS = load_status_descriptions()
-
-
 def parse_status(enum_class, value):
     if value is None:
         return None
@@ -95,10 +71,13 @@ def status_line(label, enum_class, value):
     parsed = parse_status(enum_class, value)
     if parsed is None:
         return f"{label} status: {value} UNKNOWN - Unknown status code."
-    return (
-        f"{label} status: {value} {parsed.name} - "
-        f"{STATUS_DESCRIPTIONS[enum_class][parsed]}"
-    )
+    if issubclass(enum_class, IntFlag) and parsed != enum_class.SUCCESS:
+        flags = [
+            flag for flag in enum_class if flag != enum_class.SUCCESS and flag in parsed
+        ]
+        names = ", ".join(flag.name for flag in flags)
+        return f"{label} status: {value} {names}"
+    return f"{label} status: {value} {parsed.name}"
 
 
 def exit_code_line(exit_code):
@@ -134,22 +113,17 @@ def build_message(
     token_status=None,
     dispatch_status=None,
 ):
-    repository = env("GITHUB_REPOSITORY", "heavyedge/feature-models")
-    ref_name = env("GITHUB_REF_NAME", "")
-    image_tag = env("IMAGE_TAG", "")
+    repository = env("GITHUB_REPOSITORY")
+    ref_name = env("GITHUB_REF_NAME")
 
-    subject_parts = [f"[{status}]", "HeavyEdge feature-models deploy"]
-    if ref_name:
-        subject_parts.append(ref_name)
+    job_name = env("KUBERNETES_JOB_NAME")
 
     body_lines = [
         f"Deployment status: {status}",
-        f"Repository: {repository}",
+        f"Repository: https://github.com/{repository}",
     ]
     if ref_name:
         body_lines.append(f"Ref: {ref_name}")
-    if image_tag:
-        body_lines.append(f"Image tag: {image_tag}")
     exit_line = exit_code_line(exit_code)
     if exit_line:
         body_lines.append(exit_line)
@@ -162,15 +136,14 @@ def build_message(
         if line:
             body_lines.append(line)
 
-    model_mode = env("MODEL_MODE", "test")
-    body_lines.append(f"Dry build: {int(model_mode == 'test')}")
-    body_lines.append(f"Push model: {int(model_mode == 'release')}")
-    body_lines.append(f"Push documentation: {env('PUSH_DOC', 'false')}")
+    body_lines.append(f"BUILD_MODE: {env('BUILD_MODE')}")
+    body_lines.append(f"DEPLOY_MODE: {env('DEPLOY_MODE')}")
+    body_lines.append(f"DOC_BUILD_MODE: {env('DOC_BUILD_MODE')}")
+    body_lines.append(f"DOC_DEPLOY_MODE: {env('DOC_DEPLOY_MODE')}")
 
     msg = EmailMessage()
-    msg["From"] = env("SMTP_NOTIFY_SENDER", "heavyedge-bot@users.noreply.github.com")
     msg["To"] = env("SMTP_NOTIFY_RECIPIENT")
-    msg["Subject"] = " - ".join(subject_parts)
+    msg["Subject"] = f"[{status}] {job_name}"
     msg.set_content("\n".join(body_lines) + "\n")
     return msg
 

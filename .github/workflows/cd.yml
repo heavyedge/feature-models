@@ -11,9 +11,7 @@ on:
     types: [published]
 
 permissions:
-  actions: write
   checks: write
-  contents: read
   packages: write
 
 jobs:
@@ -30,6 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: 'recursive'
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -53,7 +52,6 @@ jobs:
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           echo "tag=${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}-dev" >> "$GITHUB_OUTPUT"
-          echo "created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
       - name: Build and push temporary Docker image
         uses: docker/build-push-action@v6
@@ -61,14 +59,10 @@ jobs:
           context: .
           push: true
           target: dev
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=feature-models-dev
-          cache-to: type=gha,mode=max,scope=feature-models-dev
-          build-args: |
-            IMAGE_CREATED=${{ steps.image-metadata.outputs.created }}
-            IMAGE_REVISION=${{ github.event.pull_request.head.sha || github.sha }}
-          secrets: |
-            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
+          platforms: linux/amd64
+          provenance: false
+          cache-from: type=gha,scope=feature-model-dev
+          cache-to: type=gha,mode=max,scope=feature-model-dev
           tags: ghcr.io/${{ github.repository_owner }}/${{ vars.IMAGE_NAME }}:${{ steps.image-metadata.outputs.tag }}
 
   resolve-variables:
@@ -76,13 +70,9 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      model_mode: ${{ steps.configuration.outputs.model_mode }}
-      push_doc: ${{ steps.configuration.outputs.push_doc }}
-      model_revision: ${{ steps.configuration.outputs.model_revision }}
-      model_repo_id: ${{ steps.configuration.outputs.model_repo_id }}
-      doc_branch: ${{ steps.doc-branch.outputs.doc_branch }}
-      doc_dir: ${{ steps.doc-branch.outputs.doc_dir }}
-      doc_version: ${{ steps.doc-branch.outputs.doc_version }}
+      major_version: ${{ steps.configuration.outputs.major_version }}
+      build_mode: ${{ steps.configuration.outputs.build_mode }}
+      deploy_mode: ${{ steps.configuration.outputs.deploy_mode }}
       email_recipient: ${{ steps.email.outputs.email }}
 
     steps:
@@ -103,34 +93,6 @@ jobs:
           python3 .github/scripts/parse-version.py \
             --event-name "$EVENT_NAME" \
             --ref-name "$REF_NAME"
-
-      - name: Resolve doc branch name
-        id: doc-branch
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REF_NAME: ${{ github.ref_name }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          RUN_ID: ${{ github.run_id }}
-        shell: bash
-        run: |
-          if [ "$EVENT_NAME" = "release" ]; then
-            echo "doc_branch=${REF_NAME}-${RUN_ID::7}-doc" >> "$GITHUB_OUTPUT"
-            echo "doc_dir=${REF_NAME}" >> "$GITHUB_OUTPUT"
-            echo "doc_version=${REF_NAME}" >> "$GITHUB_OUTPUT"
-          elif [ "$EVENT_NAME" = "push" ] && [ "$REF_NAME" = "master" ]; then
-            version_tag="$(python3 .github/scripts/latest-version-tag.py)"
-            echo "doc_branch=${GITHUB_SHA::7}-${RUN_ID::7}-doc" >> "$GITHUB_OUTPUT"
-            echo "doc_dir=latest" >> "$GITHUB_OUTPUT"
-            if [ -n "$version_tag" ]; then
-              echo "doc_version=${version_tag}+${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-            else
-              echo "doc_version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "doc_branch=${GITHUB_SHA::7}-${RUN_ID::7}-doc-test" >> "$GITHUB_OUTPUT"
-            echo "doc_dir=" >> "$GITHUB_OUTPUT"
-            echo "doc_version=" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Resolve email recipient
         id: email
@@ -201,9 +163,9 @@ jobs:
       - resolve-variables
 
     outputs:
-      gpu-build-check-run-id: ${{ steps.deploy-checks.outputs.gpu-build-check-run-id }}
-      upload-model-check-run-id: ${{ steps.deploy-checks.outputs.upload-model-check-run-id }}
-      upload-doc-check-run-id: ${{ steps.deploy-checks.outputs.upload-doc-check-run-id }}
+      build-check-run-id: ${{ steps.deploy-checks.outputs.build-check-run-id }}
+      deploy-check-run-id: ${{ steps.deploy-checks.outputs.deploy-check-run-id }}
+      doc-deploy-check-run-id: ${{ steps.deploy-checks.outputs.doc-deploy-check-run-id }}
       cleanup-check-run-id: ${{ steps.deploy-checks.outputs.cleanup-check-run-id }}
 
     runs-on: ubuntu-latest
@@ -224,20 +186,20 @@ jobs:
         env:
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          MODEL_MODE: ${{ needs.resolve-variables.outputs.model_mode }}
-          PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
+          DEPLOY_MODE: ${{ needs.resolve-variables.outputs.deploy_mode }}
+          DOC_DEPLOY_MODE: ${{ needs.resolve-variables.outputs.doc_deploy_mode }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
               const checks = [
-                ['gpu-build-check-run-id', 'GPU build', 'GPU build is queued.'],
+                ['build-check-run-id', 'Build', 'Build is queued.'],
                 ['cleanup-check-run-id', 'CD Cleanup', 'CD cleanup is queued.'],
               ];
-              if (process.env.MODEL_MODE === 'release') {
-                checks.push(['upload-model-check-run-id', 'Upload model', 'Model upload is queued.']);
+              if (process.env.DEPLOY_MODE == 'true') {
+                checks.push(['deploy-check-run-id', 'Deploy', 'Build output deployment is queued.']);
               }
-              if (process.env.PUSH_DOC === '1') {
-                checks.push(['upload-doc-check-run-id', 'Upload document', 'Document upload is queued.']);
+              if (process.env.DOC_DEPLOY_MODE == 'true') {
+                checks.push(['doc-deploy-check-run-id', 'Deploy docs', 'Documentation deployment is queued.']);
               }
 
               for (const [outputName, checkName, summary] of checks) {
@@ -353,35 +315,33 @@ jobs:
       - name: Deploy to Kubernetes
         shell: bash
         env:
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
           KUBE_USERNAME: ${{ secrets.KUBE_USERNAME }}
+          TTL_SECONDS_AFTER_FINISHED: ${{ vars.TTL_SECONDS_AFTER_FINISHED }}
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
-          CPU_REQUEST: ${{ needs.resolve-variables.outputs.model_mode == 'test' && '1' || '2' }}
-          GPU_REQUEST: ${{ needs.resolve-variables.outputs.model_mode == 'test' && '1' || '2' }}
+          CPU_REQUEST: ${{ vars.CPU_REQUEST }}
+          GPU_REQUEST: ${{ vars.GPU_REQUEST }}
           DOCKER_REGISTRY: ghcr.io
           DOCKER_NAMESPACE: ${{ github.repository_owner }}
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
-          MODEL_MODE: ${{ needs.resolve-variables.outputs.model_mode }}
-          MODEL_REVISION: ${{ needs.resolve-variables.outputs.model_revision }}
-          MODEL_REPO_ID: ${{ needs.resolve-variables.outputs.model_repo_id }}
-          PUSH_DOC: ${{ needs.resolve-variables.outputs.push_doc }}
-          DOC_BRANCH: ${{ needs.resolve-variables.outputs.doc_branch }}
-          DOC_DIR: ${{ needs.resolve-variables.outputs.doc_dir }}
-          DOC_VERSION: ${{ needs.resolve-variables.outputs.doc_version }}
+          MARJOR_VERSION: ${{ needs.resolve-variables.outputs.major_version }}
+          BUILD_MODE: ${{ needs.resolve-variables.outputs.build_mode }}
+          DEPLOY_MODE: ${{ needs.resolve-variables.outputs.deploy_mode }}
+          MAKE_JOBS: ${{ vars.MAKE_JOBS }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           SMTP_NOTIFY_RECIPIENT: ${{ needs.resolve-variables.outputs.email_recipient }}
-          GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
-          UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
-          UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+          BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.build-check-run-id }}
+          DEPLOY_CHECK_RUN_ID: ${{ needs.create-checks.outputs.deploy-check-run-id }}
+          DOC_DEPLOY_CHECK_RUN_ID: ${{ needs.create-checks.outputs.doc-deploy-check-run-id }}
           CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cleanup-check-run-id }}
         run: |
-          job_name="heavyedge-feature-models-${GITHUB_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}"
+          job_name="heavyedge-feature-model-${GIT_SHA::7}-${RUN_ID}-${RUN_ATTEMPT}"
           export JOB_NAME="$job_name"
           template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
           envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
@@ -399,7 +359,7 @@ jobs:
       - create-checks
       - deploy
 
-    if: ${{ always() && needs.deploy.result == 'failure' }}
+    if: ${{ always() && (needs.create-checks.result == 'failure' || needs.deploy.result == 'failure') }}
 
     runs-on: ubuntu-latest
 
@@ -424,13 +384,13 @@ jobs:
           GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_DISPATCH_REF: ${{ github.head_ref || github.ref_name }}
-          GPU_BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.gpu-build-check-run-id }}
-          UPLOAD_MODEL_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-model-check-run-id }}
-          UPLOAD_DOC_CHECK_RUN_ID: ${{ needs.create-checks.outputs.upload-doc-check-run-id }}
+          BUILD_CHECK_RUN_ID: ${{ needs.create-checks.outputs.build-check-run-id }}
+          DEPLOY_CHECK_RUN_ID: ${{ needs.create-checks.outputs.deploy-check-run-id }}
+          DOC_DEPLOY_CHECK_RUN_ID: ${{ needs.create-checks.outputs.doc-deploy-check-run-id }}
           CLEANUP_CHECK_RUN_ID: ${{ needs.create-checks.outputs.cleanup-check-run-id }}
           IMAGE_TAG: ${{ needs.build-image.outputs.tag }}
-          GPU_BUILD_CONCLUSION: failure
-          UPLOAD_MODEL_CONCLUSION: failure
-          UPLOAD_DOC_CONCLUSION: failure
+          BUILD_CONCLUSION: failure
+          DEPLOY_CONCLUSION: failure
+          DOC_DEPLOY_CONCLUSION: failure
         run: |
           sh .github/scripts/deploy-dispatch.sh

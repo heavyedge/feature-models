@@ -2,11 +2,6 @@ name: CI
 
 on:
   push:
-    branches-ignore:
-      - "*-doc"
-      - "**/*-doc"
-      - "*-doc-test"
-      - "**/*-doc-test"
   pull_request:
 
 jobs:
@@ -44,14 +39,81 @@ jobs:
         run: |
           isort --check .
 
-  doc:
+  train-models:
 
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: get repo
+      - name: Checkout repository and submodules
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - run: HEAVYEDGE_TEST_MODE=1 ./setup.sh
+        env:
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+
+      - name: build models
+        run: HEAVYEDGE_TEST_MODE=1 make models
+
+      - name: test models
+        run: HEAVYEDGE_TEST_MODE=1 make tests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: data
+          path: |
+            _data/v1/dimless.csv
+            _data/v1/shape_features/mean_profiles.csv
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: models
+          path: models
+          retention-days: 1
+
+  find-notebooks:
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      notebooks: ${{ steps.list.outputs.notebooks }}
+
+    steps:
+
+      - name: get repo
+        uses: actions/checkout@v3
+
+      - name: list notebooks
+        id: list
+        run: |
+          notebooks=$(find examples -name "*.ipynb" | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "notebooks=$notebooks" >> $GITHUB_OUTPUT
+
+  build-notebooks:
+
+    needs:
+      - train-models
+      - find-notebooks
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        notebook: ${{ fromJson(needs.find-notebooks.outputs.notebooks) }}
+
+    steps:
+
+      - name: get repo
+        uses: actions/checkout@v3
 
       - name: set up Python
         uses: actions/setup-python@v4
@@ -61,217 +123,31 @@ jobs:
       - name: set up uv
         uses: astral-sh/setup-uv@v5
 
-      - name: install package
-        run: |
-          uv pip install --system -r doc/requirements.txt
+      - name: install dependencies
+        run: uv pip install --system -r requirements.txt -r examples/requirements.txt
 
-      - name: build document
-        run: |
-          cd doc
-          make html SPHINXOPTS="-W --keep-going"
+      - uses: actions/download-artifact@v4
+        with:
+          name: data
+          path: _data/v1
 
-  train-models:
+      - uses: actions/download-artifact@v4
+        with:
+          name: models
+          path: models
 
-      needs: lint
-
-      runs-on: ubuntu-latest
-
-      steps:
-
-        - name: get repo
-          uses: actions/checkout@v3
-
-        - name: set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: "3.12"
-
-        - name: set up uv
-          uses: astral-sh/setup-uv@v5
-
-        - name: Download feature dataset
-          run: |
-            curl -LsSf https://hf.co/cli/install.sh | bash
-            hf auth login --token $HUGGINGFACE_TOKEN
-            ./download.sh
-          env:
-            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-
-        - name: install package
-          run: |
-            uv pip install --system -r requirements.txt
-
-        - name: build models
-          run: |
-            HEAVYEDGE_TEST_MODE=1 make models
-
-        - name: test models in build environment
-          run: make test
-
-        - uses: actions/upload-artifact@v4
-          with:
-            name: trained-models
-            path: model/*
-            retention-days: 1
-
-  find-notebooks:
-
-      needs: train-models
-
-      runs-on: ubuntu-latest
-
-      outputs:
-        notebooks: ${{ steps.list.outputs.notebooks }}
-
-      steps:
-
-        - name: get repo
-          uses: actions/checkout@v3
-
-        - name: list notebooks
-          id: list
-          run: |
-            notebooks=$(find notebooks -name "*.ipynb" | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
-            echo "notebooks=$notebooks" >> $GITHUB_OUTPUT
-
-  build-notebooks:
-
-      needs: find-notebooks
-
-      runs-on: ubuntu-latest
-
-      strategy:
-        fail-fast: false
-        matrix:
-          notebook: ${{ fromJson(needs.find-notebooks.outputs.notebooks) }}
-
-      steps:
-
-        - name: get repo
-          uses: actions/checkout@v3
-
-        - name: set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: "3.12"
-
-        - name: set up uv
-          uses: astral-sh/setup-uv@v5
-
-        - name: Download feature dataset
-          run: |
-            curl -LsSf https://hf.co/cli/install.sh | bash
-            hf auth login --token $HUGGINGFACE_TOKEN
-            ./download.sh
-          env:
-            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-
-        - name: install package
-          run: |
-            uv pip install --system -r requirements.txt -r notebooks/requirements.txt
-
-        - uses: actions/download-artifact@v4
-          with:
-            name: trained-models
-            path: model
-
-        - run: HEAVYEDGE_TEST_MODE=1 make ${{ matrix.notebook }}
+      - run: HEAVYEDGE_TEST_MODE=1 make ${{ matrix.notebook }}
 
   test-model:
-
-      needs: train-models
-
-      runs-on: ubuntu-latest
-
-      steps:
-
-        - name: get repo
-          uses: actions/checkout@v3
-
-        - name: set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: "3.12"
-
-        - name: set up uv
-          uses: astral-sh/setup-uv@v5
-
-        - uses: actions/download-artifact@v4
-          with:
-            name: trained-models
-            path: model
-
-        - name: install package
-          run: uv pip install --system -r model/requirements.txt
-
-        - name: test models in inference environment
-          run: make test
-
-  image-infer:
-
-      needs: train-models
-
-      runs-on: ubuntu-latest
-
-      steps:
-
-        - name: Checkout
-          uses: actions/checkout@v4
-
-        - name: set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: "3.12"
-
-        - name: set up uv
-          uses: astral-sh/setup-uv@v5
-
-        - uses: actions/download-artifact@v4
-          with:
-            name: trained-models
-            path: model
-
-        - name: Set up Docker Buildx
-          uses: docker/setup-buildx-action@v3
-
-        - name: Build Docker image
-          uses: docker/build-push-action@v6
-          with:
-            context: .
-            load: true
-            push: false
-            target: infer
-            cache-from: type=gha,scope=feature-models-infer
-            cache-to: type=gha,mode=max,scope=feature-models-infer
-            tags: heavyedge-feature-models:infer-ci
-
-        - name: Download feature dataset
-          run: |
-            curl -LsSf https://hf.co/cli/install.sh | bash
-            hf auth login --token $HUGGINGFACE_TOKEN
-            ./download.sh
-          env:
-            HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-
-        - name: Prepare test input
-          run: |
-            uv pip install --system numpy pandas
-            make _temp/X.npy
-            python3 -c "import numpy as np; np.save('_temp/X.npy', np.load('_temp/X.npy')[:1])"
-
-        - name: Test Docker image
-          run: |
-            docker run --rm -w /workdir -v $PWD/_temp:/workdir heavyedge-feature-models:infer-ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
-
-  image-base:
 
     needs: train-models
 
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+
+      - name: get repo
+        uses: actions/checkout@v3
 
       - name: set up Python
         uses: actions/setup-python@v4
@@ -283,66 +159,14 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: trained-models
-          path: model
+          name: models
+          path: models
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          push: false
-          target: base
-          cache-from: type=gha,scope=feature-models-base
-          cache-to: type=gha,mode=max,scope=feature-models-base
-          tags: heavyedge-feature-models:base-ci
-
-      - name: Download feature dataset
+      - name: install package
         run: |
-          curl -LsSf https://hf.co/cli/install.sh | bash
-          hf auth login --token $HUGGINGFACE_TOKEN
-          ./download.sh
-        env:
-          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+          for requirements in models/v*/requirements.txt; do
+            uv pip install --system -r "$requirements"
+          done
 
-      - name: Prepare test input
-        run: |
-          uv pip install --system numpy pandas
-          make _temp/X.npy
-          python3 -c "import numpy as np; np.save('_temp/X.npy', np.load('_temp/X.npy')[:1])"
-
-      - name: Test Docker image
-        run: |
-          docker run --rm -w /workdir -v $PWD/_temp:/workdir heavyedge-feature-models:base-ci python3 /app/model/predict-quantiles.py X.npy --target H --method delta -o H.quantiles.npy
-          docker run --rm -v $PWD/_data:/app/_data heavyedge-feature-models:base-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
-
-  image-dev:
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          push: false
-          target: dev
-          cache-from: type=gha,scope=feature-models-dev
-          cache-to: type=gha,mode=max,scope=feature-models-dev
-          secrets: |
-            hf_token=${{ secrets.HUGGINGFACE_TOKEN }}
-          tags: heavyedge-feature-models:dev-ci
-
-      - name: Test Docker image
-        run: |
-          docker run --rm heavyedge-feature-models:dev-ci sh -c 'uv pip install --system -r requirements.txt -r notebooks/requirements.txt && HEAVYEDGE_TEST_MODE=1 make models notebooks'
+      - name: test models in inference environment
+        run: HEAVYEDGE_TEST_MODE=1 make tests

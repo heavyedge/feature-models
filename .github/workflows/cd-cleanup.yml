@@ -6,25 +6,25 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      gpu_build_check_run_id:
+      build_check_run_id:
         required: true
         type: string
       cleanup_check_run_id:
         required: true
         type: string
-      gpu_build_conclusion:
+      build_conclusion:
         required: true
         type: string
-      upload_model_check_run_id:
+      deploy_check_run_id:
         required: false
         type: string
-      upload_model_conclusion:
+      deploy_conclusion:
         required: true
         type: string
-      upload_doc_check_run_id:
+      doc_deploy_check_run_id:
         required: false
         type: string
-      upload_doc_conclusion:
+      doc_deploy_conclusion:
         required: true
         type: string
       image_tag:
@@ -63,11 +63,6 @@ jobs:
         env:
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
           KUBERNETES_JOB_NAME: ${{ inputs.kubernetes_job_name }}
-          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         run: |
           raw_log_file="$RUNNER_TEMP/kubernetes-job.raw.log"
           redacted_log_file="$RUNNER_TEMP/kubernetes-job.log"
@@ -85,12 +80,11 @@ jobs:
               "$KUBERNETES_JOB_NAME" "$status" >> "$raw_log_file"
           fi
 
-          python3 .github/scripts/redact-log.py "$raw_log_file" "$redacted_log_file" \
-            --secret-env GH_APP_PRIVATE_KEY \
-            --secret-env GHCR_TOKEN \
-            --secret-env GMAIL_APP_PASSWORD \
-            --secret-env HUGGINGFACE_TOKEN \
-            --secret-env KUBE_CONFIG
+          if ! python3 .github/scripts/redact-log.py "$raw_log_file" "$redacted_log_file" --template-file .github/k8s/job.yaml; then
+            echo "Log collection skipped because the log could not be safely redacted." >&2
+            rm -f "$raw_log_file" "$redacted_log_file"
+            exit 0
+          fi
           rm -f "$raw_log_file"
 
       - name: Upload Kubernetes Job log
@@ -98,7 +92,7 @@ jobs:
         with:
           name: kubernetes-job-log-${{ inputs.kubernetes_job_name || github.run_id }}
           path: ${{ runner.temp }}/kubernetes-job.log
-          if-no-files-found: error
+          if-no-files-found: ignore
 
   update-deploy-checks:
 
@@ -117,21 +111,21 @@ jobs:
       - name: Update deploy checks
         uses: actions/github-script@v9
         env:
-          GPU_BUILD_CHECK_RUN_ID: ${{ inputs.gpu_build_check_run_id }}
-          GPU_BUILD_CONCLUSION: ${{ inputs.gpu_build_conclusion }}
-          UPLOAD_MODEL_CHECK_RUN_ID: ${{ inputs.upload_model_check_run_id }}
-          UPLOAD_MODEL_CONCLUSION: ${{ inputs.upload_model_conclusion }}
-          UPLOAD_DOC_CHECK_RUN_ID: ${{ inputs.upload_doc_check_run_id }}
-          UPLOAD_DOC_CONCLUSION: ${{ inputs.upload_doc_conclusion }}
+          BUILD_CHECK_RUN_ID: ${{ inputs.build_check_run_id }}
+          BUILD_CONCLUSION: ${{ inputs.build_conclusion }}
+          DEPLOY_CHECK_RUN_ID: ${{ inputs.deploy_check_run_id }}
+          DEPLOY_CONCLUSION: ${{ inputs.deploy_conclusion }}
+          DOC_DEPLOY_CHECK_RUN_ID: ${{ inputs.doc_deploy_check_run_id }}
+          DOC_DEPLOY_CONCLUSION: ${{ inputs.doc_deploy_conclusion }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const checks = [
-              [process.env.GPU_BUILD_CHECK_RUN_ID, process.env.GPU_BUILD_CONCLUSION],
-              [process.env.UPLOAD_MODEL_CHECK_RUN_ID, process.env.UPLOAD_MODEL_CONCLUSION],
-              [process.env.UPLOAD_DOC_CHECK_RUN_ID, process.env.UPLOAD_DOC_CONCLUSION],
+              [process.env.BUILD_CHECK_RUN_ID, process.env.BUILD_CONCLUSION],
+              [process.env.DEPLOY_CHECK_RUN_ID, process.env.DEPLOY_CONCLUSION],
+              [process.env.DOC_DEPLOY_CHECK_RUN_ID, process.env.DOC_DEPLOY_CONCLUSION],
             ].filter(([checkRunId]) => checkRunId);
-            const allowedConclusions = new Set(['success', 'failure']);
+            const allowedConclusions = new Set(['success', 'failure', 'skipped']);
 
             for (const [checkRunId, conclusion] of checks) {
               const normalizedConclusion = allowedConclusions.has(conclusion)
@@ -156,6 +150,9 @@ jobs:
         shell: bash
         env:
           GITHUB_API_URL: ${{ github.api_url }}
+          # This org-scoped package does not grant package-admin access to the
+          # workflow token. GHCR_TOKEN must be a classic PAT with
+          # read:packages and delete:packages scopes, and package admin access.
           PACKAGE_TOKEN: ${{ secrets.GHCR_TOKEN }}
           PACKAGE_OWNER: ${{ github.repository_owner }}
           PACKAGE_NAME: ${{ vars.IMAGE_NAME }}
@@ -198,7 +195,11 @@ jobs:
             exit 0
           fi
 
-          delete_status="$(curl -sS -o /dev/null -w "%{http_code}" \
+          delete_response="$(mktemp)"
+          delete_headers="$(mktemp)"
+          trap 'rm -f "${delete_response}" "${delete_headers}"' EXIT
+
+          delete_status="$(curl -sS -D "${delete_headers}" -o "${delete_response}" -w "%{http_code}" \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${PACKAGE_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
@@ -209,7 +210,27 @@ jobs:
             exit 0
           fi
 
-          echo "Could not delete Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}; GitHub API returned HTTP ${delete_status}." >&2
+          error_message="$(jq -r '.message // empty' "${delete_response}" 2>/dev/null || true)"
+          if [ "${delete_status}" = "400" ] &&
+            [ "${error_message}" = "You cannot delete the last tagged version of a package. You must delete the package instead." ]; then
+            package_url="${GITHUB_API_URL%/}/orgs/${PACKAGE_OWNER}/packages/container/${PACKAGE_NAME}"
+            package_delete_status="$(curl -sS -D "${delete_headers}" -o "${delete_response}" -w "%{http_code}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${PACKAGE_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -X DELETE "${package_url}" || true)"
+
+            if [ "${package_delete_status}" = "204" ] || [ "${package_delete_status}" = "404" ]; then
+              echo "Deleted last Docker image tag by deleting package ${PACKAGE_OWNER}/${PACKAGE_NAME}."
+              exit 0
+            fi
+
+            delete_status="${package_delete_status}"
+            error_message="$(jq -r '.message // empty' "${delete_response}" 2>/dev/null || true)"
+          fi
+
+          request_id="$(awk 'BEGIN { IGNORECASE = 1 } /^x-github-request-id:/ { print $2 }' "${delete_headers}" | tr -d '\r' | tail -n 1)"
+          echo "Could not delete Docker image tag ${PACKAGE_OWNER}/${PACKAGE_NAME}:${IMAGE_TAG}; GitHub API returned HTTP ${delete_status}${error_message:+: ${error_message}}${request_id:+ (request ID: ${request_id})}." >&2
           exit 1
 
   finalize-cleanup-check:
@@ -238,15 +259,17 @@ jobs:
         env:
           CLEANUP_CHECK_RUN_ID: ${{ inputs.cleanup_check_run_id }}
           UPDATE_RESULT: ${{ needs.update-deploy-checks.result }}
-          DELETE_RESULT: ${{ needs.delete-image.result }}
+          DELETE_IMAGE_RESULT: ${{ needs.delete-image.result }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
-            const conclusion =
-              process.env.UPDATE_RESULT === 'success' &&
-              process.env.DELETE_RESULT === 'success'
-                ? 'success'
-                : 'failure';
+            const results = {
+              updateDeployChecks: process.env.UPDATE_RESULT,
+              deleteImage: process.env.DELETE_IMAGE_RESULT,
+            };
+            const conclusion = Object.values(results).every((result) => result === 'success')
+              ? 'success'
+              : 'failure';
 
             await github.rest.checks.update({
               ...context.repo,
@@ -256,6 +279,6 @@ jobs:
               completed_at: new Date().toISOString(),
               output: {
                 title: 'CD Cleanup',
-                summary: `Cleanup result: ${conclusion}`,
+                summary: `Cleanup result: ${conclusion}. Check updates: ${results.updateDeployChecks}; temporary image deletion: ${results.deleteImage}.`,
               },
             });

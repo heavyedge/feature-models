@@ -1,26 +1,27 @@
 # Heavy Edge Feature Model
 
-[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/jeesoo9595/heavyedge-features-v0)
-[![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat-square&logo=Docker&logoColor=white)](https://hub.docker.com/repository/docker/jeesoo9595/heavyedge-feature-models)
-[![Documentation](https://img.shields.io/badge/github-pages-blue?logo=github)](https://heavyedge.github.io/feature-models/)
+[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/heavyedge/feature-model-v0)
 [![GitHub repository](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/heavyedge/feature-models)
 
-Models the relation between process variables and heavy edge shape features.
+Models the relation between process variables and edge shape features.
 
 Provides:
-- GPR and GPQR models for H and phi.
-- Cross validation and other validation examples.
+- GPR and GPQR models for edge shape features.
+- Cross validation and other benchmarks.
 - Yield estimation and probabilistic quality window examples.
 
-## Installation
+## Usage
 
-This repository provides model architectures, and scripts to train and evaluate the model.
-Clone the repository and execute the files in `scripts` directory.
-Refer to the `Makefile` for usage examples.
-
-The trained model can be acquired by either directly downloading from the [model repository](https://huggingface.co/jeesoo9595/heavyedge-features-v0) of by pulling the Docker image that encapsulates it.
+This repository provides architectures for edge shape models, scripts to train and evaluate them, and notebooks to visualize the results.
 
 ### Cloning the repository
+
+You need:
+
+- `git`
+- Python runtime with `pip`
+
+Run the following commands to clone the repository and install the necessary requirements.
 
 ```sh
 git clone git@github.com:heavyedge/feature-models.git
@@ -28,116 +29,77 @@ cd feature-models
 pip install -r requirements.txt
 ```
 
-### Direct download
+### Downloading the dataset (Optional)
+
+Run the following commands to download the process variable and shape feature datasets in the `_data` directory.
+
+```sh
+export HUGGINGFACE_TOKEN="..."
+./setup.sh
+```
+
+### Acquiring the models
+
+The models trained by this project can be acquired by downloading them from the model repository.
+Alternatively, you can train the models yourself if you have downloaded the dataset.
+
+Either approach creates the trained models in the `models/v*` directories.
+
+#### Direct download
+
+You need:
 
 - [Hugging Face CLI](https://huggingface.co/docs/transformers/en/installation)
-- Python runtime
 
-Run the following commands:
-
-```sh
-hf download jeesoo9595/heavyedge-features-v0 --repo-type model --local-dir model
-pip install -r model/requirements.txt
-```
-
-### Docker image
-
-Two types of images are distributed for each release: the base image and the inference image.
-
-#### Base image
-
-Base image includes source code, documents and trained models.
-The base images are tagged by `(version)`:
+Run the following command:
 
 ```sh
-docker pull jeesoo9595/heavyedge-feature-models:latest
+hf download heavyedge/feature-model-v0 --repo-type model --local-dir models/v0
 ```
 
-After pulling the image, run the following command.
-It creates a container named `feature-models`, downloads dependencies and attaches to the terminal.
+You may change the reposotiry name and local path to download other models.
+
+#### Training the models
+
+You need:
+
+- `make`
+
+Run the following command:
 
 ```sh
-docker run --name feature-models -it jeesoo9595/heavyedge-feature-models:latest sh -c "uv pip install --system -r requirements.txt && /bin/bash"
+make models
 ```
 
-#### Inference image
-
-Inference image is the minimum installation, including only the trained models.
-The inference images are tagged by `(version)-infer`:
+You can test the trained models by running:
 
 ```sh
-docker pull jeesoo9595/heavyedge-feature-models:latest-infer
+make tests
 ```
 
-After pulling the image, run the following command.
-It creates a container named `feature-models`, downloads dependencies and attaches to the terminal.
+### Using the trained model
+
+Once models are trained, you can perform inference using the scripts in `models/v*` directory.
+
+### Acquiring the built examples
+
+The benchmark results are visualized as notebooks in the `examples` directory.
+
+The notebook outputs are stripped before being stored in this repository.
+To check their outputs, you must acquire the built example notebooks.
+
+You can either download the built notebooks from the [GitHub release](https://github.com/heavyedge/feature-models/releases) artifacts, or build the notebooks yourself if you have acquired the preprocessed data.
+
+#### Building the notebooks
+
+You need:
+
+- `make`
 
 ```sh
-docker run --name feature-models -it jeesoo9595/heavyedge-feature-models:latest-infer sh -c "uv pip install --system -r model/requirements.txt && /bin/bash"
+pip install -r examples/requirements.txt
+make examples
 ```
-
-## Usage
-
-You can use this project in three ways:
-
-1. Train the model using your own data.
-2. Do inference using the trained model.
-3. Use advanced features, e.g., joint probability estimation.
-
-### Training (optional)
-
-> This feature is accessible if you
-> - Cloned the repository, or
-> - Pulled the base image.
-
-To train your own model, run scripts in `scripts/train/` directory.
-You need to prepare your own dataset as csv files and pass them to the scripts.
-Refer to the recipes in `Makefile`.
-
-Alternatively, you can use the distributed pre-trained model.
-
-### Inference
-
-> This feature is accessible if you
-> - Cloned the repository, or
-> - Downloaded from the model repository, or
-> - Pulled the base image, or
-> - Pulled the inference image.
-
-For inference, you need to put trained models and inference scripts in `model/` directory.
-These files are already provided if you downloaded from the model repository or pulled the image.
-
-To perform inference, run scripts in `model/` directory.
-You need to prepare your own input data points as npy file and pass it to the script.
-Refer to the recipes in `Makefile`.
-
-### Advanced features
-
-> This feature is accessible if you
-> - Cloned the repository, or
-> - Pulled the base image.
-
-Files in `scripts/` and `notebooks/` directories provide advanced features.
-These features include models with different architectures, model selection, and joint probability estimation.
-Refer to the recipes in `Makefile` and project document.
-
-> **NOTE** : Advanced features are considered experimental.
-> Backward-incompatible changes may occur without versioning support.
-
-## Documentation
-
-Documentation can be found at:
-
-> https://heavyedge.github.io/feature-models/
-
-The HTML document is also distributed in `doc/` directory inside the image.
-To view the document in a browser on the host, build the image and run:
-
-```sh
-docker run --rm -p 8000:8000 jeesoo9595/heavyedge-feature-models:latest python -m http.server 8000 --directory ./doc
-```
-
-Then open <http://localhost:8000/> in the host's browser while the container is running.
 
 ## Contributing
 
@@ -146,53 +108,42 @@ Then open <http://localhost:8000/> in the host's browser while the container is 
 Configure the local git filter (run once after cloning):
 
 ```sh
+nbstripout --install --attributes .gitattributes
 git config filter.nbstripout.clean "nbstripout"
 git config filter.nbstripout.smudge cat
 git config filter.nbstripout.required true
 ```
 
-### Downloading the dataset
+### Testing
 
-The default dataset can be downloaded by running the following command with Huggingface credential.
-This dataset is used to train the models that are published to the model repository.
-
-```sh
-hf auth login --token [Hugging Face token]
-./download.sh
-```
-
-### Building the model
+Set the `HEAVYEDGE_TEST_MODE` environment variable to `1` for CI/CD testing purposes.
 
 ```sh
-make models
+export HEAVYEDGE_TEST_MODE=1
+./setup.sh
+make models examples tests
 ```
 
-### Testing the built model
+### Building the container image
 
-```sh
-make test
-```
+The `Dockerfile` is provided to facilitate model distribution without sharing secrets.
 
-### Building the document
+After downloading the dataset and training the models, build the image with one of the following targets:
 
-After building the models, run the following commands:
-
-```sh
-make notbooks
-pip install -r doc/requirements.txt
-cd doc
-make html
-```
-
-The main page is `doc/build/html/index.html`.
-
-### Development image
-
-The development image includes dataset and additonal files for containerized training.
-It can be built by running the `Dockerfile` with `dev` taget, passing the `hf_token` secret.
-
-The development images are tagged by `(version)-dev`, but they are never released.
-They are uploaded to private registry during CI/CD and immediately deleted afterwards.
+- `infer`
+  - Includes the trained models (`models`).
+  - Includes essential environment for inference.
+- `base` (default)
+  - Includes the trained models (`models`).
+  - Includes the benchmarks and built examples (`benchmarks`, `examples`).
+  - Includes essential environment for inference.
+  - Includes non-hidden source files.
+- `dev`
+  - Includes the dataset (`_data`).
+  - Includes the trained models (`models`).
+  - Includes the benchmarks and built examples (`benchmarks`, `examples`).
+  - Includes essential environment for inference.
+  - Includes all source files.
 
 ### Versioning policy
 
@@ -202,53 +153,13 @@ This repository follows semantic versioning with [Python version specifiers](htt
 N.N.N[{a|b|rc}N][.postN][.devN]
 ```
 
-The repository versioning focuses on managing versions of trained models.
-If only the repository code is updated without changing the model, the following rules apply:
+The following rules apply to the final release versions:
 
-- `notebooks` : Treated as documentation updates, so a post-release is published.
-- `scripts` : Treated as developer features, so a developmental release is published.
+- Major version is raised when the model API is changed in a backwards-incompatible way.
+- Minor version is raised when the models are trained with new dataset.
+- Patch version is raised when bugs are fixed.
 
-Trained models are released only when the final relase or the pre-release are made.
-Inference image is released only when new trained models are released.
-Base image is always released when a new release is made in the repository.
-
-#### Major version
-
-A major version change indicates that a new model with incompatible API is released.
-Each major version has a dedicated repository, e.g., `heavyedge-features-v0`, `heavyedge-features-v1`, and so on.
-
-- Model API MAY change.
-- Model architecture MAY change.
-- Model weights MAY change.
-
-#### Minor version
-
-A minor version change indicates that a new model with compatible API is released.
-This can be a change in architecture or training dataset.
-
-- Model API MUST NOT change.
-- Model architecture MAY change.
-- Model weights MAY change.
-
-#### Patch version
-
-A patch version change indicates a change in hyperparameter or bug fix.
-
-- Model API MUST NOT change.
-- Model architecture MUST NOT change.
-- Model weights MAY change.
-
-#### Pre-release version
-
-A pre-release version is for testing before the final release.
-The scope and extent of model change depends on the final version that the pre-release version refers to.
-
-#### Post-release version
-
-Post-release versions indicate minor changes that do not affect the software, e.g., documentation updates.
-Model MUST NOT change in any way.
-
-#### Developmental release
-
-Developmental releases include experimental changes in the advanced features.
-Model MUST NOT change in any way.
+This repository stores source code for all major versions.
+When a new release is made, trained models are deployed to a repository dedicated to each major release.
+For example, when `v1.0.0` is released, `models/v1` is uploaded to `feature-model-v1` repository.
+This applies to other build outputs, e.g., `examples/v1`.

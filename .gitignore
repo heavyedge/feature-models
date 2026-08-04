@@ -1,15 +1,13 @@
 _data
 _temp
-_artifacts
-model/*
-!model/README.md
-
+benchmarks
+models/**/*.pt
+models/**/*.py
+models/**/.gitattributes
 doc/source/notebooks/
 
-.vscode
-build.sh
-!.github/**/build.sh
 slurm*
+sbatch*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
