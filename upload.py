@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 import shutil
 import sys
@@ -24,7 +25,8 @@ VERSION = args.tag
 MAJOR_VERSION = f"v{version.major}"
 REPO = f"heavyedge/feature-model-{MAJOR_VERSION}"
 
-shutil.rmtree(f"models/{MAJOR_VERSION}/__pycache__", ignore_errors=True)
+for path in glob.glob(f"models/{MAJOR_VERSION}/**/__pycache__", recursive=True):
+    shutil.rmtree(path, ignore_errors=True)
 
 api.create_repo(
     repo_id=REPO,
