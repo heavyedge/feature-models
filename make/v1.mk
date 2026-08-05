@@ -90,7 +90,12 @@ models/v1/feature_models/load.py: scripts/v1/model/load.py
 	mkdir -p $(@D)
 	cp $< $@
 
+# Prediction
+
+_temp/v1/%.prior_mean.Xpred_1D.csv: models/v1/feature_models/predict-prior_mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v1)
+	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
+
 # Examples
 
-examples/v1/Models.ipynb: _temp/v1/X.csv _temp/v1/y.csv _temp/v0/Xpred_1D.csv .FORCE
+examples/v1/Models.ipynb: _temp/v1/X.csv _temp/v1/y.csv _temp/v0/Xpred_1D.csv _temp/v1/H.prior_mean.Xpred_1D.csv _temp/v1/phi.prior_mean.Xpred_1D.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
