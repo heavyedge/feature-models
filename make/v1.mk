@@ -15,8 +15,11 @@ PHI_THRESHOLD := 1.0
 MODEL_FILES_v1 := \
 models/v1/feature_models/H.prior_mean.pt \
 models/v1/feature_models/phi.prior_mean.pt \
+models/v1/feature_models/H.gpr.pt \
+models/v1/feature_models/phi.gpr.pt \
 models/v1/feature_models/prior.py \
 models/v1/feature_models/scale.py \
+models/v1/feature_models/gpr.py \
 models/v1/feature_models/load.py \
 models/v1/feature_models/predict-prior_mean.py
 
@@ -27,6 +30,8 @@ examples-v1: $(wildcard examples/v1/*)
 test-v1: $(MODEL_FILES_v1)
 	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_PriorMean_H; load_PriorMean_H()"
 	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_PriorMean_phi; load_PriorMean_phi()"
+	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_GPR_H; load_GPR_H()"
+	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_GPR_phi; load_GPR_phi()"
 
 # Data
 
@@ -87,6 +92,10 @@ models/v1/feature_models/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model GPR_$* --num-epochs $(N_EPOCHS) -o $@
 
 models/v1/feature_models/%.py: scripts/v0/model/%.py
+	mkdir -p $(@D)
+	cp $< $@
+
+models/v1/feature_models/gpr.py: scripts/v1/model/gpr.py
 	mkdir -p $(@D)
 	cp $< $@
 
