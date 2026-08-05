@@ -12,12 +12,7 @@ N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
 
-PYTHON ?= python3
-GPU_RUN ?= $(PYTHON) scripts/gpu-run.py --
-GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
-GPU_JUPYTER ?= $(GPU_RUN) jupyter
-
-MODEL_FILES := \
+MODEL_FILES_v0 := \
 models/v0/feature_models/H.prior_mean.pt \
 models/v0/feature_models/phi.prior_mean.pt \
 models/v0/feature_models/H.gpr.pt \
@@ -33,11 +28,11 @@ models/v0/feature_models/predict-prior_mean.py \
 models/v0/feature_models/predict-mean.py \
 models/v0/feature_models/predict-quantiles.py
 
-models-v0: $(MODEL_FILES)
+models-v0: $(MODEL_FILES_v0)
 
 examples-v0: $(wildcard examples/v0/*)
 
-test-v0: $(MODEL_FILES)
+test-v0: $(MODEL_FILES_v0)
 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_PriorMean_H; load_PriorMean_H()"
 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_PriorMean_phi; load_PriorMean_phi()"
 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPR_H; load_GPR_H()"
@@ -47,11 +42,39 @@ test-v0: $(MODEL_FILES)
 
 # Data
 
-_temp/v0/X.csv: scripts/v0/data/write-X.py _data/v1/dimless.csv
+_temp/v0/dimless.csv: $(wildcard _data/v1/dimless/mean_profiles/dataset*.csv)
+	mkdir -p $(@D)
+	python3 -c '
+	from pathlib import Path
+	import pandas as pd
+
+	pvs = sorted([Path(f) for f in "$^".split(" ")])
+	df = pd.concat(
+		[pd.read_csv(f, dtype=str).assign(name=lambda df: f"{f.stem}/" + df["name"]) for f in pvs],
+		ignore_index=True,
+	)
+	df.to_csv("$@", index=False)
+	'
+
+_temp/v0/shape_features.csv: $(wildcard _data/v1/shape_features/mean_profiles/dataset*.csv)
+	mkdir -p $(@D)
+	python3 -c '
+	from pathlib import Path
+	import pandas as pd
+
+	pvs = sorted([Path(f) for f in "$^".split(" ")])
+	df = pd.concat(
+		[pd.read_csv(f, dtype=str).assign(name=lambda df: f"{f.stem}/" + df["name"]) for f in pvs],
+		ignore_index=True,
+	)
+	df.to_csv("$@", index=False)
+	'
+
+_temp/v0/X.csv: scripts/v0/data/write-X.py _temp/v0/dimless.csv
 	mkdir -p $(@D)
 	python3 $^ -o $@
 
-_temp/v0/y.csv: scripts/v0/data/write-y.py _temp/v0/X.csv _data/v1/shape_features/mean_profiles.csv
+_temp/v0/y.csv: scripts/v0/data/write-y.py _temp/v0/X.csv _temp/v0/shape_features.csv
 	python3 $^ -o $@
 
 _temp/v0/Xtrain.csv: _temp/v0/X.csv
@@ -127,22 +150,22 @@ models/v0/feature_models/%.py: scripts/v0/model/%.py
 
 # Prediction
 
-_temp/v0/%.prior_mean.Xpred_1D.csv: models/v0/feature_models/predict-prior_mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
+_temp/v0/%.prior_mean.Xpred_1D.csv: models/v0/feature_models/predict-prior_mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/v0/%.prior_mean.Xpred_2D.csv: models/v0/feature_models/predict-prior_mean.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
+_temp/v0/%.prior_mean.Xpred_2D.csv: models/v0/feature_models/predict-prior_mean.py _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/v0/%.mean.Xpred_1D.csv: models/v0/feature_models/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
+_temp/v0/%.mean.Xpred_1D.csv: models/v0/feature_models/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
-_temp/v0/%.quantiles.X.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred.csv $(MODEL_FILES)
+_temp/v0/%.quantiles.X.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/v0/%.quantiles.Xpred_1D.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred_1D.csv $(MODEL_FILES)
+_temp/v0/%.quantiles.Xpred_1D.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
-_temp/v0/%.quantiles.Xpred_2D.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred_2D.csv $(MODEL_FILES)
+_temp/v0/%.quantiles.Xpred_2D.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
 
 # Window prediction
