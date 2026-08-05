@@ -82,6 +82,10 @@ models/v1/feature_models/%.prior_mean.pt: scripts/v1/train/prior_mean.py _temp/v
 	mkdir -p $(@D)
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
+models/v1/feature_models/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv models/v1/feature_models/%.prior_mean.pt
+	mkdir -p $(@D)
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model GPR_$* --num-epochs $(N_EPOCHS) -o $@
+
 models/v1/feature_models/%.py: scripts/v0/model/%.py
 	mkdir -p $(@D)
 	cp $< $@
