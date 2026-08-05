@@ -24,6 +24,6 @@ Help:
 
 ```
 python feature_models/predict-prior_mean.py -h
-python feature_models/predict-prior_mean.py -h
-python feature_models/predict-prior_mean.py -h
+python feature_models/predict-mean.py -h
+python feature_models/predict-quantiles.py -h
 ```

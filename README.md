@@ -1,6 +1,6 @@
 # Heavy Edge Feature Model
 
-[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/heavyedge/feature-model-v0)
+[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange?logo=huggingface)](https://huggingface.co/heavyedge/feature-model-v1)
 [![GitHub repository](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/heavyedge/feature-models)
 
 Models the relation between process variables and edge shape features.
@@ -54,7 +54,7 @@ You need:
 Run the following command:
 
 ```sh
-hf download heavyedge/feature-model-v0 --repo-type model --local-dir models/v0
+hf download heavyedge/feature-model-v1 --repo-type model --local-dir models/v1
 ```
 
 You may change the reposotiry name and local path to download other models.
