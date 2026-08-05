@@ -3,8 +3,10 @@
 set -e
 
 pip install uv
-curl -LsSf https://hf.co/cli/install.sh | bash
-"$HOME/.local/bin/hf" auth login --token "$HUGGINGFACE_TOKEN"
+
+uv tool install --force 'huggingface_hub[cli]'
+export PATH="$(uv tool dir --bin):$PATH"
+export HF_TOKEN="${HF_TOKEN:-$HUGGINGFACE_TOKEN}"
 
 mkdir -p ./_data/v1/
 
@@ -14,12 +16,12 @@ mkdir -p ./_data/v1/
 requirements_pid=$!
 
 (
-    "$HOME/.local/bin/hf" download heavyedge/profiles --repo-type dataset --revision v1.0.0rc4 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
+    hf download heavyedge/profiles --repo-type dataset --revision v1.0.0rc4 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
 ) &
 pv_pid=$!
 
 (
-    "$HOME/.local/bin/hf" download heavyedge/shape-features --repo-type dataset --revision v1.0.0b1 --include "v1/shape_features/" --local-dir _data/
+    hf download heavyedge/shape-features --repo-type dataset --revision v1.0.0b1 --include "v1/shape_features/" --local-dir _data/
 ) &
 features_pid=$!
 
