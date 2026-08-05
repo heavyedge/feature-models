@@ -2,7 +2,7 @@
 
 # Data
 
-_temp/v1/dimless.csv: $(wildcard _data/v1/dimless/profiles/dataset*.csv)
+_temp/v1/dimless.csv: $(wildcard _data/v1/dimless/all_profiles/dataset*.csv)
 	mkdir -p $(@D)
 	python3 -c '
 	from pathlib import Path
@@ -16,7 +16,7 @@ _temp/v1/dimless.csv: $(wildcard _data/v1/dimless/profiles/dataset*.csv)
 	df.to_csv("$@", index=False)
 	'
 
-_temp/v1/shape_features.csv: $(wildcard _data/v1/shape_features/profiles/dataset*.csv)
+_temp/v1/shape_features.csv: $(wildcard _data/v1/shape_features/all_profiles/dataset*.csv)
 	mkdir -p $(@D)
 	python3 -c '
 	from pathlib import Path
