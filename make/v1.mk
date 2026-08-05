@@ -1,4 +1,11 @@
-.PHONY:
+.PHONY: examples-v1
+
+PYTHON ?= python3
+GPU_RUN ?= $(PYTHON) scripts/gpu-run.py --
+GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
+GPU_JUPYTER ?= $(GPU_RUN) jupyter
+
+examples-v1: $(wildcard examples/v1/*)
 
 # Data
 
@@ -45,3 +52,8 @@ _temp/v1/y$(1).csv: _temp/v1/y.csv
 	python3 -c "import pandas as pd; df = pd.read_csv('$$<'); mask = df['split'] == '$(1)'; df.loc[mask, ['H', 'phi']].to_csv('$$@', index=False)"
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v1,$(split))))
+
+# Examples
+
+examples/v1/Models.ipynb: _temp/v1/X.csv _temp/v1/y.csv _temp/v0/Xpred_1D.csv .FORCE
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@

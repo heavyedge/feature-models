@@ -9,7 +9,7 @@ all: models examples
 
 models: models-v0
 
-examples: examples-v0
+examples: examples-v0 examples-v1
 
 tests: test-v0
 
