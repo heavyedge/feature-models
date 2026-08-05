@@ -159,15 +159,8 @@ for epoch in range(args.num_epochs):
         val_mean = mean(Xval)
         val_res = y_scaler((yval - val_mean).unsqueeze(-1)).squeeze(-1)
 
-        val_prediction = likelihood(model(Xval_scaled))
-        val_variance = val_prediction.variance.clamp_min(torch.finfo(val_res.dtype).eps)
-        val_loss = (
-            0.5
-            * (
-                torch.log(2 * torch.pi * val_variance)
-                + (val_res - val_prediction.mean).square() / val_variance
-            ).mean()
-        )
+        val_output = model(Xval_scaled)
+        val_loss = -likelihood.expected_log_prob(val_res, val_output).mean()
 
     current_val_loss = val_loss.item()
     lr_scheduler.step(current_val_loss)
