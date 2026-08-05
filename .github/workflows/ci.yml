@@ -76,7 +76,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: models
-          path: models
+          path: |
+            models/v0/**
           retention-days: 1
 
   find-notebooks:
@@ -134,7 +135,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: models
-          path: models
+          path: models/v0
 
       - run: HEAVYEDGE_TEST_MODE=1 make ${{ matrix.notebook }}
 
@@ -160,7 +161,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: models
-          path: models
+          path: models/v0
 
       - name: install package
         run: |
