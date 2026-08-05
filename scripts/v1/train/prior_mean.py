@@ -3,9 +3,9 @@ import copy
 import logging
 import pathlib
 
-import model.prior as model_module  # Needs PYTHONPATH=scripts/v0
 import pandas as pd
 import torch
+import v0.model.prior as model_module  # Needs PYTHONPATH=scripts
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),

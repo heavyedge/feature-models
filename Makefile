@@ -16,7 +16,7 @@ models: models-v0 models-v1
 
 examples: examples-v0 examples-v1
 
-tests: test-v0
+tests: test-v0 test-v1
 
 clean:
 	shopt -s globstar nullglob

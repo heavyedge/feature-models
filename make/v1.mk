@@ -1,4 +1,4 @@
-.PHONY: models-v1 examples-v1
+.PHONY: models-v1 examples-v1 test-v1
 
 QUANTILES := 0.05 0.25 0.5 0.75 0.95
 NUM_LOWER_QUANTILES := 2
@@ -14,11 +14,19 @@ PHI_THRESHOLD := 1.0
 
 MODEL_FILES_v1 := \
 models/v1/feature_models/H.prior_mean.pt \
-models/v1/feature_models/phi.prior_mean.pt
+models/v1/feature_models/phi.prior_mean.pt \
+models/v1/feature_models/prior.py \
+models/v1/feature_models/scale.py \
+models/v1/feature_models/load.py \
+models/v1/feature_models/predict-prior_mean.py
 
 models-v1: $(MODEL_FILES_v1)
 
 examples-v1: $(wildcard examples/v1/*)
+
+test-v1: $(MODEL_FILES_v1)
+	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_PriorMean_H; load_PriorMean_H()"
+	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_PriorMean_phi; load_PriorMean_phi()"
 
 # Data
 
@@ -72,7 +80,15 @@ $(foreach split,train val test,$(eval $(call SPLIT_v1,$(split))))
 
 models/v1/feature_models/%.prior_mean.pt: scripts/v1/train/prior_mean.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv
 	mkdir -p $(@D)
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+
+models/v1/feature_models/%.py: scripts/v0/model/%.py
+	mkdir -p $(@D)
+	cp $< $@
+
+models/v1/feature_models/load.py: scripts/v1/model/load.py
+	mkdir -p $(@D)
+	cp $< $@
 
 # Examples
 
