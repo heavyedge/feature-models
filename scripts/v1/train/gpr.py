@@ -1,4 +1,5 @@
 import argparse
+import copy
 import logging
 import pathlib
 
@@ -31,10 +32,43 @@ parser.add_argument(
     help="Prior mean model weight file.",
 )
 parser.add_argument("--target", type=str, help="Target variable name.")
-parser.add_argument("--model", help="Model class prefix.")
-parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
+parser.add_argument("--model", type=str, help="Model name.")
+parser.add_argument("--num-epochs", type=int, help="Number of maximum epochs.")
 parser.add_argument(
-    "--learning-rate", type=float, default=0.001, help="Learning rate for optimizer."
+    "--learning-rate",
+    type=float,
+    default=0.001,
+    help="Initial learning rate for optimizer.",
+)
+parser.add_argument(
+    "--early-stopping-patience",
+    type=int,
+    default=20,
+    help="Stop after this many epochs without validation-loss improvement.",
+)
+parser.add_argument(
+    "--early-stopping-min-delta",
+    type=float,
+    default=0.0,
+    help="Minimum validation-loss decrease required to reset early stopping.",
+)
+parser.add_argument(
+    "--lr-scheduler-patience",
+    type=int,
+    default=10,
+    help="Epochs without validation-loss improvement before reducing learning rate.",
+)
+parser.add_argument(
+    "--lr-scheduler-factor",
+    type=float,
+    default=0.5,
+    help="Factor by which to reduce the learning rate.",
+)
+parser.add_argument(
+    "--min-learning-rate",
+    type=float,
+    default=1e-6,
+    help="Minimum learning rate for the scheduler.",
 )
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
@@ -79,6 +113,19 @@ optimizer = torch.optim.Adam(
     + list(model.parameters()),
     lr=args.learning_rate,
 )
+lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer,
+    mode="min",
+    factor=args.lr_scheduler_factor,
+    patience=args.lr_scheduler_patience,
+    min_lr=args.min_learning_rate,
+)
+best_val_loss = float("inf")
+best_model_state = None
+best_X_scaler_state = None
+best_y_scaler_state = None
+best_likelihood_state = None
+epochs_without_improvement = 0
 
 for epoch in range(args.num_epochs):
     X_scaler.train()
@@ -113,13 +160,40 @@ for epoch in range(args.num_epochs):
         val_output = model(Xval_scaled)
         val_loss = -mll(val_output, val_res)
 
-    if (epoch + 1) % 100 == 0:
+    current_val_loss = val_loss.item()
+    lr_scheduler.step(current_val_loss)
+
+    if current_val_loss < best_val_loss - args.early_stopping_min_delta:
+        best_val_loss = current_val_loss
+        best_model_state = copy.deepcopy(model.state_dict())
+        best_X_scaler_state = copy.deepcopy(X_scaler.state_dict())
+        best_y_scaler_state = copy.deepcopy(y_scaler.state_dict())
+        best_likelihood_state = copy.deepcopy(likelihood.state_dict())
+        epochs_without_improvement = 0
+    else:
+        epochs_without_improvement += 1
+
+    if (epoch + 1) % 100 == 0 or epochs_without_improvement == 0:
         logger.info(
             f"Epoch [{epoch + 1}/{args.num_epochs}] "
             f"Train Loss: {train_loss.item():.6f}, "
-            f"Validation Loss: {val_loss:.6f}, "
+            f"Validation Loss: {current_val_loss:.6f}, "
             f"Learning Rate: {optimizer.param_groups[0]['lr']:.2e}"
         )
+
+    if epochs_without_improvement >= args.early_stopping_patience:
+        logger.info(
+            "Early stopping at epoch %d; best validation loss: %.6f",
+            epoch + 1,
+            best_val_loss,
+        )
+        break
+
+if best_model_state is not None:
+    X_scaler.load_state_dict(best_X_scaler_state)
+    y_scaler.load_state_dict(best_y_scaler_state)
+    likelihood.load_state_dict(best_likelihood_state)
+    model.load_state_dict(best_model_state)
 
 save_gpr(
     Xtrain,
