@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0.a1] - 2026-08-05
+
+- Model: `gpytorch-qr==0.8.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0rc4`
+  - `heavyedge/shape-features:v1.0.0a4`
+
+### Added
+
+- v1 GPR of `H` and `phi`.
+
 ## [1.0.0.a0] - 2026-08-05
 
 - Model: `gpytorch-qr==0.8.0`
@@ -14,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Prior mean of `H` and `phi`.
+- v1 Prior mean of `H` and `phi`.
 
 ## [0.2.0.post0] - 2026-08-05
 
@@ -53,6 +64,6 @@ Trained with:
 
 ### Added
 
-- Prior mean of `H` and `phi`.
-- GPR of `H` and `phi`.
-- GPQR of `H` and `phi`.
+- v0 Prior mean of `H` and `phi`.
+- v0 GPR of `H` and `phi`.
+- v0 GPQR of `H` and `phi`.

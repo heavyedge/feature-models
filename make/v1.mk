@@ -15,10 +15,14 @@ PHI_THRESHOLD := 1.0
 MODEL_FILES_v1 := \
 models/v1/feature_models/H.prior_mean.pt \
 models/v1/feature_models/phi.prior_mean.pt \
+models/v1/feature_models/H.gpr.pt \
+models/v1/feature_models/phi.gpr.pt \
 models/v1/feature_models/prior.py \
 models/v1/feature_models/scale.py \
+models/v1/feature_models/gpr.py \
 models/v1/feature_models/load.py \
-models/v1/feature_models/predict-prior_mean.py
+models/v1/feature_models/predict-prior_mean.py \
+models/v1/feature_models/predict-mean.py
 
 models-v1: $(MODEL_FILES_v1)
 
@@ -27,6 +31,8 @@ examples-v1: $(wildcard examples/v1/*)
 test-v1: $(MODEL_FILES_v1)
 	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_PriorMean_H; load_PriorMean_H()"
 	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_PriorMean_phi; load_PriorMean_phi()"
+	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_GPR_H; load_GPR_H()"
+	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_GPR_phi; load_GPR_phi()"
 
 # Data
 
@@ -82,7 +88,15 @@ models/v1/feature_models/%.prior_mean.pt: scripts/v1/train/prior_mean.py _temp/v
 	mkdir -p $(@D)
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
+models/v1/feature_models/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv models/v1/feature_models/%.prior_mean.pt
+	mkdir -p $(@D)
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model GPR_$* --num-epochs $(N_EPOCHS) -o $@
+
 models/v1/feature_models/%.py: scripts/v0/model/%.py
+	mkdir -p $(@D)
+	cp $< $@
+
+models/v1/feature_models/gpr.py: scripts/v1/model/gpr.py
 	mkdir -p $(@D)
 	cp $< $@
 
@@ -95,7 +109,10 @@ models/v1/feature_models/load.py: scripts/v1/model/load.py
 _temp/v1/%.prior_mean.Xpred_1D.csv: models/v1/feature_models/predict-prior_mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v1)
 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
 
+_temp/v1/%.mean.Xpred_1D.csv: models/v1/feature_models/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v1)
+	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
+
 # Examples
 
-examples/v1/Models.ipynb: _temp/v1/X.csv _temp/v1/y.csv _temp/v0/Xpred_1D.csv _temp/v1/H.prior_mean.Xpred_1D.csv _temp/v1/phi.prior_mean.Xpred_1D.csv .FORCE
+examples/v1/Models.ipynb: _temp/v1/X.csv _temp/v1/y.csv _temp/v0/Xpred_1D.csv _temp/v1/H.prior_mean.Xpred_1D.csv _temp/v1/phi.prior_mean.Xpred_1D.csv _temp/v1/H.mean.Xpred_1D.csv _temp/v1/phi.mean.Xpred_1D.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
