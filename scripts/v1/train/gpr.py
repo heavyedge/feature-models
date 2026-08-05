@@ -173,7 +173,7 @@ for epoch in range(args.num_epochs):
     else:
         epochs_without_improvement += 1
 
-    if (epoch + 1) % 100 == 0 or epochs_without_improvement == 0:
+    if (epoch + 1) % 100 == 0:
         logger.info(
             f"Epoch [{epoch + 1}/{args.num_epochs}] "
             f"Train Loss: {train_loss.item():.6f}, "
