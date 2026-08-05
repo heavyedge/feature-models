@@ -3,6 +3,7 @@ import copy
 import logging
 import pathlib
 
+import gpytorch
 import pandas as pd
 import torch
 import v0.model.prior as prior_module  # Needs PYTHONPATH=scripts
@@ -93,6 +94,11 @@ y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
 
 X_scaler.train()
 Xtrain_scaled = X_scaler(Xtrain)
+if not torch.isfinite(Xtrain_scaled).all():
+    raise ValueError(
+        "Xtrain scaling produced NaN/Inf. Check for constant feature columns "
+        "(zero min-max range)."
+    )
 
 mean_class = getattr(prior_module, "PriorMean_" + args.target)
 mean = mean_class(batch_shape=batch_shape).to(device)
@@ -144,12 +150,19 @@ for epoch in range(args.num_epochs):
         strict=False,
     )
 
-    output = model(Xtrain_scaled)
-    train_loss = -mll(output, res)
+    if not torch.isfinite(Xtrain_scaled).all() or not torch.isfinite(res).all():
+        raise ValueError(
+            "Training scaling produced NaN/Inf. Check for constant feature "
+            "columns or zero-variance prior residuals."
+        )
+
+    with gpytorch.settings.cholesky_jitter(1e-3):
+        output = model(Xtrain_scaled)
+        train_loss = -mll(output, res)
     train_loss.backward()
     optimizer.step()
 
-    with torch.no_grad():
+    with torch.no_grad(), gpytorch.settings.fast_pred_var():
         X_scaler.eval()
         y_scaler.eval()
         likelihood.eval()
@@ -157,8 +170,18 @@ for epoch in range(args.num_epochs):
         Xval_scaled = X_scaler(Xval)
         val_mean = mean(Xval)
         val_res = y_scaler((yval - val_mean).unsqueeze(-1)).squeeze(-1)
-        val_output = model(Xval_scaled)
-        val_loss = -mll(val_output, val_res)
+        with gpytorch.settings.cholesky_jitter(1e-3):
+            val_prediction = likelihood(model(Xval_scaled))
+            val_variance = val_prediction.variance.clamp_min(
+                torch.finfo(val_res.dtype).eps
+            )
+            val_loss = (
+                0.5
+                * (
+                    torch.log(2 * torch.pi * val_variance)
+                    + (val_res - val_prediction.mean).square() / val_variance
+                ).mean()
+            )
 
     current_val_loss = val_loss.item()
     lr_scheduler.step(current_val_loss)
@@ -178,7 +201,8 @@ for epoch in range(args.num_epochs):
             f"Epoch [{epoch + 1}/{args.num_epochs}] "
             f"Train Loss: {train_loss.item():.6f}, "
             f"Validation Loss: {current_val_loss:.6f}, "
-            f"Learning Rate: {optimizer.param_groups[0]['lr']:.2e}"
+            f"Learning Rate: {optimizer.param_groups[0]['lr']:.2e}, "
+            f"Noise: {likelihood.noise.mean().item():.2e}"
         )
 
     if epochs_without_improvement >= args.early_stopping_patience:
