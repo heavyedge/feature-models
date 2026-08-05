@@ -7,7 +7,7 @@
 
 all: models examples
 
-models: models-v0
+models: models-v0 models-v1
 
 examples: examples-v0 examples-v1
 
