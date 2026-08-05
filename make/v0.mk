@@ -12,11 +12,6 @@ N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
 
-PYTHON ?= python3
-GPU_RUN ?= $(PYTHON) scripts/gpu-run.py --
-GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
-GPU_JUPYTER ?= $(GPU_RUN) jupyter
-
 MODEL_FILES_v0 := \
 models/v0/feature_models/H.prior_mean.pt \
 models/v0/feature_models/phi.prior_mean.pt \

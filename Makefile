@@ -5,6 +5,11 @@
 # Dummy target to ensure that prerequisite files are built.
 .FORCE:
 
+PYTHON ?= python3
+GPU_RUN ?= $(PYTHON) scripts/gpu-run.py --
+GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
+GPU_JUPYTER ?= $(GPU_RUN) jupyter
+
 all: models examples
 
 models: models-v0 models-v1

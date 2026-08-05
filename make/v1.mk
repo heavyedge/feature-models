@@ -1,9 +1,16 @@
 .PHONY: models-v1 examples-v1
 
-PYTHON ?= python3
-GPU_RUN ?= $(PYTHON) scripts/gpu-run.py --
-GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
-GPU_JUPYTER ?= $(GPU_RUN) jupyter
+QUANTILES := 0.05 0.25 0.5 0.75 0.95
+NUM_LOWER_QUANTILES := 2
+NUM_LATENTS := 3
+
+N_EPOCHS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
+N_FOLDS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
+N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
+N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
+
+H_THRESHOLD := 1.1
+PHI_THRESHOLD := 1.0
 
 MODEL_FILES_v1 := \
 models/v1/feature_models/H.prior_mean.pt \
