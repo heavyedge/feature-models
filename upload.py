@@ -24,7 +24,7 @@ VERSION = args.tag
 MAJOR_VERSION = f"v{version.major}"
 REPO = f"heavyedge/feature-model-{MAJOR_VERSION}"
 
-shutil.rmtree("models/__pycache__", ignore_errors=True)
+shutil.rmtree(f"models/{MAJOR_VERSION}/__pycache__", ignore_errors=True)
 
 api.create_repo(
     repo_id=REPO,

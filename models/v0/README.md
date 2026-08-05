@@ -4,6 +4,7 @@ language:
 - en
 datasets:
 - heavyedge/shape-features
+new_version: heavyedge/feature-model-v1
 ---
 # HeavyEdge Shape Feature Model v0
 
