@@ -3,6 +3,7 @@ import copy
 import logging
 import pathlib
 
+import gpytorch
 import pandas as pd
 import torch
 import v0.model.prior as prior_module  # Needs PYTHONPATH=scripts
@@ -149,7 +150,7 @@ for epoch in range(args.num_epochs):
     train_loss.backward()
     optimizer.step()
 
-    with torch.no_grad():
+    with torch.no_grad(), gpytorch.settings.fast_pred_var():
         X_scaler.eval()
         y_scaler.eval()
         likelihood.eval()
@@ -157,8 +158,9 @@ for epoch in range(args.num_epochs):
         Xval_scaled = X_scaler(Xval)
         val_mean = mean(Xval)
         val_res = y_scaler((yval - val_mean).unsqueeze(-1)).squeeze(-1)
+
         val_output = model(Xval_scaled)
-        val_loss = -mll(val_output, val_res)
+        val_loss = -likelihood.expected_log_prob(val_res, val_output).mean()
 
     current_val_loss = val_loss.item()
     lr_scheduler.step(current_val_loss)
@@ -173,12 +175,13 @@ for epoch in range(args.num_epochs):
     else:
         epochs_without_improvement += 1
 
-    if (epoch + 1) % 100 == 0 or epochs_without_improvement == 0:
+    if (epoch + 1) % 100 == 0:
         logger.info(
             f"Epoch [{epoch + 1}/{args.num_epochs}] "
             f"Train Loss: {train_loss.item():.6f}, "
             f"Validation Loss: {current_val_loss:.6f}, "
-            f"Learning Rate: {optimizer.param_groups[0]['lr']:.2e}"
+            f"Learning Rate: {optimizer.param_groups[0]['lr']:.2e}, "
+            f"Noise: {likelihood.noise.mean().item():.2e}"
         )
 
     if epochs_without_improvement >= args.early_stopping_patience:
