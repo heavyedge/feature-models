@@ -1,7 +1,6 @@
 import gpytorch
 import torch
 from gpytorch.constraints import Interval
-from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
 from gpytorch.models import ExactGP
 
