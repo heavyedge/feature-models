@@ -11,9 +11,10 @@ import torch
 import v0.model.prior as prior_module  # Needs PYTHONPATH=scripts
 import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
 import v1.model.gpr as model_module  # Needs PYTHONPATH=scripts
-from gpytorch.constraints import GreaterThan
+from gpytorch.constraints import Positive
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
+from gpytorch.priors import LogNormalPrior
 from v1.train.save import save_gpr  # Needs PYTHONPATH=scripts
 
 logging.basicConfig(
@@ -81,16 +82,28 @@ parser.add_argument(
     help="Number of trials for hyperparameter optimization.",
 )
 parser.add_argument(
-    "--noise-lower-bound-min",
+    "--prior-loc-min",
     type=float,
-    default=1e-6,
-    help="Smallest observation-noise lower bound considered by Optuna.",
+    default=-10.0,
+    help="Smallest log-space location for the LogNormal prior.",
 )
 parser.add_argument(
-    "--noise-lower-bound-max",
+    "--prior-loc-max",
+    type=float,
+    default=0.0,
+    help="Largest log-space location for the LogNormal prior.",
+)
+parser.add_argument(
+    "--prior-scale-min",
     type=float,
     default=0.1,
-    help="Largest observation-noise lower bound considered by Optuna.",
+    help="Smallest log-space scale for the LogNormal prior.",
+)
+parser.add_argument(
+    "--prior-scale-max",
+    type=float,
+    default=2.0,
+    help="Largest log-space scale for the LogNormal prior.",
 )
 parser.add_argument(
     "--storage-name",
@@ -122,14 +135,12 @@ mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 mean.eval()
 
 model_class = getattr(model_module, args.model)
-best_trial_state = {"value": float("inf"), "state": None}
 
 
-def train_with_noise_lower_bound(noise_lower_bound, trial):
+def train_with_prior(noise_prior, trial=None):
     """Train one GP trial and return its best validation-loss checkpoint."""
-    # Every trial starts from the same random state, making the bound the only
-    # intended source of variation in the optimization objective.
     torch.manual_seed(42)
+    trial_label = trial.number if trial is not None else "best"
 
     X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
     y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
@@ -138,7 +149,8 @@ def train_with_noise_lower_bound(noise_lower_bound, trial):
 
     likelihood = GaussianLikelihood(
         batch_shape=batch_shape,
-        noise_constraint=GreaterThan(noise_lower_bound),
+        noise_prior=noise_prior,
+        noise_constraint=Positive(),
     ).to(device)
     with torch.no_grad():
         y_scaler.train()
@@ -214,8 +226,8 @@ def train_with_noise_lower_bound(noise_lower_bound, trial):
 
         if (epoch + 1) % 100 == 0:
             logger.info(
-                "Trial %d, epoch %d: train loss %.6f, validation loss %.6f, noise %.2e",
-                trial.number,
+                "Trial %s, epoch %d: train loss %.6f, validation loss %.6f, noise %.2e",
+                trial_label,
                 epoch + 1,
                 train_loss.item(),
                 current_val_loss,
@@ -225,21 +237,26 @@ def train_with_noise_lower_bound(noise_lower_bound, trial):
         if epochs_without_improvement >= args.early_stopping_patience:
             break
 
-    trial.set_user_attr("best_epoch", epoch + 1 - epochs_without_improvement)
+    if trial is not None:
+        trial.set_user_attr("best_epoch", epoch + 1 - epochs_without_improvement)
     return best_val_loss, best_state
 
 
 def objective(trial):
-    noise_lower_bound = trial.suggest_float(
-        "noise_lower_bound",
-        args.noise_lower_bound_min,
-        args.noise_lower_bound_max,
+    noise_prior_loc = trial.suggest_float(
+        "noise_prior_loc",
+        args.prior_loc_min,
+        args.prior_loc_max,
+    )
+    noise_prior_scale = trial.suggest_float(
+        "noise_prior_scale",
+        args.prior_scale_min,
+        args.prior_scale_max,
         log=True,
     )
-    val_loss, state = train_with_noise_lower_bound(noise_lower_bound, trial)
-    if val_loss < best_trial_state["value"]:
-        best_trial_state["value"] = val_loss
-        best_trial_state["state"] = state
+    val_loss, _ = train_with_prior(
+        LogNormalPrior(noise_prior_loc, noise_prior_scale), trial
+    )
     return val_loss
 
 
@@ -254,12 +271,19 @@ study = optuna.create_study(
 )
 study.optimize(objective, n_trials=args.n_trials)
 best_trial = study.best_trial
-best_state = best_trial_state["state"]
-best_noise_lower_bound = best_trial.params["noise_lower_bound"]
+best_noise_prior_loc = best_trial.params["noise_prior_loc"]
+best_noise_prior_scale = best_trial.params["noise_prior_scale"]
 logger.info(
-    "Best noise lower bound: %.6g (validation loss: %.6f)",
-    best_noise_lower_bound,
+    "Best noise prior: LogNormal(loc=%.6g, scale=%.6g) " "(validation loss: %.6f)",
+    best_noise_prior_loc,
+    best_noise_prior_scale,
     best_trial.value,
+)
+
+# Retrain the selected configuration so resuming an existing Optuna study also
+# produces a checkpoint matching the study's best trial.
+_, best_state = train_with_prior(
+    LogNormalPrior(best_noise_prior_loc, best_noise_prior_scale),
 )
 
 X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
@@ -271,7 +295,8 @@ with torch.no_grad():
     res = y_scaler((ytrain - mean(Xtrain)).unsqueeze(-1)).squeeze(-1)
 likelihood = GaussianLikelihood(
     batch_shape=batch_shape,
-    noise_constraint=GreaterThan(best_noise_lower_bound),
+    noise_prior=LogNormalPrior(best_noise_prior_loc, best_noise_prior_scale),
+    noise_constraint=Positive(),
 ).to(device)
 model = model_class(
     Xtrain_scaled,
