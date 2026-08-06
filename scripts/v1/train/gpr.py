@@ -11,6 +11,7 @@ import torch
 import v0.model.prior as prior_module  # Needs PYTHONPATH=scripts
 import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
 import v1.model.gpr as model_module  # Needs PYTHONPATH=scripts
+from gpytorch.constraints import GreaterThan
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from v1.train.save import save_gpr  # Needs PYTHONPATH=scripts
@@ -92,6 +93,18 @@ parser.add_argument(
     help="Largest per-dimension ARD lengthscale lower bound considered by Optuna.",
 )
 parser.add_argument(
+    "--noise-lower-bound-min",
+    type=float,
+    default=1e-6,
+    help="Smallest observation-noise lower bound considered by Optuna.",
+)
+parser.add_argument(
+    "--noise-lower-bound-max",
+    type=float,
+    default=0.1,
+    help="Largest observation-noise lower bound considered by Optuna.",
+)
+parser.add_argument(
     "--storage-name",
     type=str,
     default=None,
@@ -109,6 +122,13 @@ if args.lengthscale_lower_bound_max < args.lengthscale_lower_bound_min:
     parser.error(
         "--lengthscale-lower-bound-max must be greater than or equal to "
         "--lengthscale-lower-bound-min"
+    )
+if args.noise_lower_bound_min <= 0:
+    parser.error("--noise-lower-bound-min must be positive")
+if args.noise_lower_bound_max < args.noise_lower_bound_min:
+    parser.error(
+        "--noise-lower-bound-max must be greater than or equal to "
+        "--noise-lower-bound-min"
     )
 
 if args.device is None:
@@ -134,7 +154,7 @@ model_class = getattr(model_module, args.model)
 best_trial_state = {"value": float("inf"), "state": None}
 
 
-def train_with_lower_bounds(lower_bounds, trial):
+def train_with_lower_bounds(lower_bounds, noise_lower_bound, trial):
     """Train one GP trial and return its best validation-loss checkpoint."""
     # Every trial starts from the same random state, making the bound the only
     # intended source of variation in the optimization objective.
@@ -145,7 +165,10 @@ def train_with_lower_bounds(lower_bounds, trial):
     X_scaler.train()
     Xtrain_scaled = X_scaler(Xtrain)
 
-    likelihood = GaussianLikelihood(batch_shape=batch_shape).to(device)
+    likelihood = GaussianLikelihood(
+        batch_shape=batch_shape,
+        noise_constraint=GreaterThan(noise_lower_bound),
+    ).to(device)
     with torch.no_grad():
         y_scaler.train()
         res = y_scaler((ytrain - mean(Xtrain)).unsqueeze(-1)).squeeze(-1)
@@ -246,7 +269,13 @@ def objective(trial):
         )
         for dimension in range(3)
     )
-    val_loss, state = train_with_lower_bounds(lower_bounds, trial)
+    noise_lower_bound = trial.suggest_float(
+        "noise_lower_bound",
+        args.noise_lower_bound_min,
+        args.noise_lower_bound_max,
+        log=True,
+    )
+    val_loss, state = train_with_lower_bounds(lower_bounds, noise_lower_bound, trial)
     if val_loss < best_trial_state["value"]:
         best_trial_state["value"] = val_loss
         best_trial_state["state"] = state
@@ -256,7 +285,9 @@ def objective(trial):
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 study = optuna.create_study(
     direction="minimize",
-    study_name=args.out.stem,
+    # Keep trials from the earlier one-bound search separate: those trials do
+    # not have the per-dimension and noise-bound parameters used here.
+    study_name=f"{args.out.stem}-lengthscale-noise-bounds-v2",
     storage=(
         f"sqlite:///{args.storage_name}.db" if args.storage_name is not None else None
     ),
@@ -268,9 +299,12 @@ best_state = best_trial_state["state"]
 best_lower_bounds = tuple(
     best_trial.params[f"lengthscale_lower_bound_{dimension}"] for dimension in range(3)
 )
+best_noise_lower_bound = best_trial.params["noise_lower_bound"]
 logger.info(
-    "Best lengthscale lower bounds: %s (validation loss: %.6f)",
+    "Best lengthscale lower bounds: %s, noise lower bound: %.6g "
+    "(validation loss: %.6f)",
     best_lower_bounds,
+    best_noise_lower_bound,
     best_trial.value,
 )
 
@@ -281,7 +315,10 @@ Xtrain_scaled = X_scaler(Xtrain)
 with torch.no_grad():
     y_scaler.train()
     res = y_scaler((ytrain - mean(Xtrain)).unsqueeze(-1)).squeeze(-1)
-likelihood = GaussianLikelihood(batch_shape=batch_shape).to(device)
+likelihood = GaussianLikelihood(
+    batch_shape=batch_shape,
+    noise_constraint=GreaterThan(best_noise_lower_bound),
+).to(device)
 model = model_class(
     Xtrain_scaled,
     res,
