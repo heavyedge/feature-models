@@ -22,6 +22,8 @@ spec:
       volumes:
         - name: postfix-state
           emptyDir: {}
+        - name: optuna-postgres-data
+          emptyDir: {}
         - name: gmail-smtp-relay
           secret:
             secretName: gmail-smtp-relay
@@ -167,6 +169,86 @@ spec:
               value: "${DEPLOY_MODE}"
             - name: MAKE_JOBS
               value: "${MAKE_JOBS}"
+            - name: OPTUNA_DB
+              value: "postgresql+psycopg2://optuna:optuna-local@127.0.0.1:5432/optuna"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+        - name: optuna-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              docker-entrypoint.sh postgres &
+              postgres_pid=$!
+
+              while kill -0 "$postgres_pid" 2>/dev/null; do
+                if [ -f /var/run/heavyedge/deploy.done ]; then
+                  kill -TERM "$postgres_pid" 2>/dev/null || true
+                  wait "$postgres_pid" || true
+                  exit 0
+                fi
+                sleep 2
+              done
+
+              wait "$postgres_pid" || true
+          env:
+            - name: POSTGRES_DB
+              value: "optuna"
+            - name: POSTGRES_USER
+              value: "optuna"
+            - name: POSTGRES_PASSWORD
+              value: "optuna-local"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+            - name: optuna-postgres-data
+              mountPath: /var/lib/postgresql/data
+        - name: optuna-dashboard
+          image: ghcr.io/optuna/optuna-dashboard:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          ports:
+            - name: dashboard
+              containerPort: 8080
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              dashboard_pid=""
+              while [ ! -f /var/run/heavyedge/deploy.done ]; do
+                optuna-dashboard "$OPTUNA_DB" --host 0.0.0.0 --port 8080 &
+                dashboard_pid=$!
+                sleep 3
+                if kill -0 "$dashboard_pid" 2>/dev/null; then
+                  break
+                fi
+                wait "$dashboard_pid" || true
+                sleep 2
+              done
+
+              while [ ! -f /var/run/heavyedge/deploy.done ]; do
+                sleep 2
+              done
+
+              if [ -n "$dashboard_pid" ]; then
+                kill -TERM "$dashboard_pid" 2>/dev/null || true
+                wait "$dashboard_pid" || true
+              fi
+          env:
+            - name: OPTUNA_DB
+              value: "postgresql+psycopg2://optuna:optuna-local@127.0.0.1:5432/optuna"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
