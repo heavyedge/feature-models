@@ -4,6 +4,7 @@ import logging
 import pathlib
 
 import gpytorch
+import optuna
 import pandas as pd
 import torch
 import v0.model.prior as prior_module  # Needs PYTHONPATH=scripts
@@ -77,9 +78,31 @@ parser.add_argument(
     default=50,
     help="Number of trials for hyperparameter optimization.",
 )
+parser.add_argument(
+    "--lengthscale-lower-bound-min",
+    type=float,
+    default=0.01,
+    help="Smallest common ARD lengthscale lower bound considered by Optuna.",
+)
+parser.add_argument(
+    "--lengthscale-lower-bound-max",
+    type=float,
+    default=0.5,
+    help="Largest common ARD lengthscale lower bound considered by Optuna.",
+)
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
+
+if args.n_trials < 1:
+    parser.error("--n-trials must be at least 1")
+if args.lengthscale_lower_bound_min <= 0:
+    parser.error("--lengthscale-lower-bound-min must be positive")
+if args.lengthscale_lower_bound_max < args.lengthscale_lower_bound_min:
+    parser.error(
+        "--lengthscale-lower-bound-max must be greater than or equal to "
+        "--lengthscale-lower-bound-min"
+    )
 
 if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -95,114 +118,161 @@ dim = Xtrain.shape[-1]
 num_data = Xtrain.shape[-2]
 batch_shape = Xtrain.shape[:-2]
 
-X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
-
-X_scaler.train()
-Xtrain_scaled = X_scaler(Xtrain)
-
 mean_class = getattr(prior_module, "PriorMean_" + args.target)
 mean = mean_class(batch_shape=batch_shape).to(device)
 mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 mean.eval()
 
 model_class = getattr(model_module, args.model)
-likelihood = GaussianLikelihood(batch_shape=batch_shape).to(device)
+best_trial_state = {"value": float("inf"), "state": None}
+
+
+def train_with_lower_bound(lower_bound, trial):
+    """Train one GP trial and return its best validation-loss checkpoint."""
+    # Every trial starts from the same random state, making the bound the only
+    # intended source of variation in the optimization objective.
+    torch.manual_seed(42)
+
+    X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+    y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+    X_scaler.train()
+    Xtrain_scaled = X_scaler(Xtrain)
+
+    likelihood = GaussianLikelihood(batch_shape=batch_shape).to(device)
+    with torch.no_grad():
+        y_scaler.train()
+        res = y_scaler((ytrain - mean(Xtrain)).unsqueeze(-1)).squeeze(-1)
+    model = model_class(
+        Xtrain_scaled,
+        res,
+        likelihood,
+        batch_shape=batch_shape,
+        lengthscale_lower_bounds=(lower_bound,) * min(dim, 3),
+    ).to(device)
+
+    mll = ExactMarginalLogLikelihood(likelihood, model)
+    optimizer = torch.optim.Adam(
+        list(X_scaler.parameters())
+        + list(y_scaler.parameters())
+        + list(model.parameters()),
+        lr=args.learning_rate,
+    )
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=args.lr_scheduler_factor,
+        patience=args.lr_scheduler_patience,
+        min_lr=args.min_learning_rate,
+    )
+    best_val_loss = float("inf")
+    best_state = None
+    epochs_without_improvement = 0
+
+    for epoch in range(args.num_epochs):
+        X_scaler.train()
+        y_scaler.train()
+        likelihood.train()
+        model.train()
+        optimizer.zero_grad()
+
+        Xtrain_scaled = X_scaler(Xtrain)
+        with torch.no_grad():
+            train_mean = mean(Xtrain)
+        res = y_scaler((ytrain - train_mean).unsqueeze(-1)).squeeze(-1)
+        model.set_train_data(
+            inputs=Xtrain_scaled.detach(), targets=res.detach(), strict=False
+        )
+
+        output = model(Xtrain_scaled)
+        train_loss = -mll(output, res)
+        train_loss.backward()
+        optimizer.step()
+
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+            X_scaler.eval()
+            y_scaler.eval()
+            likelihood.eval()
+            model.eval()
+            Xval_scaled = X_scaler(Xval)
+            val_res = y_scaler((yval - mean(Xval)).unsqueeze(-1)).squeeze(-1)
+            val_loss = -likelihood.expected_log_prob(val_res, model(Xval_scaled)).mean()
+
+        current_val_loss = val_loss.item()
+        lr_scheduler.step(current_val_loss)
+
+        if current_val_loss < best_val_loss - args.early_stopping_min_delta:
+            best_val_loss = current_val_loss
+            best_state = {
+                "X_scaler": copy.deepcopy(X_scaler.state_dict()),
+                "y_scaler": copy.deepcopy(y_scaler.state_dict()),
+                "likelihood": copy.deepcopy(likelihood.state_dict()),
+                "model": copy.deepcopy(model.state_dict()),
+            }
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        if (epoch + 1) % 100 == 0:
+            logger.info(
+                "Trial %d, epoch %d: train loss %.6f, validation loss %.6f, noise %.2e",
+                trial.number,
+                epoch + 1,
+                train_loss.item(),
+                current_val_loss,
+                likelihood.noise.mean().item(),
+            )
+
+        if epochs_without_improvement >= args.early_stopping_patience:
+            break
+
+    trial.set_user_attr("best_epoch", epoch + 1 - epochs_without_improvement)
+    return best_val_loss, best_state
+
+
+def objective(trial):
+    lower_bound = trial.suggest_float(
+        "lengthscale_lower_bound",
+        args.lengthscale_lower_bound_min,
+        args.lengthscale_lower_bound_max,
+        log=True,
+    )
+    val_loss, state = train_with_lower_bound(lower_bound, trial)
+    if val_loss < best_trial_state["value"]:
+        best_trial_state["value"] = val_loss
+        best_trial_state["state"] = state
+    return val_loss
+
+
+study = optuna.create_study(direction="minimize")
+study.optimize(objective, n_trials=args.n_trials)
+best_trial = study.best_trial
+best_state = best_trial_state["state"]
+best_lower_bound = best_trial.params["lengthscale_lower_bound"]
+logger.info(
+    "Best lengthscale lower bound: %.6g (validation loss: %.6f)",
+    best_lower_bound,
+    best_trial.value,
+)
+
+X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+X_scaler.train()
+Xtrain_scaled = X_scaler(Xtrain)
 with torch.no_grad():
     y_scaler.train()
     res = y_scaler((ytrain - mean(Xtrain)).unsqueeze(-1)).squeeze(-1)
-model = model_class(Xtrain_scaled, res, likelihood, batch_shape=batch_shape).to(device)
-
-mll = ExactMarginalLogLikelihood(likelihood, model)
-optimizer = torch.optim.Adam(
-    list(X_scaler.parameters())
-    + list(y_scaler.parameters())
-    + list(model.parameters()),
-    lr=args.learning_rate,
-)
-lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer,
-    mode="min",
-    factor=args.lr_scheduler_factor,
-    patience=args.lr_scheduler_patience,
-    min_lr=args.min_learning_rate,
-)
-best_val_loss = float("inf")
-best_model_state = None
-best_X_scaler_state = None
-best_y_scaler_state = None
-best_likelihood_state = None
-epochs_without_improvement = 0
-
-for epoch in range(args.num_epochs):
-    X_scaler.train()
-    y_scaler.train()
-    likelihood.train()
-    model.train()
-    optimizer.zero_grad()
-
-    Xtrain_scaled = X_scaler(Xtrain)
-    with torch.no_grad():
-        train_mean = mean(Xtrain)
-    res = y_scaler((ytrain - train_mean).unsqueeze(-1)).squeeze(-1)
-    model.set_train_data(
-        inputs=Xtrain_scaled.detach(),
-        targets=res.detach(),
-        strict=False,
-    )
-
-    output = model(Xtrain_scaled)
-    train_loss = -mll(output, res)
-    train_loss.backward()
-    optimizer.step()
-
-    with torch.no_grad(), gpytorch.settings.fast_pred_var():
-        X_scaler.eval()
-        y_scaler.eval()
-        likelihood.eval()
-        model.eval()
-        Xval_scaled = X_scaler(Xval)
-        val_mean = mean(Xval)
-        val_res = y_scaler((yval - val_mean).unsqueeze(-1)).squeeze(-1)
-
-        val_output = model(Xval_scaled)
-        val_loss = -likelihood.expected_log_prob(val_res, val_output).mean()
-
-    current_val_loss = val_loss.item()
-    lr_scheduler.step(current_val_loss)
-
-    if current_val_loss < best_val_loss - args.early_stopping_min_delta:
-        best_val_loss = current_val_loss
-        best_model_state = copy.deepcopy(model.state_dict())
-        best_X_scaler_state = copy.deepcopy(X_scaler.state_dict())
-        best_y_scaler_state = copy.deepcopy(y_scaler.state_dict())
-        best_likelihood_state = copy.deepcopy(likelihood.state_dict())
-        epochs_without_improvement = 0
-    else:
-        epochs_without_improvement += 1
-
-    if (epoch + 1) % 100 == 0:
-        logger.info(
-            f"Epoch [{epoch + 1}/{args.num_epochs}] "
-            f"Train Loss: {train_loss.item():.6f}, "
-            f"Validation Loss: {current_val_loss:.6f}, "
-            f"Learning Rate: {optimizer.param_groups[0]['lr']:.2e}, "
-            f"Noise: {likelihood.noise.mean().item():.2e}"
-        )
-
-    if epochs_without_improvement >= args.early_stopping_patience:
-        logger.info(
-            "Early stopping at epoch %d; best validation loss: %.6f",
-            epoch + 1,
-            best_val_loss,
-        )
-        break
-
-if best_model_state is not None:
-    X_scaler.load_state_dict(best_X_scaler_state)
-    y_scaler.load_state_dict(best_y_scaler_state)
-    likelihood.load_state_dict(best_likelihood_state)
-    model.load_state_dict(best_model_state)
+likelihood = GaussianLikelihood(batch_shape=batch_shape).to(device)
+model = model_class(
+    Xtrain_scaled,
+    res,
+    likelihood,
+    batch_shape=batch_shape,
+    lengthscale_lower_bounds=(best_lower_bound,) * min(dim, 3),
+).to(device)
+X_scaler.load_state_dict(best_state["X_scaler"])
+y_scaler.load_state_dict(best_state["y_scaler"])
+likelihood.load_state_dict(best_state["likelihood"])
+model.load_state_dict(best_state["model"])
 
 save_gpr(
     Xtrain,
