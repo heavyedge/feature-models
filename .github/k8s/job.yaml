@@ -267,6 +267,10 @@ spec:
           args:
             - |
               dashboard_pid=""
+              while [ ! -f /var/run/heavyedge/optuna.ready ] && [ ! -f /var/run/heavyedge/deploy.done ]; do
+                sleep 2
+              done
+
               while [ ! -f /var/run/heavyedge/deploy.done ]; do
                 optuna-dashboard "$OPTUNA_DB" --host 0.0.0.0 --port 8080 &
                 dashboard_pid=$!
