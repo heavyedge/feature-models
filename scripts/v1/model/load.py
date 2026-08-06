@@ -1,7 +1,9 @@
 from pathlib import Path
 
 import torch
+from gpytorch.constraints import Positive
 from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.priors import LogNormalPrior
 
 from .gpr import (
     GPR_H,
@@ -41,7 +43,11 @@ def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, devic
     X_scaler = xscaler_class(dim, batch_shape=batch_shape)
     y_scaler = yscaler_class(1, batch_shape=batch_shape)
     mean = mean_class(batch_shape=batch_shape)
-    likelihood = GaussianLikelihood(batch_shape=batch_shape)
+    likelihood = GaussianLikelihood(
+        batch_shape=batch_shape,
+        noise_prior=LogNormalPrior(0, 1),
+        noise_constraint=Positive(),
+    )
 
     X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
     y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
