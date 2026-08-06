@@ -81,18 +81,6 @@ parser.add_argument(
     help="Number of trials for hyperparameter optimization.",
 )
 parser.add_argument(
-    "--lengthscale-lower-bound-min",
-    type=float,
-    default=0.01,
-    help="Smallest per-dimension ARD lengthscale lower bound considered by Optuna.",
-)
-parser.add_argument(
-    "--lengthscale-lower-bound-max",
-    type=float,
-    default=1.0,
-    help="Largest per-dimension ARD lengthscale lower bound considered by Optuna.",
-)
-parser.add_argument(
     "--noise-lower-bound-min",
     type=float,
     default=1e-6,
@@ -113,23 +101,6 @@ parser.add_argument(
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
-
-if args.n_trials < 1:
-    parser.error("--n-trials must be at least 1")
-if args.lengthscale_lower_bound_min <= 0:
-    parser.error("--lengthscale-lower-bound-min must be positive")
-if args.lengthscale_lower_bound_max < args.lengthscale_lower_bound_min:
-    parser.error(
-        "--lengthscale-lower-bound-max must be greater than or equal to "
-        "--lengthscale-lower-bound-min"
-    )
-if args.noise_lower_bound_min <= 0:
-    parser.error("--noise-lower-bound-min must be positive")
-if args.noise_lower_bound_max < args.noise_lower_bound_min:
-    parser.error(
-        "--noise-lower-bound-max must be greater than or equal to "
-        "--noise-lower-bound-min"
-    )
 
 if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -154,7 +125,7 @@ model_class = getattr(model_module, args.model)
 best_trial_state = {"value": float("inf"), "state": None}
 
 
-def train_with_lower_bounds(lower_bounds, noise_lower_bound, trial):
+def train_with_noise_lower_bound(noise_lower_bound, trial):
     """Train one GP trial and return its best validation-loss checkpoint."""
     # Every trial starts from the same random state, making the bound the only
     # intended source of variation in the optimization objective.
@@ -177,7 +148,6 @@ def train_with_lower_bounds(lower_bounds, noise_lower_bound, trial):
         res,
         likelihood,
         batch_shape=batch_shape,
-        lengthscale_lower_bounds=lower_bounds,
     ).to(device)
 
     mll = ExactMarginalLogLikelihood(likelihood, model)
@@ -260,22 +230,13 @@ def train_with_lower_bounds(lower_bounds, noise_lower_bound, trial):
 
 
 def objective(trial):
-    lower_bounds = tuple(
-        trial.suggest_float(
-            f"lengthscale_lower_bound_{dimension}",
-            args.lengthscale_lower_bound_min,
-            args.lengthscale_lower_bound_max,
-            log=True,
-        )
-        for dimension in range(3)
-    )
     noise_lower_bound = trial.suggest_float(
         "noise_lower_bound",
         args.noise_lower_bound_min,
         args.noise_lower_bound_max,
         log=True,
     )
-    val_loss, state = train_with_lower_bounds(lower_bounds, noise_lower_bound, trial)
+    val_loss, state = train_with_noise_lower_bound(noise_lower_bound, trial)
     if val_loss < best_trial_state["value"]:
         best_trial_state["value"] = val_loss
         best_trial_state["state"] = state
@@ -285,9 +246,7 @@ def objective(trial):
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 study = optuna.create_study(
     direction="minimize",
-    # Keep trials from the earlier one-bound search separate: those trials do
-    # not have the per-dimension and noise-bound parameters used here.
-    study_name=f"{args.out.stem}-lengthscale-noise-bounds-v2",
+    study_name=f"{args.out.stem}",
     storage=(
         f"sqlite:///{args.storage_name}.db" if args.storage_name is not None else None
     ),
@@ -296,14 +255,9 @@ study = optuna.create_study(
 study.optimize(objective, n_trials=args.n_trials)
 best_trial = study.best_trial
 best_state = best_trial_state["state"]
-best_lower_bounds = tuple(
-    best_trial.params[f"lengthscale_lower_bound_{dimension}"] for dimension in range(3)
-)
 best_noise_lower_bound = best_trial.params["noise_lower_bound"]
 logger.info(
-    "Best lengthscale lower bounds: %s, noise lower bound: %.6g "
-    "(validation loss: %.6f)",
-    best_lower_bounds,
+    "Best noise lower bound: %.6g (validation loss: %.6f)",
     best_noise_lower_bound,
     best_trial.value,
 )
@@ -324,7 +278,6 @@ model = model_class(
     res,
     likelihood,
     batch_shape=batch_shape,
-    lengthscale_lower_bounds=best_lower_bounds,
 ).to(device)
 X_scaler.load_state_dict(best_state["X_scaler"])
 y_scaler.load_state_dict(best_state["y_scaler"])
