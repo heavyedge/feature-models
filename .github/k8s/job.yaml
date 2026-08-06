@@ -82,10 +82,10 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
             requests:
-              memory: "128Mi"
+              memory: "4Gi"
               cpu: "250m"
             limits:
-              memory: "256Mi"
+              memory: "8Gi"
               cpu: "1"
           ports:
             - name: dashboard
