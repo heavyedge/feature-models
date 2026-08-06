@@ -13,7 +13,7 @@ N_TRIALS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,50)
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
 
-OPTUNA_DB ?= sqlite:///_temp/v1/optuna.db.sqlite3
+OPTUNA_DB ?= sqlite:///benchmarks/v1/optuna.db
 
 MODEL_FILES_v1 := \
 models/v1/feature_models/H.prior_mean.pt \
@@ -92,7 +92,7 @@ models/v1/feature_models/%.prior_mean.pt: scripts/v1/train/prior_mean.py _temp/v
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 models/v1/feature_models/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv models/v1/feature_models/%.prior_mean.pt
-	mkdir -p $(@D)
+	mkdir -p $(@D) benchmarks/v1
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) -o $@
 
 models/v1/feature_models/%.py: scripts/v0/model/%.py

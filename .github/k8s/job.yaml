@@ -56,6 +56,46 @@ spec:
               sh .github/k8s/build.sh >"$build_log_pipe" 2>&1 || build_status=$?
               wait "$build_log_pid" || true
               rm -rf "$build_log_dir"
+
+              if [ "$build_status" -eq 0 ]; then
+                optuna_export_status=0
+                mkdir -p benchmarks/v1 || optuna_export_status=$?
+                if [ "$optuna_export_status" -eq 0 ]; then
+                  optuna_export_file="$(mktemp benchmarks/v1/.optuna.db.XXXXXX)" || optuna_export_status=$?
+                fi
+                if [ "$optuna_export_status" -eq 0 ]; then
+                  python3 - "$OPTUNA_DB" "sqlite:///$optuna_export_file" <<'PY' || optuna_export_status=$?
+              import sys
+
+              import optuna
+
+              source_storage, destination_storage = sys.argv[1:]
+              optuna.storages.RDBStorage(destination_storage)
+              studies = optuna.get_all_study_summaries(
+                  storage=source_storage,
+                  include_best_trial=False,
+              )
+              for study in studies:
+                  optuna.copy_study(
+                      from_study_name=study.study_name,
+                      from_storage=source_storage,
+                      to_storage=destination_storage,
+                  )
+              print(f"Exported {len(studies)} Optuna studies to benchmarks/v1/optuna.db")
+              PY
+                fi
+                if [ "$optuna_export_status" -eq 0 ]; then
+                  mv "$optuna_export_file" benchmarks/v1/optuna.db || optuna_export_status=$?
+                fi
+                if [ "$optuna_export_status" -ne 0 ]; then
+                  if [ -n "${optuna_export_file:-}" ]; then
+                    rm -f "$optuna_export_file"
+                  fi
+                  echo "::error::Failed to export OPTUNA_DB to benchmarks/v1/optuna.db." >&2
+                  build_status=8
+                fi
+              fi
+
               if [ "$build_status" -eq 0 ]; then
                 build_conclusion=success
               else
