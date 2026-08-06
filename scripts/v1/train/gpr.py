@@ -2,6 +2,7 @@ import argparse
 import copy
 import logging
 import pathlib
+import sys
 
 import gpytorch
 import optuna
@@ -87,8 +88,14 @@ parser.add_argument(
 parser.add_argument(
     "--lengthscale-lower-bound-max",
     type=float,
-    default=0.5,
+    default=1.0,
     help="Largest common ARD lengthscale lower bound considered by Optuna.",
+)
+parser.add_argument(
+    "--storage-name",
+    type=str,
+    default=None,
+    help="Optuna storage name for resuming trials.",
 )
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
@@ -243,7 +250,15 @@ def objective(trial):
     return val_loss
 
 
-study = optuna.create_study(direction="minimize")
+optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
+study = optuna.create_study(
+    direction="minimize",
+    study_name=args.out.stem,
+    storage=(
+        f"sqlite:///{args.storage_name}.db" if args.storage_name is not None else None
+    ),
+    load_if_exists=True,
+)
 study.optimize(objective, n_trials=args.n_trials)
 best_trial = study.best_trial
 best_state = best_trial_state["state"]
