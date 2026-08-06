@@ -11,7 +11,7 @@ import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
 import v1.model.gpr as model_module  # Needs PYTHONPATH=scripts
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from v0.train.save import save_gpr  # Needs PYTHONPATH=scripts
+from v1.train.save import save_gpr  # Needs PYTHONPATH=scripts
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -70,6 +70,12 @@ parser.add_argument(
     type=float,
     default=1e-6,
     help="Minimum learning rate for the scheduler.",
+)
+parser.add_argument(
+    "--n-trials",
+    type=int,
+    default=50,
+    help="Number of trials for hyperparameter optimization.",
 )
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
