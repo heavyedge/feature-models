@@ -277,6 +277,7 @@ def objective(trial):
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 study = optuna.create_study(
     direction="minimize",
+    sampler=optuna.samplers.TPESampler(seed=42),
     study_name=f"{args.out.stem}",
     storage=args.storage if args.storage is not None else None,
     load_if_exists=True,
