@@ -46,10 +46,13 @@ parser.add_argument(
     help="Initial learning rate for optimizer.",
 )
 parser.add_argument(
-    "--early-stopping-patience",
-    type=int,
-    default=20,
-    help="Stop after this many epochs without validation-loss improvement.",
+    "--early-stopping-patience-ratio",
+    type=float,
+    default=0.02,
+    help=(
+        "Fraction of maximum epochs without validation-loss improvement before "
+        "early stopping."
+    ),
 )
 parser.add_argument(
     "--early-stopping-min-delta",
@@ -80,6 +83,12 @@ parser.add_argument(
     type=int,
     default=50,
     help="Number of trials for hyperparameter optimization.",
+)
+parser.add_argument(
+    "--pruning-patience-ratio",
+    type=float,
+    default=0.02,
+    help="Fraction of maximum epochs to wait before enabling trial pruning.",
 )
 parser.add_argument(
     "--prior-loc-min",
@@ -114,6 +123,11 @@ parser.add_argument(
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
+
+early_stopping_patience = max(
+    1, round(args.num_epochs * args.early_stopping_patience_ratio)
+)
+pruning_patience = max(1, round(args.num_epochs * args.pruning_patience_ratio))
 
 if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -180,6 +194,7 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
     best_val_loss = float("inf")
     best_state = None
     epochs_without_improvement = 0
+    training_loss_history = []
 
     for epoch in range(args.num_epochs):
         X_scaler.train()
@@ -211,6 +226,7 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
             val_loss = -likelihood.expected_log_prob(val_res, model(Xval_scaled)).mean()
 
         current_val_loss = val_loss.item()
+        training_loss_history.append(train_loss.item())
         lr_scheduler.step(current_val_loss)
 
         if current_val_loss < best_val_loss - args.early_stopping_min_delta:
@@ -225,6 +241,17 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
         else:
             epochs_without_improvement += 1
 
+        if trial is not None:
+            # Intermediate values are persisted in Optuna storage and power
+            # both pruning and the native intermediate-values visualization.
+            trial.report(current_val_loss, step=epoch)
+            if trial.should_prune():
+                trial.set_user_attr("training_loss_history", training_loss_history)
+                trial.set_user_attr(
+                    "best_epoch", epoch + 1 - epochs_without_improvement
+                )
+                raise optuna.TrialPruned()
+
         if (epoch + 1) % 100 == 0:
             logger.info(
                 "Trial %s, epoch %d: train loss %.6f, validation loss %.6f, noise %.2e",
@@ -235,10 +262,11 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
                 likelihood.noise.mean().item(),
             )
 
-        if epochs_without_improvement >= args.early_stopping_patience:
+        if epochs_without_improvement >= early_stopping_patience:
             break
 
     if trial is not None:
+        trial.set_user_attr("training_loss_history", training_loss_history)
         trial.set_user_attr("best_epoch", epoch + 1 - epochs_without_improvement)
     return best_val_loss, best_state
 
@@ -278,6 +306,11 @@ optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout)
 study = optuna.create_study(
     direction="minimize",
     sampler=optuna.samplers.TPESampler(seed=42),
+    pruner=optuna.pruners.MedianPruner(
+        n_startup_trials=5,
+        n_warmup_steps=pruning_patience,
+        interval_steps=max(1, pruning_patience // 10),
+    ),
     study_name=f"{args.out.stem}",
     storage=args.storage if args.storage is not None else None,
     load_if_exists=True,
