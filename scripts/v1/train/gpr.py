@@ -27,25 +27,32 @@ logger = logging.getLogger(__name__)
 torch.manual_seed(42)
 
 parser = argparse.ArgumentParser()
-parser.add_argument("Xtrain", type=pathlib.Path, help="Training feature csv file.")
-parser.add_argument("ytrain", type=pathlib.Path, help="Training target csv file.")
-parser.add_argument("Xval", type=pathlib.Path, help="Validation feature csv file.")
-parser.add_argument("yval", type=pathlib.Path, help="Validation target csv file.")
-parser.add_argument(
+model_group = parser.add_argument_group("input data and model")
+training_group = parser.add_argument_group("per-trial training")
+hpo_group = parser.add_argument_group("hyperparameter optimization")
+
+model_group.add_argument("Xtrain", type=pathlib.Path, help="Training feature csv file.")
+model_group.add_argument("ytrain", type=pathlib.Path, help="Training target csv file.")
+model_group.add_argument("Xval", type=pathlib.Path, help="Validation feature csv file.")
+model_group.add_argument("yval", type=pathlib.Path, help="Validation target csv file.")
+model_group.add_argument(
     "prior_mean",
     type=pathlib.Path,
     help="Prior mean model weight file.",
 )
-parser.add_argument("--target", type=str, help="Target variable name.")
-parser.add_argument("--model", type=str, help="Model name.")
-parser.add_argument("--num-epochs", type=int, help="Number of maximum epochs.")
-parser.add_argument(
+model_group.add_argument("--target", type=str, help="Target variable name.")
+model_group.add_argument("--model", type=str, help="Model name.")
+model_group.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
+model_group.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
+
+training_group.add_argument("--num-epochs", type=int, help="Number of maximum epochs.")
+training_group.add_argument(
     "--learning-rate",
     type=float,
     default=0.001,
     help="Initial learning rate for optimizer.",
 )
-parser.add_argument(
+training_group.add_argument(
     "--early-stopping-patience-ratio",
     type=float,
     default=0.02,
@@ -54,74 +61,72 @@ parser.add_argument(
         "early stopping."
     ),
 )
-parser.add_argument(
+training_group.add_argument(
     "--early-stopping-min-delta",
     type=float,
     default=0.0,
     help="Minimum validation-loss decrease required to reset early stopping.",
 )
-parser.add_argument(
+training_group.add_argument(
     "--lr-scheduler-patience",
     type=int,
     default=10,
     help="Epochs without validation-loss improvement before reducing learning rate.",
 )
-parser.add_argument(
+training_group.add_argument(
     "--lr-scheduler-factor",
     type=float,
     default=0.5,
     help="Factor by which to reduce the learning rate.",
 )
-parser.add_argument(
+training_group.add_argument(
     "--min-learning-rate",
     type=float,
     default=1e-6,
     help="Minimum learning rate for the scheduler.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--n-trials",
     type=int,
     default=50,
     help="Number of trials for hyperparameter optimization.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--pruning-patience-ratio",
     type=float,
     default=0.02,
     help="Fraction of maximum epochs to wait before enabling trial pruning.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--prior-loc-min",
     type=float,
     default=-10.0,
     help="Smallest log-space location for the LogNormal prior.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--prior-loc-max",
     type=float,
     default=2.0,
     help="Largest log-space location for the LogNormal prior.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--prior-scale-min",
     type=float,
     default=0.1,
     help="Smallest log-space scale for the LogNormal prior.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--prior-scale-max",
     type=float,
     default=2.0,
     help="Largest log-space scale for the LogNormal prior.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--storage",
     type=str,
     default=None,
     help="Optuna storage URL.",
 )
-parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
-parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
 
 early_stopping_patience = max(
