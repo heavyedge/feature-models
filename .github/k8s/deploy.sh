@@ -17,7 +17,20 @@ trap 'rm -f "$archive_file" "$response_file"' EXIT INT TERM
 asset_name="results-${GITHUB_REF_NAME}.tar.gz"
 release_url="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}"
 
-if ! tar -czf "$archive_file" benchmarks/${MAJOR_VERSION} examples/${MAJOR_VERSION}; then
+benchmark_dir="benchmarks/${MAJOR_VERSION}"
+example_dir="examples/${MAJOR_VERSION}"
+archive_status=0
+if [ -d "$benchmark_dir" ] && [ -d "$example_dir" ]; then
+  tar -czf "$archive_file" "$benchmark_dir" "$example_dir" || archive_status=$?
+elif [ -d "$benchmark_dir" ]; then
+  tar -czf "$archive_file" "$benchmark_dir" || archive_status=$?
+elif [ -d "$example_dir" ]; then
+  tar -czf "$archive_file" "$example_dir" || archive_status=$?
+else
+  tar -czf "$archive_file" --files-from=/dev/null || archive_status=$?
+fi
+
+if [ "$archive_status" -ne 0 ]; then
   deploy_status=$((deploy_status | 4))
 elif ! http_status="$(curl -sS -o "$response_file" -w '%{http_code}' \
     -H 'Accept: application/vnd.github+json' \

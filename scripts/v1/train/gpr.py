@@ -27,93 +27,112 @@ logger = logging.getLogger(__name__)
 torch.manual_seed(42)
 
 parser = argparse.ArgumentParser()
-parser.add_argument("Xtrain", type=pathlib.Path, help="Training feature csv file.")
-parser.add_argument("ytrain", type=pathlib.Path, help="Training target csv file.")
-parser.add_argument("Xval", type=pathlib.Path, help="Validation feature csv file.")
-parser.add_argument("yval", type=pathlib.Path, help="Validation target csv file.")
-parser.add_argument(
+model_group = parser.add_argument_group("input data and model")
+training_group = parser.add_argument_group("per-trial training")
+hpo_group = parser.add_argument_group("hyperparameter optimization")
+
+model_group.add_argument("Xtrain", type=pathlib.Path, help="Training feature csv file.")
+model_group.add_argument("ytrain", type=pathlib.Path, help="Training target csv file.")
+model_group.add_argument("Xval", type=pathlib.Path, help="Validation feature csv file.")
+model_group.add_argument("yval", type=pathlib.Path, help="Validation target csv file.")
+model_group.add_argument(
     "prior_mean",
     type=pathlib.Path,
     help="Prior mean model weight file.",
 )
-parser.add_argument("--target", type=str, help="Target variable name.")
-parser.add_argument("--model", type=str, help="Model name.")
-parser.add_argument("--num-epochs", type=int, help="Number of maximum epochs.")
-parser.add_argument(
+model_group.add_argument("--target", type=str, help="Target variable name.")
+model_group.add_argument("--model", type=str, help="Model name.")
+model_group.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
+model_group.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
+
+training_group.add_argument("--num-epochs", type=int, help="Number of maximum epochs.")
+training_group.add_argument(
     "--learning-rate",
     type=float,
     default=0.001,
     help="Initial learning rate for optimizer.",
 )
-parser.add_argument(
-    "--early-stopping-patience",
-    type=int,
-    default=20,
-    help="Stop after this many epochs without validation-loss improvement.",
+training_group.add_argument(
+    "--early-stopping-patience-ratio",
+    type=float,
+    default=0.02,
+    help=(
+        "Fraction of maximum epochs without validation-loss improvement before "
+        "early stopping."
+    ),
 )
-parser.add_argument(
+training_group.add_argument(
     "--early-stopping-min-delta",
     type=float,
     default=0.0,
     help="Minimum validation-loss decrease required to reset early stopping.",
 )
-parser.add_argument(
+training_group.add_argument(
     "--lr-scheduler-patience",
     type=int,
     default=10,
     help="Epochs without validation-loss improvement before reducing learning rate.",
 )
-parser.add_argument(
+training_group.add_argument(
     "--lr-scheduler-factor",
     type=float,
     default=0.5,
     help="Factor by which to reduce the learning rate.",
 )
-parser.add_argument(
+training_group.add_argument(
     "--min-learning-rate",
     type=float,
     default=1e-6,
     help="Minimum learning rate for the scheduler.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--n-trials",
     type=int,
     default=50,
     help="Number of trials for hyperparameter optimization.",
 )
-parser.add_argument(
+hpo_group.add_argument(
+    "--pruning-patience-ratio",
+    type=float,
+    default=0.02,
+    help="Fraction of maximum epochs to wait before enabling trial pruning.",
+)
+hpo_group.add_argument(
     "--prior-loc-min",
     type=float,
     default=-10.0,
     help="Smallest log-space location for the LogNormal prior.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--prior-loc-max",
     type=float,
     default=2.0,
     help="Largest log-space location for the LogNormal prior.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--prior-scale-min",
     type=float,
     default=0.1,
     help="Smallest log-space scale for the LogNormal prior.",
 )
-parser.add_argument(
+hpo_group.add_argument(
     "--prior-scale-max",
     type=float,
     default=2.0,
     help="Largest log-space scale for the LogNormal prior.",
 )
-parser.add_argument(
-    "--storage-name",
+hpo_group.add_argument(
+    "--storage",
     type=str,
     default=None,
-    help="Optuna storage name for resuming trials.",
+    help="Optuna storage URL.",
 )
-parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
-parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 args = parser.parse_args()
+
+early_stopping_patience = max(
+    1, round(args.num_epochs * args.early_stopping_patience_ratio)
+)
+pruning_patience = max(1, round(args.num_epochs * args.pruning_patience_ratio))
 
 if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -180,6 +199,7 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
     best_val_loss = float("inf")
     best_state = None
     epochs_without_improvement = 0
+    training_loss_history = []
 
     for epoch in range(args.num_epochs):
         X_scaler.train()
@@ -211,6 +231,7 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
             val_loss = -likelihood.expected_log_prob(val_res, model(Xval_scaled)).mean()
 
         current_val_loss = val_loss.item()
+        training_loss_history.append(train_loss.item())
         lr_scheduler.step(current_val_loss)
 
         if current_val_loss < best_val_loss - args.early_stopping_min_delta:
@@ -225,6 +246,17 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
         else:
             epochs_without_improvement += 1
 
+        if trial is not None:
+            # Intermediate values are persisted in Optuna storage and power
+            # both pruning and the native intermediate-values visualization.
+            trial.report(current_val_loss, step=epoch)
+            if trial.should_prune():
+                trial.set_user_attr("training_loss_history", training_loss_history)
+                trial.set_user_attr(
+                    "best_epoch", epoch + 1 - epochs_without_improvement
+                )
+                raise optuna.TrialPruned()
+
         if (epoch + 1) % 100 == 0:
             logger.info(
                 "Trial %s, epoch %d: train loss %.6f, validation loss %.6f, noise %.2e",
@@ -235,10 +267,11 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
                 likelihood.noise.mean().item(),
             )
 
-        if epochs_without_improvement >= args.early_stopping_patience:
+        if epochs_without_improvement >= early_stopping_patience:
             break
 
     if trial is not None:
+        trial.set_user_attr("training_loss_history", training_loss_history)
         trial.set_user_attr("best_epoch", epoch + 1 - epochs_without_improvement)
     return best_val_loss, best_state
 
@@ -277,10 +310,14 @@ def objective(trial):
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 study = optuna.create_study(
     direction="minimize",
-    study_name=f"{args.out.stem}",
-    storage=(
-        f"sqlite:///{args.storage_name}.db" if args.storage_name is not None else None
+    sampler=optuna.samplers.TPESampler(seed=42),
+    pruner=optuna.pruners.MedianPruner(
+        n_startup_trials=5,
+        n_warmup_steps=pruning_patience,
+        interval_steps=max(1, pruning_patience // 10),
     ),
+    study_name=f"{args.out.stem}",
+    storage=args.storage if args.storage is not None else None,
     load_if_exists=True,
 )
 study.optimize(objective, n_trials=args.n_trials)

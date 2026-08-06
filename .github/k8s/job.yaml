@@ -17,14 +17,184 @@ spec:
       nodeSelector:
           mlx.navercorp.com/zone: ${MLXP_ZONE}
       restartPolicy: Never
+      terminationGracePeriodSeconds: 60
       imagePullSecrets:
         - name: regcred
       volumes:
         - name: postfix-state
           emptyDir: {}
+        - name: optuna-postgres-data
+          emptyDir: {}
         - name: gmail-smtp-relay
           secret:
             secretName: gmail-smtp-relay
+      initContainers:
+        - name: optuna-postgres
+          restartPolicy: Always
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              postgres_pid=""
+              shutdown_postgres() {
+                if [ -n "$postgres_pid" ] && kill -0 "$postgres_pid" 2>/dev/null; then
+                  kill -TERM "$postgres_pid" 2>/dev/null || true
+                  wait "$postgres_pid" || true
+                fi
+                exit 0
+              }
+              trap shutdown_postgres TERM INT
+
+              docker-entrypoint.sh postgres &
+              postgres_pid=$!
+
+              while kill -0 "$postgres_pid" 2>/dev/null; do
+                if [ -f /var/run/heavyedge/deploy.done ]; then
+                  shutdown_postgres
+                fi
+                sleep 2
+              done
+
+              wait "$postgres_pid" || true
+          env:
+            - name: POSTGRES_DB
+              value: "optuna"
+            - name: POSTGRES_USER
+              value: "optuna"
+            - name: POSTGRES_PASSWORD
+              value: "optuna-local"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+            - name: optuna-postgres-data
+              mountPath: /var/lib/postgresql/data
+        - name: optuna-dashboard
+          restartPolicy: Always
+          image: ghcr.io/optuna/optuna-dashboard:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          ports:
+            - name: dashboard
+              containerPort: 8080
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              dashboard_pid=""
+              shutdown_dashboard() {
+                if [ -n "$dashboard_pid" ] && kill -0 "$dashboard_pid" 2>/dev/null; then
+                  kill -TERM "$dashboard_pid" 2>/dev/null || true
+                  wait "$dashboard_pid" || true
+                fi
+                exit 0
+              }
+              trap shutdown_dashboard TERM INT
+
+              while [ ! -f /var/run/heavyedge/optuna.ready ] && [ ! -f /var/run/heavyedge/deploy.done ]; do
+                sleep 2
+              done
+
+              while [ ! -f /var/run/heavyedge/deploy.done ]; do
+                optuna-dashboard "$OPTUNA_DB" --host 0.0.0.0 --port 8080 &
+                dashboard_pid=$!
+                sleep 3
+                if kill -0 "$dashboard_pid" 2>/dev/null; then
+                  break
+                fi
+                wait "$dashboard_pid" || true
+                sleep 2
+              done
+
+              while [ ! -f /var/run/heavyedge/deploy.done ]; do
+                sleep 2
+              done
+
+              shutdown_dashboard
+          env:
+            - name: OPTUNA_DB
+              value: "postgresql+psycopg2://optuna:optuna-local@127.0.0.1:5432/optuna"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+        - name: postfix
+          restartPolicy: Always
+          image: boky/postfix:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+          ports:
+            - name: smtp
+              containerPort: 587
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              postfix_pid=""
+              shutdown_postfix() {
+                if [ -n "$postfix_pid" ] && kill -0 "$postfix_pid" 2>/dev/null; then
+                  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+                    postqueue -f || true
+                    if postqueue -p 2>/dev/null | grep -q "Mail queue is empty"; then
+                      break
+                    fi
+                    sleep 2
+                  done
+                  kill -TERM "$postfix_pid" 2>/dev/null || true
+                  wait "$postfix_pid" || true
+                fi
+                exit 0
+              }
+              trap shutdown_postfix TERM INT
+
+              /scripts/run.sh &
+              postfix_pid=$!
+
+              while kill -0 "$postfix_pid" 2>/dev/null; do
+                if [ -f /var/run/heavyedge/deploy.done ]; then
+                  shutdown_postfix
+                fi
+                sleep 2
+              done
+
+              wait "$postfix_pid" || true
+          env:
+            - name: RELAYHOST
+              value: "[smtp.gmail.com]:587"
+            - name: RELAYHOST_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: gmail-smtp-relay
+                  key: GMAIL_USERNAME
+            - name: RELAYHOST_PASSWORD_FILE
+              value: "/run/secrets/gmail/GMAIL_APP_PASSWORD"
+            - name: POSTFIX_smtp_tls_security_level
+              value: "encrypt"
+            - name: POSTFIX_mynetworks
+              value: "127.0.0.0/8 [::1]/128"
+            - name: ALLOW_EMPTY_SENDER_DOMAINS
+              value: "true"
+            - name: LOG_FORMAT
+              value: "json"
+          volumeMounts:
+            - name: postfix-state
+              mountPath: /var/run/heavyedge
+            - name: gmail-smtp-relay
+              mountPath: /run/secrets/gmail
+              readOnly: true
       containers:
         - name: build
           image: ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
@@ -54,6 +224,15 @@ spec:
               sh .github/k8s/build.sh >"$build_log_pipe" 2>&1 || build_status=$?
               wait "$build_log_pid" || true
               rm -rf "$build_log_dir"
+
+              if [ "$build_status" -eq 0 ] && [ "${DEPLOY_MODE:-false}" != "false" ]; then
+                if ! sh .github/k8s/export-optuna-db.sh \
+                    "$OPTUNA_DB" "benchmarks/${MAJOR_VERSION}/optuna.db"; then
+                  echo "::error::Failed to export OPTUNA_DB to benchmarks/${MAJOR_VERSION}/optuna.db." >&2
+                  build_status=8
+                fi
+              fi
+
               if [ "$build_status" -eq 0 ]; then
                 build_conclusion=success
               else
@@ -167,65 +346,8 @@ spec:
               value: "${DEPLOY_MODE}"
             - name: MAKE_JOBS
               value: "${MAKE_JOBS}"
+            - name: OPTUNA_DB
+              value: "postgresql+psycopg2://optuna:optuna-local@127.0.0.1:5432/optuna"
           volumeMounts:
             - name: postfix-state
               mountPath: /var/run/heavyedge
-        - name: postfix
-          image: boky/postfix:latest
-          imagePullPolicy: IfNotPresent
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
-              memory: "256Mi"
-          ports:
-            - name: smtp
-              containerPort: 587
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              /scripts/run.sh &
-              postfix_pid=$!
-
-              while kill -0 "$postfix_pid" 2>/dev/null; do
-                if [ -f /var/run/heavyedge/deploy.done ]; then
-                  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-                    postqueue -f || true
-                    if postqueue -p 2>/dev/null | grep -q "Mail queue is empty"; then
-                      break
-                    fi
-                    sleep 2
-                  done
-                  kill "$postfix_pid" 2>/dev/null || true
-                  wait "$postfix_pid" || true
-                  exit 0
-                fi
-                sleep 2
-              done
-
-              wait "$postfix_pid" || true
-          env:
-            - name: RELAYHOST
-              value: "[smtp.gmail.com]:587"
-            - name: RELAYHOST_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: gmail-smtp-relay
-                  key: GMAIL_USERNAME
-            - name: RELAYHOST_PASSWORD_FILE
-              value: "/run/secrets/gmail/GMAIL_APP_PASSWORD"
-            - name: POSTFIX_smtp_tls_security_level
-              value: "encrypt"
-            - name: POSTFIX_mynetworks
-              value: "127.0.0.0/8 [::1]/128"
-            - name: ALLOW_EMPTY_SENDER_DOMAINS
-              value: "true"
-            - name: LOG_FORMAT
-              value: "json"
-          volumeMounts:
-            - name: postfix-state
-              mountPath: /var/run/heavyedge
-            - name: gmail-smtp-relay
-              mountPath: /run/secrets/gmail
-              readOnly: true

@@ -6,6 +6,10 @@ if ! ./setup.sh; then
   exit 1
 fi
 
+if ! sh .github/k8s/setup-postgres.sh; then
+  exit 1
+fi
+
 if ! HEAVYEDGE_GPU_DEVICES=$(python3 scripts/cuda-preflight.py --print-devices); then
   exit 2
 fi
