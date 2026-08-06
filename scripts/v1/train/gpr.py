@@ -90,7 +90,7 @@ parser.add_argument(
 parser.add_argument(
     "--prior-loc-max",
     type=float,
-    default=0.0,
+    default=2.0,
     help="Largest log-space location for the LogNormal prior.",
 )
 parser.add_argument(
@@ -137,7 +137,7 @@ mean.eval()
 model_class = getattr(model_module, args.model)
 
 
-def train_with_prior(noise_prior, trial=None):
+def train_with_priors(noise_prior, lengthscale_prior, trial=None):
     """Train one GP trial and return its best validation-loss checkpoint."""
     torch.manual_seed(42)
     trial_label = trial.number if trial is not None else "best"
@@ -160,6 +160,7 @@ def train_with_prior(noise_prior, trial=None):
         res,
         likelihood,
         batch_shape=batch_shape,
+        lengthscale_prior=lengthscale_prior,
     ).to(device)
 
     mll = ExactMarginalLogLikelihood(likelihood, model)
@@ -254,8 +255,21 @@ def objective(trial):
         args.prior_scale_max,
         log=True,
     )
-    val_loss, _ = train_with_prior(
-        LogNormalPrior(noise_prior_loc, noise_prior_scale), trial
+    lengthscale_prior_loc = trial.suggest_float(
+        "lengthscale_prior_loc",
+        args.prior_loc_min,
+        args.prior_loc_max,
+    )
+    lengthscale_prior_scale = trial.suggest_float(
+        "lengthscale_prior_scale",
+        args.prior_scale_min,
+        args.prior_scale_max,
+        log=True,
+    )
+    val_loss, _ = train_with_priors(
+        LogNormalPrior(noise_prior_loc, noise_prior_scale),
+        LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale),
+        trial,
     )
     return val_loss
 
@@ -273,17 +287,24 @@ study.optimize(objective, n_trials=args.n_trials)
 best_trial = study.best_trial
 best_noise_prior_loc = best_trial.params["noise_prior_loc"]
 best_noise_prior_scale = best_trial.params["noise_prior_scale"]
+best_lengthscale_prior_loc = best_trial.params["lengthscale_prior_loc"]
+best_lengthscale_prior_scale = best_trial.params["lengthscale_prior_scale"]
 logger.info(
-    "Best noise prior: LogNormal(loc=%.6g, scale=%.6g) " "(validation loss: %.6f)",
+    "Best priors: noise=LogNormal(loc=%.6g, scale=%.6g), "
+    "lengthscale=LogNormal(loc=%.6g, scale=%.6g) "
+    "(validation loss: %.6f)",
     best_noise_prior_loc,
     best_noise_prior_scale,
+    best_lengthscale_prior_loc,
+    best_lengthscale_prior_scale,
     best_trial.value,
 )
 
 # Retrain the selected configuration so resuming an existing Optuna study also
 # produces a checkpoint matching the study's best trial.
-_, best_state = train_with_prior(
+_, best_state = train_with_priors(
     LogNormalPrior(best_noise_prior_loc, best_noise_prior_scale),
+    LogNormalPrior(best_lengthscale_prior_loc, best_lengthscale_prior_scale),
 )
 
 X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
@@ -303,6 +324,9 @@ model = model_class(
     res,
     likelihood,
     batch_shape=batch_shape,
+    lengthscale_prior=LogNormalPrior(
+        best_lengthscale_prior_loc, best_lengthscale_prior_scale
+    ),
 ).to(device)
 X_scaler.load_state_dict(best_state["X_scaler"])
 y_scaler.load_state_dict(best_state["y_scaler"])
