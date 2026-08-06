@@ -55,7 +55,7 @@ training_group.add_argument(
 training_group.add_argument(
     "--early-stopping-patience-ratio",
     type=float,
-    default=0.02,
+    default=0.1,
     help=(
         "Fraction of maximum epochs without validation-loss improvement before "
         "early stopping."
@@ -94,7 +94,7 @@ hpo_group.add_argument(
 hpo_group.add_argument(
     "--pruning-patience-ratio",
     type=float,
-    default=0.02,
+    default=0.1,
     help="Fraction of maximum epochs to wait before enabling trial pruning.",
 )
 hpo_group.add_argument(

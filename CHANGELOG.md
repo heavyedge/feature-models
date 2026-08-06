@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - GPR now uses train data + validation data for final training.
+- Increase early stopping patience ratio of GPR from 0.02 to 0.1
+- Increase pruning patience ratio of GPR from 0.02 to 0.1
+- Increase the number of hyperparameter optimization trial from 50 to 500
 
 ## [1.0.0.a2] - 2026-08-06
 
