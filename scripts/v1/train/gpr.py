@@ -307,6 +307,69 @@ def objective(trial):
     return val_loss
 
 
+def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
+    """Fit the selected configuration on train+validation for a fixed epoch count."""
+    torch.manual_seed(42)
+    Xall = torch.cat((Xtrain, Xval), dim=-2)
+    yall = torch.cat((ytrain, yval), dim=-1)
+
+    X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+    y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+    likelihood = GaussianLikelihood(
+        batch_shape=batch_shape,
+        noise_prior=noise_prior,
+        noise_constraint=Positive(),
+    ).to(device)
+
+    X_scaler.train()
+    Xall_scaled = X_scaler(Xall)
+    with torch.no_grad():
+        y_scaler.train()
+        res = y_scaler((yall - mean(Xall)).unsqueeze(-1)).squeeze(-1)
+    model = model_class(
+        Xall_scaled,
+        res,
+        likelihood,
+        batch_shape=batch_shape,
+        lengthscale_prior=lengthscale_prior,
+    ).to(device)
+
+    mll = ExactMarginalLogLikelihood(likelihood, model)
+    optimizer = torch.optim.Adam(
+        list(X_scaler.parameters())
+        + list(y_scaler.parameters())
+        + list(model.parameters()),
+        lr=args.learning_rate,
+    )
+    for epoch in range(num_epochs):
+        X_scaler.train()
+        y_scaler.train()
+        likelihood.train()
+        model.train()
+        optimizer.zero_grad()
+
+        Xall_scaled = X_scaler(Xall)
+        with torch.no_grad():
+            all_mean = mean(Xall)
+        res = y_scaler((yall - all_mean).unsqueeze(-1)).squeeze(-1)
+        model.set_train_data(
+            inputs=Xall_scaled.detach(), targets=res.detach(), strict=False
+        )
+        loss = -mll(model(Xall_scaled), res)
+        loss.backward()
+        optimizer.step()
+
+        if (epoch + 1) % 100 == 0:
+            logger.info(
+                "Final training, epoch %d/%d: loss %.6f",
+                epoch + 1,
+                num_epochs,
+                loss.item(),
+            )
+
+    return Xall, yall, X_scaler, y_scaler, likelihood, model
+
+
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 study = optuna.create_study(
     direction="minimize",
@@ -337,42 +400,28 @@ logger.info(
     best_trial.value,
 )
 
-# Retrain the selected configuration so resuming an existing Optuna study also
-# produces a checkpoint matching the study's best trial.
-_, best_state = train_with_priors(
+best_epoch = best_trial.user_attrs.get("best_epoch", args.num_epochs)
+best_epoch = max(1, min(int(best_epoch), args.num_epochs))
+logger.info("Final training on train+validation data for %d epochs.", best_epoch)
+
+# Refit the selected configuration on all available labelled data.  The epoch
+# count is fixed from the best trial because no validation set remains here.
+(
+    Xall,
+    yall,
+    X_scaler,
+    y_scaler,
+    likelihood,
+    model,
+) = train_on_all_data(
     LogNormalPrior(best_noise_prior_loc, best_noise_prior_scale),
     LogNormalPrior(best_lengthscale_prior_loc, best_lengthscale_prior_scale),
+    best_epoch,
 )
 
-X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
-X_scaler.train()
-Xtrain_scaled = X_scaler(Xtrain)
-with torch.no_grad():
-    y_scaler.train()
-    res = y_scaler((ytrain - mean(Xtrain)).unsqueeze(-1)).squeeze(-1)
-likelihood = GaussianLikelihood(
-    batch_shape=batch_shape,
-    noise_prior=LogNormalPrior(best_noise_prior_loc, best_noise_prior_scale),
-    noise_constraint=Positive(),
-).to(device)
-model = model_class(
-    Xtrain_scaled,
-    res,
-    likelihood,
-    batch_shape=batch_shape,
-    lengthscale_prior=LogNormalPrior(
-        best_lengthscale_prior_loc, best_lengthscale_prior_scale
-    ),
-).to(device)
-X_scaler.load_state_dict(best_state["X_scaler"])
-y_scaler.load_state_dict(best_state["y_scaler"])
-likelihood.load_state_dict(best_state["likelihood"])
-model.load_state_dict(best_state["model"])
-
 save_gpr(
-    Xtrain,
-    ytrain,
+    Xall,
+    yall,
     X_scaler,
     y_scaler,
     mean,
