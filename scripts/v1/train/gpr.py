@@ -106,10 +106,10 @@ parser.add_argument(
     help="Largest log-space scale for the LogNormal prior.",
 )
 parser.add_argument(
-    "--storage-name",
+    "--storage",
     type=str,
     default=None,
-    help="Optuna storage name for resuming trials.",
+    help="Optuna storage URL.",
 )
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 parser.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
@@ -278,9 +278,7 @@ optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout)
 study = optuna.create_study(
     direction="minimize",
     study_name=f"{args.out.stem}",
-    storage=(
-        f"sqlite:///{args.storage_name}.db" if args.storage_name is not None else None
-    ),
+    storage=args.storage if args.storage is not None else None,
     load_if_exists=True,
 )
 study.optimize(objective, n_trials=args.n_trials)
