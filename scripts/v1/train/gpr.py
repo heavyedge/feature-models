@@ -83,13 +83,13 @@ parser.add_argument(
     "--lengthscale-lower-bound-min",
     type=float,
     default=0.01,
-    help="Smallest common ARD lengthscale lower bound considered by Optuna.",
+    help="Smallest per-dimension ARD lengthscale lower bound considered by Optuna.",
 )
 parser.add_argument(
     "--lengthscale-lower-bound-max",
     type=float,
     default=1.0,
-    help="Largest common ARD lengthscale lower bound considered by Optuna.",
+    help="Largest per-dimension ARD lengthscale lower bound considered by Optuna.",
 )
 parser.add_argument(
     "--storage-name",
@@ -134,7 +134,7 @@ model_class = getattr(model_module, args.model)
 best_trial_state = {"value": float("inf"), "state": None}
 
 
-def train_with_lower_bound(lower_bound, trial):
+def train_with_lower_bounds(lower_bounds, trial):
     """Train one GP trial and return its best validation-loss checkpoint."""
     # Every trial starts from the same random state, making the bound the only
     # intended source of variation in the optimization objective.
@@ -154,7 +154,7 @@ def train_with_lower_bound(lower_bound, trial):
         res,
         likelihood,
         batch_shape=batch_shape,
-        lengthscale_lower_bounds=(lower_bound,) * min(dim, 3),
+        lengthscale_lower_bounds=lower_bounds,
     ).to(device)
 
     mll = ExactMarginalLogLikelihood(likelihood, model)
@@ -237,13 +237,16 @@ def train_with_lower_bound(lower_bound, trial):
 
 
 def objective(trial):
-    lower_bound = trial.suggest_float(
-        "lengthscale_lower_bound",
-        args.lengthscale_lower_bound_min,
-        args.lengthscale_lower_bound_max,
-        log=True,
+    lower_bounds = tuple(
+        trial.suggest_float(
+            f"lengthscale_lower_bound_{dimension}",
+            args.lengthscale_lower_bound_min,
+            args.lengthscale_lower_bound_max,
+            log=True,
+        )
+        for dimension in range(3)
     )
-    val_loss, state = train_with_lower_bound(lower_bound, trial)
+    val_loss, state = train_with_lower_bounds(lower_bounds, trial)
     if val_loss < best_trial_state["value"]:
         best_trial_state["value"] = val_loss
         best_trial_state["state"] = state
@@ -262,10 +265,12 @@ study = optuna.create_study(
 study.optimize(objective, n_trials=args.n_trials)
 best_trial = study.best_trial
 best_state = best_trial_state["state"]
-best_lower_bound = best_trial.params["lengthscale_lower_bound"]
+best_lower_bounds = tuple(
+    best_trial.params[f"lengthscale_lower_bound_{dimension}"] for dimension in range(3)
+)
 logger.info(
-    "Best lengthscale lower bound: %.6g (validation loss: %.6f)",
-    best_lower_bound,
+    "Best lengthscale lower bounds: %s (validation loss: %.6f)",
+    best_lower_bounds,
     best_trial.value,
 )
 
@@ -282,7 +287,7 @@ model = model_class(
     res,
     likelihood,
     batch_shape=batch_shape,
-    lengthscale_lower_bounds=(best_lower_bound,) * min(dim, 3),
+    lengthscale_lower_bounds=best_lower_bounds,
 ).to(device)
 X_scaler.load_state_dict(best_state["X_scaler"])
 y_scaler.load_state_dict(best_state["y_scaler"])
