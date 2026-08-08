@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0.a2.dev1] - 2026-08-08
+
+- Model: `gpytorch-qr==0.8.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0rc4`
+  - `heavyedge/shape-features:v1.0.0a4`
+
+### Changed
+
+**v1**
+
+- Optuna `N_TRIALS` is reduced from 500 to 100.
+
 ## [1.0.0.a2.dev0] - 2026-08-06
 
 - Model: `gpytorch-qr==0.8.0`

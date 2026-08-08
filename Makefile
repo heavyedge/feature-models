@@ -10,6 +10,8 @@ GPU_RUN ?= $(PYTHON) scripts/gpu-run.py --
 GPU_PYTHON ?= $(GPU_RUN) $(PYTHON)
 GPU_JUPYTER ?= $(GPU_RUN) jupyter
 
+OPTUNA_DB ?= sqlite:///benchmarks/optuna.db
+
 all: models examples
 
 models: models-v0 models-v1

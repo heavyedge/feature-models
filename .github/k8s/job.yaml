@@ -228,9 +228,9 @@ spec:
               rm -rf "$build_log_dir"
 
               if [ "$build_status" -eq 0 ] && [ "${DEPLOY_MODE:-false}" != "false" ]; then
-                if ! sh .github/k8s/export-optuna-db.sh \
-                    "$OPTUNA_DB" "benchmarks/${MAJOR_VERSION}/optuna.db"; then
-                  echo "::error::Failed to export OPTUNA_DB to benchmarks/${MAJOR_VERSION}/optuna.db." >&2
+                if ! sh .github/k8s/export-db.sh \
+                    "$OPTUNA_DB" "benchmarks/optuna.db"; then
+                  echo "::error::Failed to export OPTUNA_DB." >&2
                   build_status=8
                 fi
               fi

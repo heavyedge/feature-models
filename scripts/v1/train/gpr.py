@@ -127,6 +127,12 @@ hpo_group.add_argument(
     default=None,
     help="Optuna storage URL.",
 )
+hpo_group.add_argument(
+    "--study-name",
+    type=str,
+    default=None,
+    help="Optuna study name.",
+)
 args = parser.parse_args()
 
 early_stopping_patience = max(
@@ -379,7 +385,7 @@ study = optuna.create_study(
         n_warmup_steps=pruning_patience,
         interval_steps=max(1, pruning_patience // 10),
     ),
-    study_name=f"{args.out.stem}",
+    study_name=args.study_name if args.study_name is not None else f"{args.out.stem}",
     storage=args.storage if args.storage is not None else None,
     load_if_exists=True,
 )
