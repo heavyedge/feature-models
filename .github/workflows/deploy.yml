@@ -27,3 +27,36 @@ jobs:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           permission-checks: write
+
+      - name: Create checks
+        id: checks
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { data: check } = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'k8s',
+              head_sha: context.payload.pull_request?.head?.sha ?? context.sha,
+              status: 'queued',
+              output: {
+                title: 'Job is queued',
+                summary: 'Waiting for the Kubernetes Job to start.',
+              },
+            });
+            core.setOutput('k8s-check-run-id', String(check.id));
+
+      - name: Mark k8s check as failed
+        if: failure() && steps.deploy-to-kubernetes.outcome == 'failure'
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            await github.rest.checks.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              check_run_id: Number('${{ steps.checks.outputs.k8s-check-run-id }}'),
+              status: 'completed',
+              conclusion: 'failure',
+            });
