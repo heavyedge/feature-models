@@ -215,8 +215,13 @@ spec:
             preStop:
               exec:
                 command:
-                  - /usr/bin/touch
-                  - /heartbeat/build-cancelled
+                  - /bin/bash
+                  - -c
+                  - |
+                    if [ ! -f /heartbeat/build-success ] && \
+                       [ ! -f /heartbeat/build-failure ]; then
+                      touch /heartbeat/build-cancelled
+                    fi
           resources:
             requests:
               memory: "16Gi"
@@ -309,9 +314,20 @@ spec:
                 git submodule update --init --recursive --depth 1 || return $?
               }
 
+              set_major_version() {
+                MAJOR_VERSION="$(python3 .github/k8s/major-version.py)" || return $?
+                export MAJOR_VERSION
+              }
+
               run_step "Container setup" install_dependencies
               run_step "Source checkout" checkout_source
 
+              run_step "Build environment setup" bash -euo pipefail ./setup.sh
+              run_step "Setup PostgreSQL" bash -euo pipefail .github/k8s/setup-postgres.sh
+
+              if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+                run_step "Parse version" set_major_version
+              fi
               run_step "Build" bash -euo pipefail .github/k8s/build.sh
               run_step "Benchmark database export" \
                 bash -euo pipefail .github/k8s/export-db.sh \
@@ -330,6 +346,10 @@ spec:
               fi
 
               set_current_step "Finalizing job"
+              if update_check completed success "Build completed successfully" \
+                   "All build-container steps completed successfully."; then
+                touch "$heartbeat_dir/check-finalized"
+              fi
               bash -euo pipefail .github/k8s/heartbeat.sh finish success "$heartbeat_pid"
           envFrom:
             - secretRef:
