@@ -7,7 +7,6 @@ export MAKE_JOBS="$(python3 scripts/cuda-preflight.py --print-count)"
 python3 scripts/cuda-preflight.py
 
 if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
-    export MAJOR_VERSION="$(python3 .github/k8s/major-version.py)"
     HEAVYEDGE_TEST_MODE=0 make -j "$MAKE_JOBS" "models-${MAJOR_VERSION}"
     HEAVYEDGE_TEST_MODE=0 make -j "$MAKE_JOBS" "examples-${MAJOR_VERSION}"
 else
