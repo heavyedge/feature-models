@@ -239,6 +239,18 @@ spec:
               git submodule update --init --recursive --depth 1
 
               sh .github/k8s/build.sh
+              sh .github/k8s/export-db.sh "$OPTUNA_DB" "benchmarks/optuna.db"
+              if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+                bash -euo pipefail .github/k8s/retry.sh "Huggingface upload" \
+                  bash -euo pipefail .github/k8s/upload-huggingface.sh
+                bash -euo pipefail .github/scripts/check-run.sh \
+                  in_progress "" "Huggingface upload succeeded"
+
+                bash -euo pipefail .github/k8s/retry.sh "Artifact upload" \
+                  bash -euo pipefail .github/k8s/upload-artifact.sh
+                bash -euo pipefail .github/scripts/check-run.sh \
+                  in_progress "" "Artifact upload succeeded"
+              fi
 
               bash -euo pipefail .github/k8s/heartbeat.sh finish success "$heartbeat_pid"
           envFrom:
