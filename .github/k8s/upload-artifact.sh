@@ -1,10 +1,18 @@
 set -eu
 
-asset_name="examples-${GITHUB_RELEASE_TAG_NAME}.tar.gz"
-archive_file="$(mktemp --suffix=.tar.gz)"
-trap 'rm -f "$archive_file"' EXIT
+artifact_type="$1"
 
-tar -C examples -czf "$archive_file" .
+source_dir="${artifact_type}/${MAJOR_VERSION}"
+if [ ! -d "$source_dir" ]; then
+  echo "Skipping ${artifact_type}: ${source_dir} does not exist."
+  exit 0
+fi
+
+asset_name="${artifact_type}-${GITHUB_RELEASE_TAG_NAME}.tar.gz"
+archive_file="$(mktemp --suffix=.tar.gz)"
+trap 'rm -f "$archive_file"' EXIT INT TERM
+
+tar -C "$source_dir" -czf "$archive_file" .
 source .github/scripts/app-token.sh
 
 existing_asset_id="$(curl --fail --silent --show-error \
@@ -28,3 +36,5 @@ curl --fail --silent --show-error --request POST \
   --header 'Content-Type: application/gzip' \
   --data-binary "@$archive_file" \
   "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${GITHUB_RELEASE_ID}/assets?name=${encoded_asset_name}"
+
+echo "Uploaded ${asset_name}."
