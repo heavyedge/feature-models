@@ -1,5 +1,3 @@
-#!/bin/sh
-
 set -eu
 
 deploy_status=0
