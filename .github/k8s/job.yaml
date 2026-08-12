@@ -205,12 +205,35 @@ spec:
               bash -euo pipefail .github/k8s/heartbeat.sh start &
               heartbeat_pid=$!
 
+              mark_check_as_failed() {
+                exit_code=$?
+                trap - ERR
+                bash -euo pipefail .github/k8s/heartbeat.sh finish failure "$heartbeat_pid" || true
+                exit "$exit_code"
+              }
+              trap mark_check_as_failed ERR
+
               apt-get update
               apt-get install -y --no-install-recommends ca-certificates curl git gzip openssl tar
               git init .
               git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
               git fetch --depth 1 origin "${GIT_SHA}"
               git checkout --detach FETCH_HEAD
+
+              sh ./setup.sh
+              HEAVYEDGE_GPU_DEVICES=$(python3 scripts/cuda-preflight.py --print-devices)
+              MAKE_JOBS=$(python3 scripts/cuda-preflight.py --print-count)
+              python3 scripts/cuda-preflight.py
+
+              if [ "${GITHUB_EVENT_NAME}" != "release" ]; then
+                MAJOR_VERSION="$(python3 .github/k8s/major-version.py)"
+                HEAVYEDGE_TEST_MODE=0 make -j ${MAKE_JOBS} models-${MAJOR_VERSION}
+                HEAVYEDGE_TEST_MODE=0 make -j ${MAKE_JOBS} examples-${MAJOR_VERSION}
+              else
+                HEAVYEDGE_TEST_MODE=1 make -j ${MAKE_JOBS} models
+                HEAVYEDGE_TEST_MODE=1 make -j ${MAKE_JOBS} tests
+                HEAVYEDGE_TEST_MODE=1 make -j ${MAKE_JOBS} examples
+              fi
 
               bash -euo pipefail .github/k8s/heartbeat.sh finish success "$heartbeat_pid"
           envFrom:

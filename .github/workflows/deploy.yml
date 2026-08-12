@@ -84,10 +84,12 @@ jobs:
             --namespace="$KUBE_NAMESPACE" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Create config map
+      - name: Create github config map
         run: |
           kubectl create configmap github-config \
             --from-literal=GITHUB_REPOSITORY="${{ github.repository }}" \
+            --from-literal=GITHUB_EVENT_NAME="${{ github.event_name }}" \
+            --from-literal=GITHUB_REF_NAME="${{ github.ref_name }}" \
             --from-literal=GITHUB_CHECK_RUN_ID="${{ steps.checks.outputs.k8s-check-run-id }}" \
             --namespace="${{ secrets.KUBE_NAMESPACE }}" \
             --dry-run=client -o yaml | kubectl apply -f -
@@ -103,7 +105,6 @@ jobs:
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           CPU_REQUEST: ${{ vars.CPU_REQUEST }}
           GPU_REQUEST: ${{ vars.GPU_REQUEST }}
-          MAJOR_VERSION: ${{ needs.resolve-variables.outputs.major_version }}
         run: |
           event_name="${{ github.event_name }}"
           job_name="feature-models.${GIT_SHA::7}-${event_name//_/}.${{ github.run_id }}-${{ github.run_attempt }}"
