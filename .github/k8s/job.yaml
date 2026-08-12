@@ -62,6 +62,7 @@ spec:
               git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
               git fetch --depth 1 origin "${GIT_SHA}"
               git checkout --detach FETCH_HEAD
+              git submodule update --init --recursive --depth 1
 
               if [ ! -f /heartbeat/check-started ]; then
                 bash -euo pipefail .github/scripts/check-run.sh in_progress "" "Job has started"
@@ -219,6 +220,7 @@ spec:
               git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
               git fetch --depth 1 origin "${GIT_SHA}"
               git checkout --detach FETCH_HEAD
+              git submodule update --init --recursive --depth 1
 
               sh .github/k8s/build.sh
 
