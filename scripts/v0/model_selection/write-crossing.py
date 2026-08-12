@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 from crossing import quantile_crossing
-from gpytorch_qr.likelihoods import DirectQuantileLikelihood
+from gpytorch_qr.likelihoods import DirectQuantilesLikelihood
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -97,10 +97,9 @@ mean.load_state_dict(torch.load(args.prior_mean, map_location=device))
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
 model_class = getattr(model_module, args.model)
-likelihood = DirectQuantileLikelihood(
+likelihood = DirectQuantilesLikelihood(
     quantiles.unsqueeze(0),
-    torch.zeros((*batch_shape, len(quantiles))),
-    learn_scales=True,
+    batch_shape=batch_shape,
 ).to(device)
 model = model_class(
     inducing_points=X_scaled.clone().detach(),
