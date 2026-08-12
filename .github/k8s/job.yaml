@@ -314,10 +314,20 @@ spec:
                 git submodule update --init --recursive --depth 1 || return $?
               }
 
+              set_major_version() {
+                MAJOR_VERSION="$(python3 .github/k8s/major-version.py)" || return $?
+                export MAJOR_VERSION
+              }
+
               run_step "Container setup" install_dependencies
               run_step "Source checkout" checkout_source
 
-              export MAJOR_VERSION="$(python3 .github/k8s/major-version.py)"
+              run_step "Build environment setup" bash -euo pipefail ./setup.sh
+              run_step "Setup PostgreSQL" bash -euo pipefail .github/k8s/setup-postgres.sh
+
+              if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+                run_step "Parse version" set_major_version
+              fi
               run_step "Build" bash -euo pipefail .github/k8s/build.sh
               run_step "Benchmark database export" \
                 bash -euo pipefail .github/k8s/export-db.sh \
