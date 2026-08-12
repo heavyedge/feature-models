@@ -78,6 +78,9 @@ spec:
                 name: github-app
             - configMapRef:
                 name: github-config
+          env:
+            - name: GIT_SHA
+              value: "${GIT_SHA}"
         - name: optuna-postgres
           restartPolicy: Always
           image: postgres:16-alpine
@@ -218,5 +221,7 @@ spec:
             - configMapRef:
                 name: github-config
           env:
+            - name: GIT_SHA
+              value: "${GIT_SHA}"
             - name: OPTUNA_DB
               value: "postgresql+psycopg2://optuna:optuna-local@127.0.0.1:5432/optuna"

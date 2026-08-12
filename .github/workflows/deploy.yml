@@ -88,7 +88,6 @@ jobs:
         run: |
           kubectl create configmap github-config \
             --from-literal=GITHUB_REPOSITORY="${{ github.repository }}" \
-            --from-literal=GIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" \
             --from-literal=GITHUB_CHECK_RUN_ID="${{ steps.checks.outputs.k8s-check-run-id }}" \
             --namespace="${{ secrets.KUBE_NAMESPACE }}" \
             --dry-run=client -o yaml | kubectl apply -f -
@@ -109,6 +108,7 @@ jobs:
           event_name="${{ github.event_name }}"
           job_name="feature-models.${git_sha::7}-${event_name//_/}.${{ github.run_id }}-${{ github.run_attempt }}"
           export JOB_NAME="$job_name"
+          export GIT_SHA="$git_sha"
           template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
           envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
           kubectl wait \
