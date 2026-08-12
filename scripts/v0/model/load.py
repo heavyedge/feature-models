@@ -2,7 +2,7 @@ from pathlib import Path
 
 import torch
 from gpytorch.likelihoods import GaussianLikelihood
-from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
+from gpytorch_qr.likelihoods import CenterGapQuantilesLikelihood
 
 from .gpqr import (
     CenterGapMTGPQR_H,
@@ -90,11 +90,10 @@ def _load_gpqr(
     X_scaler = xscaler_class(dim, batch_shape=batch_shape)
     y_scaler = yscaler_class(1, batch_shape=batch_shape)
     mean = mean_class(batch_shape=batch_shape)
-    likelihood = CenterGapQuantileLikelihood(
+    likelihood = CenterGapQuantilesLikelihood(
         quantiles.unsqueeze(0),
         num_lower_quantiles,
-        torch.zeros((*batch_shape, len(quantiles))),
-        learn_scales=True,
+        batch_shape=batch_shape,
     ).to(device)
     model = model_class(
         inducing_points=inducing_points,
