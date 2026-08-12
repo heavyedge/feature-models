@@ -8,6 +8,7 @@ N_EPOCHS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_FOLDS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
 N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
+N_TRIALS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
 
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
@@ -71,17 +72,25 @@ _temp/v0/shape_features.csv: $(wildcard _data/v1/shape_features/mean_profiles/da
 	'
 
 _temp/v0/X.csv: scripts/v0/data/write-X.py _temp/v0/dimless.csv
-	mkdir -p $(@D)
-	python3 $^ -o $@
+	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS) --random-state=42 -o $@
 
 _temp/v0/y.csv: scripts/v0/data/write-y.py _temp/v0/X.csv _temp/v0/shape_features.csv
 	python3 $^ -o $@
 
-_temp/v0/Xtrain.csv: _temp/v0/X.csv
-	python3 -c "import pandas as pd; pd.read_csv('$<')[['gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']].to_csv('$@', index=False)"
+define SPLIT_v0
+_temp/v0/X$(1).csv: _temp/v0/X.csv
+	python3 -c "import pandas as pd; df = pd.read_csv('$$<'); mask = df['split'] == '$(1)'; df.loc[mask, ['fold', 'gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']].to_csv('$$@', index=False)"
+_temp/v0/y$(1).csv: _temp/v0/y.csv
+	python3 -c "import pandas as pd; df = pd.read_csv('$$<'); mask = df['split'] == '$(1)'; df.loc[mask, ['fold', 'H', 'phi']].to_csv('$$@', index=False)"
+endef
+$(foreach split,train val test,$(eval $(call SPLIT_v0,$(split))))
 
-_temp/v0/ytrain.csv: _temp/v0/y.csv
-	python3 -c "import pandas as pd; pd.read_csv('$<')[['H', 'phi']].to_csv('$@', index=False)"
+
+
+
+
+
+
 
 _temp/v0/Xpred.csv: _temp/v0/Xtrain.csv
 	python3 -c "import pandas as pd; X = pd.read_csv('$<'); cols = ['gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']; idx = pd.DataFrame({col + '_idx': X[col].map({value: i for i, value in enumerate(sorted(X[col].unique()))}) for col in cols}); pd.concat([idx, X], axis=1).to_csv('$@', index=False)"

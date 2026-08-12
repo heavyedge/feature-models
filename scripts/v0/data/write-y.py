@@ -9,5 +9,9 @@ parser.add_argument("shape_features", type=pathlib.Path, help="Shape features cs
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
 
-idx = pd.read_csv(args.X, index_col=0).index
-pd.read_csv(args.shape_features).iloc[idx].to_csv(args.out)
+X = pd.read_csv(args.X, index_col=[0, 1, 2, 3, 4])
+idx = X.index.get_level_values(0)
+y = pd.read_csv(args.shape_features, index_col=0).iloc[idx]
+y.set_index(X.index, inplace=True)
+
+y.to_csv(args.out)

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `heavyedge/profiles:v1.0.0rc4`
   - `heavyedge/shape-features:v1.0.0b1`
 
+### Changed
+
+**v0**
+
 ## [1.0.0a3] - 2026-08-12
 
 - Model: `gpytorch-qr==0.8.0`

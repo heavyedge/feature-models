@@ -66,11 +66,9 @@ _temp/v1/shape_features.csv: $(wildcard _data/v1/shape_features/profiles/dataset
 	'
 
 _temp/v1/X.csv: scripts/v1/data/write-X.py _temp/v1/dimless.csv
-	mkdir -p $(@D)
 	python3 $^ --split-ratio 0.8 0.1 0.1 --random-state=42 -o $@
 
 _temp/v1/y.csv: scripts/v1/data/write-y.py _temp/v1/X.csv _temp/v1/shape_features.csv
-	mkdir -p $(@D)
 	python3 $^ -o $@
 
 define SPLIT_v1
