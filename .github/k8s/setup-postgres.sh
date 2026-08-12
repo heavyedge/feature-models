@@ -1,7 +1,5 @@
 #!/bin/sh
 
-set -eu
-
 python3 -c 'import psycopg2' 2>/dev/null || pip install --no-cache-dir psycopg2-binary
 
 python3 - "$OPTUNA_DB" <<'PY'

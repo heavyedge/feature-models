@@ -1,5 +1,3 @@
-#!/bin/sh
-
 set -eu
 
 if [ "$#" -ne 2 ]; then
