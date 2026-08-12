@@ -96,6 +96,7 @@ jobs:
         id: deploy-to-kubernetes
         shell: bash
         env:
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
           KUBE_USERNAME: ${{ secrets.KUBE_USERNAME }}
           TTL_SECONDS_AFTER_FINISHED: ${{ vars.TTL_SECONDS_AFTER_FINISHED }}
@@ -104,11 +105,9 @@ jobs:
           GPU_REQUEST: ${{ vars.GPU_REQUEST }}
           MAJOR_VERSION: ${{ needs.resolve-variables.outputs.major_version }}
         run: |
-          git_sha="${{ github.event.pull_request.head.sha || github.sha }}"
           event_name="${{ github.event_name }}"
-          job_name="feature-models.${git_sha::7}-${event_name//_/}.${{ github.run_id }}-${{ github.run_attempt }}"
+          job_name="feature-models.${GIT_SHA::7}-${event_name//_/}.${{ github.run_id }}-${{ github.run_attempt }}"
           export JOB_NAME="$job_name"
-          export GIT_SHA="$git_sha"
           template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
           envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
           kubectl wait \

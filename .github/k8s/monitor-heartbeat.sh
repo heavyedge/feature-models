@@ -14,7 +14,7 @@ elif [ -f "$heartbeat_dir/build-failure" ]; then
 elif [ -f "$heartbeat_dir/build-success" ]; then
   finalize_check completed success "Build completed successfully"
 elif [ -f "$heartbeat_dir/build-started" ]; then
-  heartbeat_file="$heartbeat_dir/build-heartbeat"
+  heartbeat_file="$heartbeat_dir/heartbeat"
   heartbeat_source="$heartbeat_dir/build-started"
   if [ -f "$heartbeat_file" ]; then
     heartbeat_source="$heartbeat_file"

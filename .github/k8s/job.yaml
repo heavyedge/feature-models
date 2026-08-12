@@ -202,7 +202,7 @@ spec:
           command: ["bash", "-euc"]
           args:
             - |
-              bash -euo pipefail .github/k8s/build-heartbeat.sh start &
+              bash -euo pipefail .github/k8s/heartbeat.sh start &
               heartbeat_pid=$!
 
               apt-get update
@@ -212,7 +212,7 @@ spec:
               git fetch --depth 1 origin "${GIT_SHA}"
               git checkout --detach FETCH_HEAD
 
-              bash -euo pipefail .github/k8s/build-heartbeat.sh finish success "$heartbeat_pid"
+              bash -euo pipefail .github/k8s/heartbeat.sh finish success "$heartbeat_pid"
           envFrom:
             - secretRef:
                 name: github-app
