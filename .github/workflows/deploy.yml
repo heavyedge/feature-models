@@ -2,12 +2,6 @@ name: Deploy to Kubernetes
 
 on:
   workflow_call:
-    inputs:
-      publish_doc_check_run_id:
-        description: Check run to pass to the release documentation build.
-        required: false
-        type: string
-        default: ""
 
 permissions:
   contents: write
@@ -89,6 +83,40 @@ jobs:
             --from-literal=HUGGINGFACE_TOKEN="$HUGGINGFACE_TOKEN" \
             --namespace="$KUBE_NAMESPACE" \
             --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create config map
+        run: |
+          kubectl create configmap github-config \
+            --from-literal=GITHUB_REPOSITORY="${{ github.repository }}" \
+            --from-literal=GIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" \
+            --from-literal=GITHUB_CHECK_RUN_ID="${{ steps.checks.outputs.k8s-check-run-id }}" \
+            --namespace="${{ secrets.KUBE_NAMESPACE }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy to Kubernetes
+        id: deploy-to-kubernetes
+        shell: bash
+        env:
+          KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+          KUBE_USERNAME: ${{ secrets.KUBE_USERNAME }}
+          TTL_SECONDS_AFTER_FINISHED: ${{ vars.TTL_SECONDS_AFTER_FINISHED }}
+          MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
+          CPU_REQUEST: ${{ vars.CPU_REQUEST }}
+          GPU_REQUEST: ${{ vars.GPU_REQUEST }}
+          MAJOR_VERSION: ${{ needs.resolve-variables.outputs.major_version }}
+        run: |
+          git_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          event_name="${{ github.event_name }}"
+          job_name="feature-models.${git_sha::7}-${event_name//_/}.${{ github.run_id }}-${{ github.run_attempt }}"
+          export JOB_NAME="$job_name"
+          template_vars="$(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' .github/k8s/job.yaml | sort -u | tr '\n' ' ')"
+          envsubst "$template_vars" < .github/k8s/job.yaml | kubectl apply -f -
+          kubectl wait \
+            --namespace="$KUBE_NAMESPACE" \
+            --for=create \
+            "pod" \
+            --selector="job-name=${job_name}" \
+            --timeout=120s
 
       - name: Mark k8s check as failed
         if: failure() && steps.deploy-to-kubernetes.outcome == 'failure'

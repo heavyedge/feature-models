@@ -17,18 +17,67 @@ spec:
       nodeSelector:
           mlx.navercorp.com/zone: ${MLXP_ZONE}
       restartPolicy: Never
-      terminationGracePeriodSeconds: 60
-      imagePullSecrets:
-        - name: regcred
+      terminationGracePeriodSeconds: 600
       volumes:
-        - name: postfix-state
+        - name: heartbeat
           emptyDir: {}
         - name: optuna-postgres-data
           emptyDir: {}
-        - name: gmail-smtp-relay
-          secret:
-            secretName: gmail-smtp-relay
       initContainers:
+        - name: check-monitor
+          image: python:3.13
+          imagePullPolicy: Always
+          restartPolicy: Always
+          workingDir: /sidecar
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: heartbeat
+              mountPath: /heartbeat
+          startupProbe:
+            exec:
+              command: ["/usr/bin/test", "-f", "/heartbeat/sidecar-ready"]
+            periodSeconds: 5
+            failureThreshold: 60
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    cd /sidecar
+                    bash -euo pipefail .github/k8s/monitor-heartbeat.sh >/dev/null 2>&1 &
+          command: ["bash", "-euc"]
+          args:
+            - |
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates curl git openssl
+              git init .
+              git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+              git fetch --depth 1 origin "${GIT_SHA}"
+              git checkout --detach FETCH_HEAD
+
+              if [ ! -f /heartbeat/check-started ]; then
+                bash -euo pipefail .github/scripts/check-run.sh in_progress "" "Job has started"
+                touch /heartbeat/check-started
+              fi
+              touch /heartbeat/sidecar-ready
+
+              while true; do
+                bash -euo pipefail .github/k8s/monitor-heartbeat.sh
+                sleep 5
+              done
+          envFrom:
+            - secretRef:
+                name: github-app
+            - configMapRef:
+                name: github-config
         - name: optuna-postgres
           restartPolicy: Always
           image: postgres:16-alpine
@@ -72,8 +121,6 @@ spec:
             - name: POSTGRES_PASSWORD
               value: "optuna-local"
           volumeMounts:
-            - name: postfix-state
-              mountPath: /var/run/heavyedge
             - name: optuna-postgres-data
               mountPath: /var/lib/postgresql/data
         - name: optuna-dashboard
@@ -126,81 +173,20 @@ spec:
           env:
             - name: OPTUNA_DB
               value: "postgresql+psycopg2://optuna:optuna-local@127.0.0.1:5432/optuna"
-          volumeMounts:
-            - name: postfix-state
-              mountPath: /var/run/heavyedge
-        - name: postfix
-          restartPolicy: Always
-          image: boky/postfix:latest
-          imagePullPolicy: IfNotPresent
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
-              memory: "256Mi"
-          ports:
-            - name: smtp
-              containerPort: 587
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              postfix_pid=""
-              shutdown_postfix() {
-                if [ -n "$postfix_pid" ] && kill -0 "$postfix_pid" 2>/dev/null; then
-                  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-                    postqueue -f || true
-                    if postqueue -p 2>/dev/null | grep -q "Mail queue is empty"; then
-                      break
-                    fi
-                    sleep 2
-                  done
-                  kill -TERM "$postfix_pid" 2>/dev/null || true
-                  wait "$postfix_pid" || true
-                fi
-                exit 0
-              }
-              trap shutdown_postfix TERM INT
-
-              /scripts/run.sh &
-              postfix_pid=$!
-
-              while kill -0 "$postfix_pid" 2>/dev/null; do
-                if [ -f /var/run/heavyedge/deploy.done ]; then
-                  shutdown_postfix
-                fi
-                sleep 2
-              done
-
-              wait "$postfix_pid" || true
-          env:
-            - name: RELAYHOST
-              value: "[smtp.gmail.com]:587"
-            - name: RELAYHOST_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: gmail-smtp-relay
-                  key: GMAIL_USERNAME
-            - name: RELAYHOST_PASSWORD_FILE
-              value: "/run/secrets/gmail/GMAIL_APP_PASSWORD"
-            - name: POSTFIX_smtp_tls_security_level
-              value: "encrypt"
-            - name: POSTFIX_mynetworks
-              value: "127.0.0.0/8 [::1]/128"
-            - name: ALLOW_EMPTY_SENDER_DOMAINS
-              value: "true"
-            - name: LOG_FORMAT
-              value: "json"
-          volumeMounts:
-            - name: postfix-state
-              mountPath: /var/run/heavyedge
-            - name: gmail-smtp-relay
-              mountPath: /run/secrets/gmail
-              readOnly: true
       containers:
         - name: build
-          image: ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}
+          image: python:3.13
           imagePullPolicy: Always
+          workingDir: /workspace
+          volumeMounts:
+            - name: heartbeat
+              mountPath: /heartbeat
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /usr/bin/touch
+                  - /heartbeat/build-cancelled
           resources:
             requests:
               memory: "16Gi"
@@ -210,146 +196,27 @@ spec:
               memory: "16Gi"
               cpu: "${CPU_REQUEST}"
               nvidia.com/gpu: "${GPU_REQUEST}"
-          command: ["/bin/sh", "-c"]
+          command: ["bash", "-euc"]
           args:
             - |
-              python .github/k8s/wait-smtp.py || echo "SMTP relay is unavailable; continuing without email notifications."
+              bash -euo pipefail .github/k8s/build-heartbeat.sh start &
+              heartbeat_pid=$!
 
-              python .github/k8s/send-email.py --status "Started" || true
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates curl git gzip openssl tar
+              git init .
+              git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+              git fetch --depth 1 origin "${GIT_SHA}"
+              git checkout --detach FETCH_HEAD
 
-              build_log_dir="$(mktemp -d)"
-              build_log_pipe="$build_log_dir/output"
-              mkfifo "$build_log_pipe"
-              tee < "$build_log_pipe" &
-              build_log_pid=$!
-              build_status=0
-              sh .github/k8s/build.sh >"$build_log_pipe" 2>&1 || build_status=$?
-              wait "$build_log_pid" || true
-              rm -rf "$build_log_dir"
-
-              if [ "$build_status" -eq 0 ] && [ "${DEPLOY_MODE:-false}" != "false" ]; then
-                if ! sh .github/k8s/export-db.sh \
-                    "$OPTUNA_DB" "benchmarks/optuna.db"; then
-                  echo "::error::Failed to export OPTUNA_DB." >&2
-                  build_status=8
-                fi
-              fi
-
-              if [ "$build_status" -eq 0 ]; then
-                build_conclusion=success
-              else
-                build_conclusion=failure
-              fi
-              export BUILD_CONCLUSION="$build_conclusion"
-
-              token_status=0
-              GITHUB_APP_TOKEN="$(sh .github/k8s/app-token.sh)" || token_status=$?
-              export GITHUB_APP_TOKEN
-
-              deploy_conclusion=success
-              doc_deploy_conclusion=success
-              if [ "$build_status" -ne 0 ]; then
-                deploy_status=1
-                deploy_conclusion=skipped
-                doc_deploy_conclusion=skipped
-                echo "Skipping deployment because the build failed."
-              else
-                deploy_log_dir="$(mktemp -d)"
-                deploy_log_pipe="$deploy_log_dir/output"
-                mkfifo "$deploy_log_pipe"
-                tee < "$deploy_log_pipe" &
-                deploy_log_pid=$!
-                deploy_status=0
-                sh .github/k8s/deploy.sh >"$deploy_log_pipe" 2>&1 || deploy_status=$?
-                wait "$deploy_log_pid" || true
-                rm -rf "$deploy_log_dir"
-                if [ $((deploy_status & 2)) -ne 0 ]; then
-                  deploy_conclusion=failure
-                fi
-                if [ $((deploy_status & 4)) -ne 0 ]; then
-                  doc_deploy_conclusion=failure
-                fi
-              fi
-              export DEPLOY_CONCLUSION="$deploy_conclusion"
-              export DOC_DEPLOY_CONCLUSION="$doc_deploy_conclusion"
-
-              dispatch_status=0
-              sh .github/scripts/deploy-dispatch.sh || dispatch_status=$?
-
-              exit_code=0
-              if [ "$build_status" -ne 0 ]; then
-                exit_code=$((exit_code + 1))
-              fi
-              if [ "$token_status" -ne 0 ]; then
-                exit_code=$((exit_code + 2))
-              fi
-              if [ $((deploy_status & 6)) -ne 0 ]; then
-                exit_code=$((exit_code + 4))
-              fi
-              if [ "$dispatch_status" -ne 0 ]; then
-                exit_code=$((exit_code + 8))
-              fi
-
-              email_status=Failed
-              if [ "$exit_code" -eq 0 ]; then
-                email_status=Completed
-              fi
-              python .github/k8s/send-email.py --status "$email_status" --exit-code "$exit_code" --build-status "$build_status" --deploy-status "$deploy_status" || true
-
-              touch /var/run/heavyedge/deploy.done
-              exit "$exit_code"
+              bash -euo pipefail .github/k8s/build-heartbeat.sh finish success "$heartbeat_pid"
+          envFrom:
+            - secretRef:
+                name: github-app
+            - secretRef:
+                name: huggingface-token
+            - configMapRef:
+                name: github-config
           env:
-            - name: GH_APP_ID
-              valueFrom:
-                secretKeyRef:
-                  name: github-app
-                  key: GH_APP_ID
-            - name: GH_APP_PRIVATE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: github-app
-                  key: GH_APP_PRIVATE_KEY
-            - name: GH_APP_INSTALLATION_ID
-              valueFrom:
-                secretKeyRef:
-                  name: github-app
-                  key: GH_APP_INSTALLATION_ID
-                  optional: true
-            - name: GITHUB_REPOSITORY
-              value: "${GITHUB_REPOSITORY}"
-            - name: KUBERNETES_JOB_NAME
-              value: "${JOB_NAME}"
-            - name: BUILD_CHECK_RUN_ID
-              value: "${BUILD_CHECK_RUN_ID}"
-            - name: DEPLOY_CHECK_RUN_ID
-              value: "${DEPLOY_CHECK_RUN_ID}"
-            - name: DOC_DEPLOY_CHECK_RUN_ID
-              value: "${DOC_DEPLOY_CHECK_RUN_ID}"
-            - name: CLEANUP_CHECK_RUN_ID
-              value: "${CLEANUP_CHECK_RUN_ID}"
-            - name: IMAGE_TAG
-              value: "${IMAGE_TAG}"
-            - name: GITHUB_REF_NAME
-              value: "${GITHUB_REF_NAME}"
-            - name: GITHUB_DISPATCH_REF
-              value: "${GITHUB_DISPATCH_REF}"
-            - name: SMTP_NOTIFY_RECIPIENT
-              value: "${SMTP_NOTIFY_RECIPIENT}"
-            - name: HUGGINGFACE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: huggingface-token
-                  key: HUGGINGFACE_TOKEN
-            - name: MAJOR_VERSION
-              value: "${MAJOR_VERSION}"
-            - name: BUILD_MODE
-              value: "${BUILD_MODE}"
-            - name: DEPLOY_MODE
-              value: "${DEPLOY_MODE}"
-            - name: MAKE_JOBS
-              value: "${MAKE_JOBS}"
             - name: OPTUNA_DB
               value: "postgresql+psycopg2://optuna:optuna-local@127.0.0.1:5432/optuna"
-          volumeMounts:
-            - name: postfix-state
-              mountPath: /var/run/heavyedge

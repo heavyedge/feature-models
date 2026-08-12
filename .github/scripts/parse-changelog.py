@@ -45,7 +45,10 @@ def main() -> int:
 
     try:
         section = extract_section(args.file.read_text(encoding="utf-8"), args.version)
-    except (OSError, ValueError) as error:
+    except ValueError:
+        # A release may legitimately have no changelog entry.
+        return 0
+    except OSError as error:
         print(error, file=sys.stderr)
         return 1
 
