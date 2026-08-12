@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 from cv import cv_gpqr, split_data
-from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
+from gpytorch_qr.likelihoods import CenterGapQuantilesLikelihood
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -102,7 +102,7 @@ mean.eval()
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
 model_class = getattr(model_module, args.model)
-likelihood = CenterGapQuantileLikelihood(
+likelihood = CenterGapQuantilesLikelihood(
     quantiles.unsqueeze(0),
     args.num_lower_quantiles,
     torch.zeros((*batch_shape, len(quantiles))),
