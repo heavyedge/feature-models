@@ -70,6 +70,11 @@ spec:
               fi
               touch /heartbeat/sidecar-ready
 
+              shutdown_monitor() {
+                exit 0
+              }
+              trap shutdown_monitor TERM INT
+
               while true; do
                 bash -euo pipefail .github/k8s/monitor-heartbeat.sh
                 sleep 5
