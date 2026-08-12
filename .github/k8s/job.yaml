@@ -335,13 +335,13 @@ spec:
 
               if [ "$GITHUB_EVENT_NAME" = "release" ]; then
                 run_step "Hugging Face deployment" \
-                  bash -euo pipefail .github/k8s/retry.sh "Hugging Face deployment" \
+                  bash -euo pipefail .github/k8s/retry.sh --attempts 3 --sleep 60 "Hugging Face deployment" \
                     bash -euo pipefail .github/k8s/upload-huggingface.sh
                 run_step "Examples artifact upload" \
-                  bash -euo pipefail .github/k8s/retry.sh "Examples artifact upload" \
+                  bash -euo pipefail .github/k8s/retry.sh --attempts 3 --sleep 60 "Examples artifact upload" \
                     bash -euo pipefail .github/k8s/upload-artifact.sh examples
                 run_step "Benchmarks artifact upload" \
-                  bash -euo pipefail .github/k8s/retry.sh "Benchmarks artifact upload" \
+                  bash -euo pipefail .github/k8s/retry.sh --attempts 3 --sleep 60 "Benchmarks artifact upload" \
                     bash -euo pipefail .github/k8s/upload-artifact.sh benchmarks
               fi
 
