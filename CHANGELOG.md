@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0.a3] - 2026-08-12
+## [1.0.0a3] - 2026-08-12
 
 - Model: `gpytorch-qr==0.8.0`
 - Dataset:
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Increase pruning patience ratio of GPR from 0.02 to 0.1
 - Increase the number of hyperparameter optimization trial from 50 to 100
 
-## [1.0.0.a2] - 2026-08-06
+## [1.0.0a2] - 2026-08-06
 
 - Model: `gpytorch-qr==0.8.0`
 - Dataset:
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implement pruning for GPR of `H` and `phi`.
 - Make early stopping more patient for GPR of `H` and `phi`.
 
-## [1.0.0.a1] - 2026-08-06
+## [1.0.0a1] - 2026-08-06
 
 - Model: `gpytorch-qr==0.8.0`
 - Dataset:
@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1 GPR of `H` and `phi`.
 
-## [1.0.0.a0] - 2026-08-05
+## [1.0.0a0] - 2026-08-05
 
 - Model: `gpytorch-qr==0.8.0`
 - Dataset:
