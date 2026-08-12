@@ -19,7 +19,7 @@ case "${1:-}" in
     [ "$#" -eq 1 ] || usage
     touch "$heartbeat_dir/build-started"
     while true; do
-      touch "$heartbeat_dir/build-heartbeat"
+      touch "$heartbeat_dir/heartbeat"
       sleep "$heartbeat_interval"
     done
     ;;
