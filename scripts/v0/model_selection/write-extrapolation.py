@@ -111,8 +111,7 @@ model_class = getattr(model_module, args.model)
 likelihood = CenterGapQuantilesLikelihood(
     quantiles.unsqueeze(0),
     args.num_lower_quantiles,
-    torch.zeros((*batch_shape, len(quantiles))),
-    learn_scales=True,
+    batch_shape=batch_shape,
 ).to(device)
 model = model_class(
     inducing_points=x_scaled.clone().detach(),
