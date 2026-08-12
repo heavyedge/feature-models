@@ -21,6 +21,8 @@ spec:
       volumes:
         - name: heartbeat
           emptyDir: {}
+        - name: heavyedge-run
+          emptyDir: {}
         - name: optuna-postgres-data
           emptyDir: {}
       initContainers:
@@ -39,6 +41,8 @@ spec:
           volumeMounts:
             - name: heartbeat
               mountPath: /heartbeat
+            - name: heavyedge-run
+              mountPath: /var/run/heavyedge
           startupProbe:
             exec:
               command: ["/usr/bin/test", "-f", "/heartbeat/sidecar-ready"]
@@ -132,6 +136,8 @@ spec:
           volumeMounts:
             - name: optuna-postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: heavyedge-run
+              mountPath: /var/run/heavyedge
         - name: optuna-dashboard
           restartPolicy: Always
           image: ghcr.io/optuna/optuna-dashboard:latest
@@ -182,6 +188,9 @@ spec:
           env:
             - name: OPTUNA_DB
               value: "postgresql+psycopg2://optuna:optuna-local@127.0.0.1:5432/optuna"
+          volumeMounts:
+            - name: heavyedge-run
+              mountPath: /var/run/heavyedge
       containers:
         - name: build
           image: python:3.13
@@ -190,6 +199,8 @@ spec:
           volumeMounts:
             - name: heartbeat
               mountPath: /heartbeat
+            - name: heavyedge-run
+              mountPath: /var/run/heavyedge
           lifecycle:
             preStop:
               exec:
