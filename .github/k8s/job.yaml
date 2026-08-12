@@ -215,8 +215,13 @@ spec:
             preStop:
               exec:
                 command:
-                  - /usr/bin/touch
-                  - /heartbeat/build-cancelled
+                  - /bin/bash
+                  - -c
+                  - |
+                    if [ ! -f /heartbeat/build-success ] && \
+                       [ ! -f /heartbeat/build-failure ]; then
+                      touch /heartbeat/build-cancelled
+                    fi
           resources:
             requests:
               memory: "16Gi"
@@ -330,6 +335,10 @@ spec:
               fi
 
               set_current_step "Finalizing job"
+              if update_check completed success "Build completed successfully" \
+                   "All build-container steps completed successfully."; then
+                touch "$heartbeat_dir/check-finalized"
+              fi
               bash -euo pipefail .github/k8s/heartbeat.sh finish success "$heartbeat_pid"
           envFrom:
             - secretRef:
