@@ -1,4 +1,5 @@
 sh ./setup.sh
+sh ./setup-postgres.sh
 export HEAVYEDGE_GPU_DEVICES="$(python3 scripts/cuda-preflight.py --print-devices)"
 export MAKE_JOBS="$(python3 scripts/cuda-preflight.py --print-count)"
 python3 scripts/cuda-preflight.py
