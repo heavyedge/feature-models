@@ -39,8 +39,6 @@ class CenterGapMTGPQR_H(CenterGapQuantileGP):
             ),
             num_tasks=num_quantiles,
             num_latents=num_latents,
-            num_quantiles=[num_quantiles],
-            num_lower_quantiles=[num_lower_quantiles],
         )
 
         mean = ConstantMean(batch_shape=full_batch_shape)
@@ -87,8 +85,6 @@ class CenterGapMTGPQR_phi(CenterGapQuantileGP):
             ),
             num_tasks=num_quantiles,
             num_latents=num_latents,
-            num_quantiles=[num_quantiles],
-            num_lower_quantiles=[num_lower_quantiles],
         )
 
         mean = ConstantMean(batch_shape=full_batch_shape)

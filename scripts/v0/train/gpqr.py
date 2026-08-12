@@ -8,7 +8,7 @@ import model.scale as scaler_module  # Needs PYTHONPATH=scripts/v0
 import pandas as pd
 import torch
 from gpytorch.mlls import VariationalELBO
-from gpytorch_qr.likelihoods import CenterGapQuantileLikelihood
+from gpytorch_qr.likelihoods import CenterGapQuantilesLikelihood
 from save import save_gpqr
 
 logging.basicConfig(
@@ -83,7 +83,7 @@ mean.eval()
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32).to(device)
 
 model_class = getattr(model_module, args.model)
-likelihood = CenterGapQuantileLikelihood(
+likelihood = CenterGapQuantilesLikelihood(
     quantiles.unsqueeze(0),
     args.num_lower_quantiles,
     torch.zeros((*batch_shape, len(quantiles))),
