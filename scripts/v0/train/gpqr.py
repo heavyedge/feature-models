@@ -99,15 +99,6 @@ training_group.add_argument(
     help="Minimum validation-loss decrease required to reset early stopping.",
 )
 training_group.add_argument(
-    "--lr-scheduler-patience",
-    type=int,
-    default=None,
-    help=(
-        "Absolute epochs without validation-loss improvement before reducing the "
-        "learning rate. Overrides --lr-scheduler-patience-ratio."
-    ),
-)
-training_group.add_argument(
     "--lr-scheduler-patience-ratio",
     type=float,
     default=0.02,
@@ -154,18 +145,6 @@ hpo_group.add_argument(
         "Fraction of maximum epochs without sufficient validation improvement "
         "required before accepting a median-pruner decision."
     ),
-)
-hpo_group.add_argument(
-    "--prior-loc-min",
-    type=float,
-    default=None,
-    help="Override the lower location bound for both LogNormal priors.",
-)
-hpo_group.add_argument(
-    "--prior-loc-max",
-    type=float,
-    default=None,
-    help="Override the upper location bound for both LogNormal priors.",
 )
 hpo_group.add_argument(
     "--noise-prior-loc-min",
@@ -232,8 +211,6 @@ if args.min_learning_rate < 0 or args.min_learning_rate > args.learning_rate:
     parser.error("--min-learning-rate must be between 0 and --learning-rate.")
 if not 0 < args.lr_scheduler_factor < 1:
     parser.error("--lr-scheduler-factor must be between 0 and 1.")
-if args.lr_scheduler_patience is not None and args.lr_scheduler_patience < 0:
-    parser.error("--lr-scheduler-patience cannot be negative.")
 if not 0 < args.lr_scheduler_patience_ratio <= 1:
     parser.error("--lr-scheduler-patience-ratio must be in (0, 1].")
 if not 0 < args.early_stopping_patience_ratio <= 1:
@@ -259,25 +236,9 @@ if not 0 <= args.pruning_patience_ratio <= 1:
 if args.prior_scale_min <= 0 or args.prior_scale_min >= args.prior_scale_max:
     parser.error("Prior scale bounds must be positive and strictly increasing.")
 
-noise_prior_loc_min = (
-    args.prior_loc_min if args.prior_loc_min is not None else args.noise_prior_loc_min
-)
-noise_prior_loc_max = (
-    args.prior_loc_max if args.prior_loc_max is not None else args.noise_prior_loc_max
-)
-lengthscale_prior_loc_min = (
-    args.prior_loc_min
-    if args.prior_loc_min is not None
-    else args.lengthscale_prior_loc_min
-)
-lengthscale_prior_loc_max = (
-    args.prior_loc_max
-    if args.prior_loc_max is not None
-    else args.lengthscale_prior_loc_max
-)
-if noise_prior_loc_min >= noise_prior_loc_max:
+if args.noise_prior_loc_min >= args.noise_prior_loc_max:
     parser.error("Noise-prior location bounds must be strictly increasing.")
-if lengthscale_prior_loc_min >= lengthscale_prior_loc_max:
+if args.lengthscale_prior_loc_min >= args.lengthscale_prior_loc_max:
     parser.error("Lengthscale-prior location bounds must be strictly increasing.")
 
 if args.device is None:
@@ -289,13 +250,10 @@ if has_validation:
     early_stopping_patience = max(
         1, round(args.num_epochs * args.early_stopping_patience_ratio)
     )
-    if args.lr_scheduler_patience is None:
-        lr_scheduler_patience = min(
-            MAX_DEFAULT_LR_SCHEDULER_PATIENCE,
-            max(1, round(args.num_epochs * args.lr_scheduler_patience_ratio)),
-        )
-    else:
-        lr_scheduler_patience = args.lr_scheduler_patience
+    lr_scheduler_patience = min(
+        MAX_DEFAULT_LR_SCHEDULER_PATIENCE,
+        max(1, round(args.num_epochs * args.lr_scheduler_patience_ratio)),
+    )
     pruning_warmup = max(0, round(args.num_epochs * args.pruning_warmup_ratio))
     pruning_patience = max(1, round(args.num_epochs * args.pruning_patience_ratio))
     pruning_interval = max(1, min(25, pruning_patience // 2))
@@ -495,8 +453,8 @@ def train_with_hyperparameters(noise_prior, lengthscale_prior, num_latents, tria
 def objective(trial):
     noise_prior_loc = trial.suggest_float(
         "noise_prior_loc",
-        noise_prior_loc_min,
-        noise_prior_loc_max,
+        args.noise_prior_loc_min,
+        args.noise_prior_loc_max,
     )
     noise_prior_scale = trial.suggest_float(
         "noise_prior_scale",
@@ -506,8 +464,8 @@ def objective(trial):
     )
     lengthscale_prior_loc = trial.suggest_float(
         "lengthscale_prior_loc",
-        lengthscale_prior_loc_min,
-        lengthscale_prior_loc_max,
+        args.lengthscale_prior_loc_min,
+        args.lengthscale_prior_loc_max,
     )
     lengthscale_prior_scale = trial.suggest_float(
         "lengthscale_prior_scale",
@@ -647,8 +605,8 @@ if has_validation:
             "noise_prior_loc": float(
                 np.clip(
                     BASELINE_PRIOR_PARAMS["noise_prior_loc"],
-                    noise_prior_loc_min,
-                    noise_prior_loc_max,
+                    args.noise_prior_loc_min,
+                    args.noise_prior_loc_max,
                 )
             ),
             "noise_prior_scale": float(
@@ -661,8 +619,8 @@ if has_validation:
             "lengthscale_prior_loc": float(
                 np.clip(
                     BASELINE_PRIOR_PARAMS["lengthscale_prior_loc"],
-                    lengthscale_prior_loc_min,
-                    lengthscale_prior_loc_max,
+                    args.lengthscale_prior_loc_min,
+                    args.lengthscale_prior_loc_max,
                 )
             ),
             "lengthscale_prior_scale": float(
