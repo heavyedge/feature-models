@@ -128,19 +128,13 @@ models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v
 _temp/v0/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
 
-models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xfull.csv _temp/v0/yfull.csv models/v0/feature_models/%.prior_mean.pt
+models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xfull.csv _temp/v0/yfull.csv models/v0/feature_models/%.prior_mean.pt \
+_temp/v0/%.gpr.pt
 	mkdir -p $(@D)
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model GPR_$* --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
 
 
 
-
-
-
-
-models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/best-config.%.mean.epoch
-	mkdir -p $(@D)
-	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(lastword $^)) -o $@
 
 
 

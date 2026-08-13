@@ -1,5 +1,4 @@
 import argparse
-import copy
 import logging
 import pathlib
 import sys
@@ -143,12 +142,20 @@ hpo_group.add_argument(
 )
 args = parser.parse_args()
 
+has_validation = args.Xval is not None or args.yval is not None
+if (args.Xval is None) != (args.yval is None):
+    parser.error("Xval and yval must be provided together.")
+if has_validation and args.num_epochs is None:
+    parser.error("--num-epochs is required when validation data is provided.")
+if not has_validation and args.storage is None:
+    parser.error("--storage is required when validation data is not provided.")
+
 if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 else:
     device = torch.device(args.device)
 
-if args.num_epochs is not None:
+if has_validation:
     early_stopping_patience = max(
         1, round(args.num_epochs * args.early_stopping_patience_ratio)
     )
@@ -160,25 +167,23 @@ Xtrain_arr = np.stack(
 )
 Xtrain = torch.tensor(Xtrain_arr).float().to(device)  # (*K, N, D)
 
-ytrain_df = pd.read_csv(args.ytrain, index_col=args.index_col)
+ytrain_df = pd.read_csv(args.ytrain, index_col=args.index_col)[args.target]
 ytrain_arr = np.stack(
     [ytrain_df.loc[fold] for fold in sorted(ytrain_df.index.unique())], axis=0
 )
-ytrain = torch.tensor(ytrain_arr).float().to(device)  # (*K, N, D)
+ytrain = torch.tensor(ytrain_arr).float().to(device)  # (*K, N)
 
-if args.Xval is not None:
+if has_validation:
     Xval_df = pd.read_csv(args.Xval, index_col=args.index_col)
     Xval_arr = np.stack(
         [Xval_df.loc[fold] for fold in sorted(Xval_df.index.unique())], axis=0
     )
     Xval = torch.tensor(Xval_arr).float().to(device)  # (*K, N, D)
-
-if args.yval is not None:
-    yval_df = pd.read_csv(args.yval, index_col=args.index_col)
+    yval_df = pd.read_csv(args.yval, index_col=args.index_col)[args.target]
     yval_arr = np.stack(
         [yval_df.loc[fold] for fold in sorted(yval_df.index.unique())], axis=0
     )
-    yval = torch.tensor(yval_arr).float().to(device)  # (*K, N, D)
+    yval = torch.tensor(yval_arr).float().to(device)  # (*K, N)
 
 priormean_loader = getattr(load_module, "load_PriorMean_" + args.target)
 mean = priormean_loader(path=args.prior_mean, device=device)
@@ -192,7 +197,7 @@ model_class = getattr(model_module, args.model)
 
 
 def train_with_priors(noise_prior, lengthscale_prior, trial=None):
-    """Train one GP trial and return its best validation-loss checkpoint."""
+    """Train one GP trial and return its best batch-mean validation loss."""
     torch.manual_seed(42)
     trial_label = trial.number if trial is not None else "best"
 
@@ -214,7 +219,8 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
         res,
         likelihood,
         batch_shape=batch_shape,
-        lengthscale_prior=lengthscale_prior,
+        lengthscale_prior_loc=lengthscale_prior.loc,
+        lengthscale_prior_scale=lengthscale_prior.scale,
     ).to(device)
 
     mll = ExactMarginalLogLikelihood(likelihood, model)
@@ -232,7 +238,7 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
         min_lr=args.min_learning_rate,
     )
     best_val_loss = float("inf")
-    best_state = None
+    best_epoch = 1
     epochs_without_improvement = 0
     training_loss_history = []
 
@@ -252,7 +258,8 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
         )
 
         output = model(Xtrain_scaled)
-        train_loss = -mll(output, res)
+        # ExactMarginalLogLikelihood returns one value per batched fold.
+        train_loss = -mll(output, res).mean()
         train_loss.backward()
         optimizer.step()
 
@@ -263,7 +270,10 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
             model.eval()
             Xval_scaled = X_scaler(Xval)
             val_res = y_scaler((yval - mean(Xval)).unsqueeze(-1)).squeeze(-1)
-            val_loss = -likelihood.expected_log_prob(val_res, model(Xval_scaled)).mean()
+            val_log_prob = likelihood.expected_log_prob(val_res, model(Xval_scaled))
+            # Average observations within each fold, then average the folds so
+            # Optuna receives one fold-balanced scalar score.
+            val_loss = -val_log_prob.mean(dim=-1).mean()
 
         current_val_loss = val_loss.item()
         training_loss_history.append(train_loss.item())
@@ -271,12 +281,7 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
 
         if current_val_loss < best_val_loss - args.early_stopping_min_delta:
             best_val_loss = current_val_loss
-            best_state = {
-                "X_scaler": copy.deepcopy(X_scaler.state_dict()),
-                "y_scaler": copy.deepcopy(y_scaler.state_dict()),
-                "likelihood": copy.deepcopy(likelihood.state_dict()),
-                "model": copy.deepcopy(model.state_dict()),
-            }
+            best_epoch = epoch + 1
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
@@ -287,9 +292,7 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
             trial.report(current_val_loss, step=epoch)
             if trial.should_prune():
                 trial.set_user_attr("training_loss_history", training_loss_history)
-                trial.set_user_attr(
-                    "best_epoch", epoch + 1 - epochs_without_improvement
-                )
+                trial.set_user_attr("best_epoch", best_epoch)
                 raise optuna.TrialPruned()
 
         if (epoch + 1) % 100 == 0:
@@ -307,8 +310,8 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
 
     if trial is not None:
         trial.set_user_attr("training_loss_history", training_loss_history)
-        trial.set_user_attr("best_epoch", epoch + 1 - epochs_without_improvement)
-    return best_val_loss, best_state
+        trial.set_user_attr("best_epoch", best_epoch)
+    return best_val_loss
 
 
 def objective(trial):
@@ -334,7 +337,7 @@ def objective(trial):
         args.prior_scale_max,
         log=True,
     )
-    val_loss, _ = train_with_priors(
+    val_loss = train_with_priors(
         LogNormalPrior(noise_prior_loc, noise_prior_scale),
         LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale),
         trial,
@@ -343,10 +346,14 @@ def objective(trial):
 
 
 def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
-    """Fit the selected configuration on train+validation for a fixed epoch count."""
+    """Fit the selected configuration on all provided data for fixed epochs."""
     torch.manual_seed(42)
-    Xall = torch.cat((Xtrain, Xval), dim=-2)
-    yall = torch.cat((ytrain, yval), dim=-1)
+    if has_validation:
+        Xall = torch.cat((Xtrain, Xval), dim=-2)
+        yall = torch.cat((ytrain, yval), dim=-1)
+    else:
+        Xall = Xtrain
+        yall = ytrain
 
     X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
     y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
@@ -366,7 +373,8 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
         res,
         likelihood,
         batch_shape=batch_shape,
-        lengthscale_prior=lengthscale_prior,
+        lengthscale_prior_loc=lengthscale_prior.loc,
+        lengthscale_prior_scale=lengthscale_prior.scale,
     ).to(device)
 
     mll = ExactMarginalLogLikelihood(likelihood, model)
@@ -390,7 +398,7 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
         model.set_train_data(
             inputs=Xall_scaled.detach(), targets=res.detach(), strict=False
         )
-        loss = -mll(model(Xall_scaled), res)
+        loss = -mll(model(Xall_scaled), res).mean()
         loss.backward()
         optimizer.step()
 
@@ -406,19 +414,26 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
 
 
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-study = optuna.create_study(
-    direction="minimize",
-    sampler=optuna.samplers.TPESampler(seed=42),
-    pruner=optuna.pruners.MedianPruner(
-        n_startup_trials=5,
-        n_warmup_steps=pruning_patience,
-        interval_steps=max(1, pruning_patience // 10),
-    ),
-    study_name=args.study_name if args.study_name is not None else f"{args.out.stem}",
-    storage=args.storage if args.storage is not None else None,
-    load_if_exists=True,
-)
-study.optimize(objective, n_trials=args.n_trials)
+study_name = args.study_name if args.study_name is not None else args.out.stem
+if has_validation:
+    study = optuna.create_study(
+        direction="minimize",
+        sampler=optuna.samplers.TPESampler(seed=42),
+        pruner=optuna.pruners.MedianPruner(
+            n_startup_trials=5,
+            n_warmup_steps=pruning_patience,
+            interval_steps=max(1, pruning_patience // 10),
+        ),
+        study_name=study_name,
+        storage=args.storage,
+        load_if_exists=True,
+    )
+    study.optimize(objective, n_trials=args.n_trials)
+else:
+    # The final-data path must be read-only with respect to HPO: load the
+    # completed study and train once using its selected configuration.
+    study = optuna.load_study(study_name=study_name, storage=args.storage)
+
 best_trial = study.best_trial
 best_noise_prior_loc = best_trial.params["noise_prior_loc"]
 best_noise_prior_scale = best_trial.params["noise_prior_scale"]
@@ -435,9 +450,15 @@ logger.info(
     best_trial.value,
 )
 
-best_epoch = best_trial.user_attrs.get("best_epoch", args.num_epochs)
-best_epoch = max(1, min(int(best_epoch), args.num_epochs))
-logger.info("Final training on train+validation data for %d epochs.", best_epoch)
+if "best_epoch" not in best_trial.user_attrs:
+    raise RuntimeError(
+        f"Best trial {best_trial.number} in study {study_name!r} has no "
+        "'best_epoch' user attribute."
+    )
+best_epoch = max(1, int(best_trial.user_attrs["best_epoch"]))
+if has_validation:
+    best_epoch = min(best_epoch, args.num_epochs)
+logger.info("Final training on all provided data for %d epochs.", best_epoch)
 
 # Refit the selected configuration on all available labelled data.  The epoch
 # count is fixed from the best trial because no validation set remains here.

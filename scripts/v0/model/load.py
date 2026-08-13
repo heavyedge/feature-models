@@ -1,7 +1,9 @@
 from pathlib import Path
 
 import torch
+from gpytorch.constraints import Positive
 from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.priors import LogNormalPrior
 from gpytorch_qr.likelihoods import CenterGapQuantilesLikelihood
 
 from .gpqr import (
@@ -54,7 +56,19 @@ def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, devic
     X_scaler = xscaler_class(dim, batch_shape=batch_shape)
     y_scaler = yscaler_class(1, batch_shape=batch_shape)
     mean = mean_class(batch_shape=batch_shape)
-    likelihood = GaussianLikelihood(batch_shape=batch_shape)
+    likelihood_state_dict = checkpoint["likelihood_state_dict"]
+    noise_prior_loc = likelihood_state_dict.get("noise_covar.noise_prior._buffered_loc")
+    noise_prior_scale = likelihood_state_dict.get(
+        "noise_covar.noise_prior._buffered_scale"
+    )
+    if noise_prior_loc is not None and noise_prior_scale is not None:
+        likelihood = GaussianLikelihood(
+            batch_shape=batch_shape,
+            noise_prior=LogNormalPrior(noise_prior_loc, noise_prior_scale),
+            noise_constraint=Positive(),
+        )
+    else:
+        likelihood = GaussianLikelihood(batch_shape=batch_shape)
 
     X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
     y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
@@ -73,7 +87,7 @@ def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, devic
     residual = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
     model = model_class(X_scaled, residual, likelihood, batch_shape=batch_shape)
 
-    likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
+    likelihood.load_state_dict(likelihood_state_dict)
     model.load_state_dict(checkpoint["model_state_dict"])
 
     if device is not None:
