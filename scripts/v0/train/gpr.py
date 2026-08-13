@@ -101,8 +101,11 @@ hpo_group.add_argument(
 hpo_group.add_argument(
     "--pruning-patience-ratio",
     type=float,
-    default=0.1,
-    help="Fraction of maximum epochs to wait before enabling trial pruning.",
+    default=0.2,
+    help=(
+        "Fraction of maximum epochs without validation-score improvement before "
+        "allowing trial pruning."
+    ),
 )
 hpo_group.add_argument(
     "--prior-loc-min",
@@ -416,13 +419,17 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 study_name = args.study_name if args.study_name is not None else args.out.stem
 if has_validation:
+    median_pruner = optuna.pruners.MedianPruner(
+        n_startup_trials=5,
+        n_warmup_steps=pruning_patience,
+        interval_steps=max(1, pruning_patience // 10),
+    )
     study = optuna.create_study(
         direction="minimize",
         sampler=optuna.samplers.TPESampler(seed=42),
-        pruner=optuna.pruners.MedianPruner(
-            n_startup_trials=5,
-            n_warmup_steps=pruning_patience,
-            interval_steps=max(1, pruning_patience // 10),
+        pruner=optuna.pruners.PatientPruner(
+            median_pruner,
+            patience=pruning_patience,
         ),
         study_name=study_name,
         storage=args.storage,
