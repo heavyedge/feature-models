@@ -18,13 +18,21 @@ from gpytorch.priors import LogNormalPrior
 from save import save_gpr  # Needs PYTHONPATH=scripts
 
 logging.basicConfig(
-    level=getattr(logging, "INFO"),
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
 torch.manual_seed(42)
+
+MAX_DEFAULT_LR_SCHEDULER_PATIENCE = 50
+BASELINE_PRIOR_PARAMS = {
+    "noise_prior_loc": -4.0,
+    "noise_prior_scale": 0.5,
+    "lengthscale_prior_loc": -1.0,
+    "lengthscale_prior_scale": 0.5,
+}
 
 parser = argparse.ArgumentParser()
 model_group = parser.add_argument_group("input data and model")
@@ -71,19 +79,31 @@ training_group.add_argument(
 training_group.add_argument(
     "--early-stopping-min-delta",
     type=float,
-    default=0.0,
+    default=1e-4,
     help="Minimum validation-loss decrease required to reset early stopping.",
 )
 training_group.add_argument(
     "--lr-scheduler-patience",
     type=int,
-    default=10,
-    help="Epochs without validation-loss improvement before reducing learning rate.",
+    default=None,
+    help=(
+        "Absolute epochs without validation-loss improvement before reducing the "
+        "learning rate. Overrides --lr-scheduler-patience-ratio."
+    ),
+)
+training_group.add_argument(
+    "--lr-scheduler-patience-ratio",
+    type=float,
+    default=0.02,
+    help=(
+        "Fraction of maximum epochs used as scheduler patience when absolute "
+        "patience is omitted (capped at 50 epochs)."
+    ),
 )
 training_group.add_argument(
     "--lr-scheduler-factor",
     type=float,
-    default=0.5,
+    default=0.3,
     help="Factor by which to reduce the learning rate.",
 )
 training_group.add_argument(
@@ -95,29 +115,65 @@ training_group.add_argument(
 hpo_group.add_argument(
     "--n-trials",
     type=int,
-    default=50,
+    default=100,
     help="Number of trials for hyperparameter optimization.",
+)
+hpo_group.add_argument(
+    "--n-startup-trials",
+    type=int,
+    default=10,
+    help="Completed random trials before TPE sampling and median pruning begin.",
+)
+hpo_group.add_argument(
+    "--pruning-warmup-ratio",
+    type=float,
+    default=0.05,
+    help="Fraction of maximum epochs to run before median pruning begins.",
 )
 hpo_group.add_argument(
     "--pruning-patience-ratio",
     type=float,
-    default=0.2,
+    default=0.02,
     help=(
-        "Fraction of maximum epochs without validation-score improvement before "
-        "allowing trial pruning."
+        "Fraction of maximum epochs without sufficient validation improvement "
+        "required before accepting a median-pruner decision."
     ),
 )
 hpo_group.add_argument(
     "--prior-loc-min",
     type=float,
-    default=-10.0,
-    help="Smallest log-space location for the LogNormal prior.",
+    default=None,
+    help="Override the lower location bound for both LogNormal priors.",
 )
 hpo_group.add_argument(
     "--prior-loc-max",
     type=float,
-    default=2.0,
-    help="Largest log-space location for the LogNormal prior.",
+    default=None,
+    help="Override the upper location bound for both LogNormal priors.",
+)
+hpo_group.add_argument(
+    "--noise-prior-loc-min",
+    type=float,
+    default=-8.0,
+    help="Smallest log-space location for the noise LogNormal prior.",
+)
+hpo_group.add_argument(
+    "--noise-prior-loc-max",
+    type=float,
+    default=-1.0,
+    help="Largest log-space location for the noise LogNormal prior.",
+)
+hpo_group.add_argument(
+    "--lengthscale-prior-loc-min",
+    type=float,
+    default=-3.0,
+    help="Smallest log-space location for the lengthscale LogNormal prior.",
+)
+hpo_group.add_argument(
+    "--lengthscale-prior-loc-max",
+    type=float,
+    default=1.0,
+    help="Largest log-space location for the lengthscale LogNormal prior.",
 )
 hpo_group.add_argument(
     "--prior-scale-min",
@@ -128,7 +184,7 @@ hpo_group.add_argument(
 hpo_group.add_argument(
     "--prior-scale-max",
     type=float,
-    default=2.0,
+    default=1.5,
     help="Largest log-space scale for the LogNormal prior.",
 )
 hpo_group.add_argument(
@@ -152,6 +208,53 @@ if has_validation and args.num_epochs is None:
     parser.error("--num-epochs is required when validation data is provided.")
 if not has_validation and args.storage is None:
     parser.error("--storage is required when validation data is not provided.")
+if has_validation and args.num_epochs <= 0:
+    parser.error("--num-epochs must be positive.")
+if args.learning_rate <= 0:
+    parser.error("--learning-rate must be positive.")
+if args.min_learning_rate < 0 or args.min_learning_rate > args.learning_rate:
+    parser.error("--min-learning-rate must be between 0 and --learning-rate.")
+if not 0 < args.lr_scheduler_factor < 1:
+    parser.error("--lr-scheduler-factor must be between 0 and 1.")
+if args.lr_scheduler_patience is not None and args.lr_scheduler_patience < 0:
+    parser.error("--lr-scheduler-patience cannot be negative.")
+if not 0 < args.lr_scheduler_patience_ratio <= 1:
+    parser.error("--lr-scheduler-patience-ratio must be in (0, 1].")
+if not 0 < args.early_stopping_patience_ratio <= 1:
+    parser.error("--early-stopping-patience-ratio must be in (0, 1].")
+if args.early_stopping_min_delta < 0:
+    parser.error("--early-stopping-min-delta cannot be negative.")
+if args.n_trials <= 0:
+    parser.error("--n-trials must be positive.")
+if args.n_startup_trials < 0:
+    parser.error("--n-startup-trials cannot be negative.")
+if not 0 <= args.pruning_warmup_ratio <= 1:
+    parser.error("--pruning-warmup-ratio must be in [0, 1].")
+if not 0 <= args.pruning_patience_ratio <= 1:
+    parser.error("--pruning-patience-ratio must be in [0, 1].")
+if args.prior_scale_min <= 0 or args.prior_scale_min >= args.prior_scale_max:
+    parser.error("Prior scale bounds must be positive and strictly increasing.")
+
+noise_prior_loc_min = (
+    args.prior_loc_min if args.prior_loc_min is not None else args.noise_prior_loc_min
+)
+noise_prior_loc_max = (
+    args.prior_loc_max if args.prior_loc_max is not None else args.noise_prior_loc_max
+)
+lengthscale_prior_loc_min = (
+    args.prior_loc_min
+    if args.prior_loc_min is not None
+    else args.lengthscale_prior_loc_min
+)
+lengthscale_prior_loc_max = (
+    args.prior_loc_max
+    if args.prior_loc_max is not None
+    else args.lengthscale_prior_loc_max
+)
+if noise_prior_loc_min >= noise_prior_loc_max:
+    parser.error("Noise-prior location bounds must be strictly increasing.")
+if lengthscale_prior_loc_min >= lengthscale_prior_loc_max:
+    parser.error("Lengthscale-prior location bounds must be strictly increasing.")
 
 if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -162,7 +265,24 @@ if has_validation:
     early_stopping_patience = max(
         1, round(args.num_epochs * args.early_stopping_patience_ratio)
     )
+    if args.lr_scheduler_patience is None:
+        lr_scheduler_patience = min(
+            MAX_DEFAULT_LR_SCHEDULER_PATIENCE,
+            max(1, round(args.num_epochs * args.lr_scheduler_patience_ratio)),
+        )
+    else:
+        lr_scheduler_patience = args.lr_scheduler_patience
+    pruning_warmup = max(0, round(args.num_epochs * args.pruning_warmup_ratio))
     pruning_patience = max(1, round(args.num_epochs * args.pruning_patience_ratio))
+    pruning_interval = max(1, min(25, pruning_patience // 2))
+    logger.info(
+        "Training controls: scheduler patience=%d, early-stopping patience=%d, "
+        "pruning warmup=%d, pruning patience=%d epochs.",
+        lr_scheduler_patience,
+        early_stopping_patience,
+        pruning_warmup,
+        pruning_patience,
+    )
 
 Xtrain_df = pd.read_csv(args.Xtrain, index_col=args.index_col)
 Xtrain_arr = np.stack(
@@ -237,13 +357,25 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
         optimizer,
         mode="min",
         factor=args.lr_scheduler_factor,
-        patience=args.lr_scheduler_patience,
+        patience=lr_scheduler_patience,
+        threshold=args.early_stopping_min_delta,
+        threshold_mode="abs",
         min_lr=args.min_learning_rate,
     )
     best_val_loss = float("inf")
     best_epoch = 1
     epochs_without_improvement = 0
     training_loss_history = []
+    lr_reductions = []
+
+    def save_trial_progress(stop_reason):
+        if trial is None:
+            return
+        trial.set_user_attr("training_loss_history", training_loss_history)
+        trial.set_user_attr("best_epoch", best_epoch)
+        trial.set_user_attr("epochs_trained", len(training_loss_history))
+        trial.set_user_attr("lr_reductions", lr_reductions)
+        trial.set_user_attr("stop_reason", stop_reason)
 
     for epoch in range(args.num_epochs):
         X_scaler.train()
@@ -263,6 +395,11 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
         output = model(Xtrain_scaled)
         # ExactMarginalLogLikelihood returns one value per batched fold.
         train_loss = -mll(output, res).mean()
+        if not torch.isfinite(train_loss):
+            save_trial_progress("non_finite_train_loss")
+            if trial is not None:
+                raise optuna.TrialPruned("Non-finite training loss.")
+            raise RuntimeError("Non-finite training loss during final fit.")
         train_loss.backward()
         optimizer.step()
 
@@ -280,7 +417,18 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
 
         current_val_loss = val_loss.item()
         training_loss_history.append(train_loss.item())
+        if not np.isfinite(current_val_loss):
+            save_trial_progress("non_finite_validation_loss")
+            if trial is not None:
+                raise optuna.TrialPruned("Non-finite validation loss.")
+            raise RuntimeError("Non-finite validation loss.")
+
+        previous_lr = optimizer.param_groups[0]["lr"]
         lr_scheduler.step(current_val_loss)
+        current_lr = optimizer.param_groups[0]["lr"]
+        if current_lr < previous_lr:
+            # Record the completed epoch after which the new rate takes effect.
+            lr_reductions.append([epoch + 1, current_lr])
 
         if current_val_loss < best_val_loss - args.early_stopping_min_delta:
             best_val_loss = current_val_loss
@@ -294,8 +442,7 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
             # both pruning and the native intermediate-values visualization.
             trial.report(current_val_loss, step=epoch)
             if trial.should_prune():
-                trial.set_user_attr("training_loss_history", training_loss_history)
-                trial.set_user_attr("best_epoch", best_epoch)
+                save_trial_progress("pruned")
                 raise optuna.TrialPruned()
 
         if (epoch + 1) % 100 == 0:
@@ -309,19 +456,20 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
             )
 
         if epochs_without_improvement >= early_stopping_patience:
+            stop_reason = "early_stopping"
             break
+    else:
+        stop_reason = "max_epochs"
 
-    if trial is not None:
-        trial.set_user_attr("training_loss_history", training_loss_history)
-        trial.set_user_attr("best_epoch", best_epoch)
+    save_trial_progress(stop_reason)
     return best_val_loss
 
 
 def objective(trial):
     noise_prior_loc = trial.suggest_float(
         "noise_prior_loc",
-        args.prior_loc_min,
-        args.prior_loc_max,
+        noise_prior_loc_min,
+        noise_prior_loc_max,
     )
     noise_prior_scale = trial.suggest_float(
         "noise_prior_scale",
@@ -331,8 +479,8 @@ def objective(trial):
     )
     lengthscale_prior_loc = trial.suggest_float(
         "lengthscale_prior_loc",
-        args.prior_loc_min,
-        args.prior_loc_max,
+        lengthscale_prior_loc_min,
+        lengthscale_prior_loc_max,
     )
     lengthscale_prior_scale = trial.suggest_float(
         "lengthscale_prior_scale",
@@ -348,8 +496,8 @@ def objective(trial):
     return val_loss
 
 
-def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
-    """Fit the selected configuration on all provided data for fixed epochs."""
+def train_on_all_data(noise_prior, lengthscale_prior, num_epochs, lr_reductions):
+    """Fit on all data while replaying the selected trial's learning-rate path."""
     torch.manual_seed(42)
     if has_validation:
         Xall = torch.cat((Xtrain, Xval), dim=-2)
@@ -387,6 +535,9 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
         + list(model.parameters()),
         lr=args.learning_rate,
     )
+    lr_reductions_by_epoch = {
+        int(completed_epoch): float(new_lr) for completed_epoch, new_lr in lr_reductions
+    }
     for epoch in range(num_epochs):
         X_scaler.train()
         y_scaler.train()
@@ -402,8 +553,16 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs):
             inputs=Xall_scaled.detach(), targets=res.detach(), strict=False
         )
         loss = -mll(model(Xall_scaled), res).mean()
+        if not torch.isfinite(loss):
+            raise RuntimeError("Non-finite training loss during final fit.")
         loss.backward()
         optimizer.step()
+
+        completed_epoch = epoch + 1
+        if completed_epoch in lr_reductions_by_epoch:
+            new_lr = lr_reductions_by_epoch[completed_epoch]
+            for parameter_group in optimizer.param_groups:
+                parameter_group["lr"] = new_lr
 
         if (epoch + 1) % 100 == 0:
             logger.info(
@@ -420,21 +579,60 @@ optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout)
 study_name = args.study_name if args.study_name is not None else args.out.stem
 if has_validation:
     median_pruner = optuna.pruners.MedianPruner(
-        n_startup_trials=5,
-        n_warmup_steps=pruning_patience,
-        interval_steps=max(1, pruning_patience // 10),
+        n_startup_trials=args.n_startup_trials,
+        n_warmup_steps=pruning_warmup,
+        interval_steps=pruning_interval,
+        n_min_trials=3,
     )
     study = optuna.create_study(
         direction="minimize",
-        sampler=optuna.samplers.TPESampler(seed=42),
+        sampler=optuna.samplers.TPESampler(
+            seed=42,
+            n_startup_trials=args.n_startup_trials,
+            n_ei_candidates=48,
+            multivariate=True,
+        ),
         pruner=optuna.pruners.PatientPruner(
             median_pruner,
             patience=pruning_patience,
+            min_delta=args.early_stopping_min_delta,
         ),
         study_name=study_name,
         storage=args.storage,
         load_if_exists=True,
     )
+    if not study.trials:
+        baseline_params = {
+            "noise_prior_loc": float(
+                np.clip(
+                    BASELINE_PRIOR_PARAMS["noise_prior_loc"],
+                    noise_prior_loc_min,
+                    noise_prior_loc_max,
+                )
+            ),
+            "noise_prior_scale": float(
+                np.clip(
+                    BASELINE_PRIOR_PARAMS["noise_prior_scale"],
+                    args.prior_scale_min,
+                    args.prior_scale_max,
+                )
+            ),
+            "lengthscale_prior_loc": float(
+                np.clip(
+                    BASELINE_PRIOR_PARAMS["lengthscale_prior_loc"],
+                    lengthscale_prior_loc_min,
+                    lengthscale_prior_loc_max,
+                )
+            ),
+            "lengthscale_prior_scale": float(
+                np.clip(
+                    BASELINE_PRIOR_PARAMS["lengthscale_prior_scale"],
+                    args.prior_scale_min,
+                    args.prior_scale_max,
+                )
+            ),
+        }
+        study.enqueue_trial(baseline_params)
     study.optimize(objective, n_trials=args.n_trials)
 else:
     # The final-data path must be read-only with respect to HPO: load the
@@ -465,7 +663,13 @@ if "best_epoch" not in best_trial.user_attrs:
 best_epoch = max(1, int(best_trial.user_attrs["best_epoch"]))
 if has_validation:
     best_epoch = min(best_epoch, args.num_epochs)
-logger.info("Final training on all provided data for %d epochs.", best_epoch)
+best_lr_reductions = best_trial.user_attrs.get("lr_reductions", [])
+logger.info(
+    "Final training on all provided data for %d epochs with %d learning-rate "
+    "reductions replayed.",
+    best_epoch,
+    sum(int(completed_epoch) < best_epoch for completed_epoch, _ in best_lr_reductions),
+)
 
 # Refit the selected configuration on all available labelled data.  The epoch
 # count is fixed from the best trial because no validation set remains here.
@@ -480,6 +684,7 @@ logger.info("Final training on all provided data for %d epochs.", best_epoch)
     LogNormalPrior(best_noise_prior_loc, best_noise_prior_scale),
     LogNormalPrior(best_lengthscale_prior_loc, best_lengthscale_prior_scale),
     best_epoch,
+    best_lr_reductions,
 )
 
 save_gpr(
