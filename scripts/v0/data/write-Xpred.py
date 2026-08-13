@@ -55,7 +55,7 @@ if not isinstance(args.ngrid, Iterable) or len(args.ngrid) == 1:
         args.target
     )
 
-X = pd.read_csv(args.X, index_col=[0, 1, 2, 3, 4])
+X = pd.read_csv(args.X, index_col=[0, 1, 2])
 ranges = [
     (
         X[col].min() + s * (X[col].max() - X[col].min()),
