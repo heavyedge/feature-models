@@ -14,13 +14,11 @@ class PriorMean_H(torch.nn.Module):
 
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
-        self.params = torch.nn.ParameterDict(
-            {
-                "a": torch.nn.Parameter(torch.tensor(0.22)),
-                "b": torch.nn.Parameter(torch.tensor(-0.43)),
-                "c": torch.nn.Parameter(torch.tensor(0.77)),
-            }
-        )
+        # Initial values are heuristically chosen.
+        a = torch.tensor(0.22).repeat(*batch_shape, 1)  # (*B, 1)
+        b = torch.tensor(-0.43).repeat(*batch_shape, 1)  # (*B, 1)
+        c = torch.tensor(0.77).repeat(*batch_shape, 1)  # (*B, 1)
+        self.params = torch.nn.ParameterDict(dict(a=a, b=b, c=c))
         self.batch_shape = batch_shape
 
     def forward(self, x):
@@ -28,9 +26,9 @@ class PriorMean_H(torch.nn.Module):
         Ca = x[..., 1]  # (*B, N)
         cos_theta = x[..., 2]  # (*B, N)
 
-        a = self.params["a"].repeat(*self.batch_shape, 1)  # (*B, 1)
-        b = self.params["b"].repeat(*self.batch_shape, 1)  # (*B, 1)
-        c = self.params["c"].repeat(*self.batch_shape, 1)  # (*B, 1)
+        a = self.params["a"]  # (*B, 1)
+        b = self.params["b"]  # (*B, 1)
+        c = self.params["c"]  # (*B, 1)
 
         lamda = a * Ca**b * cos_theta**c
         E = 2 / (-lamda + torch.sqrt(lamda**2 + (4 / Rgt)))
@@ -50,17 +48,15 @@ class PriorMean_phi(torch.nn.Module):
 
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
-        self.params = torch.nn.ParameterDict(
-            {
-                "a": torch.nn.Parameter(torch.tensor(2.0)),
-                "b": torch.nn.Parameter(torch.tensor(-3.0)),
-            }
-        )
+        # Initial values are heuristically chosen.
+        a = torch.tensor(2.0).repeat(*batch_shape, 1)  # (*B, 1)
+        b = torch.tensor(-3.0).repeat(*batch_shape, 1)  # (*B, 1)
+        self.params = torch.nn.ParameterDict(dict(a=a, b=b))
         self.batch_shape = batch_shape
 
     def forward(self, x):
         Rgt = x[..., 0]  # (*B, N)
 
-        a = self.params["a"].repeat(*self.batch_shape, 1)  # (*B, 1)
-        b = self.params["b"].repeat(*self.batch_shape, 1)  # (*B, 1)
+        a = self.params["a"]  # (*B, 1)
+        b = self.params["b"]  # (*B, 1)
         return a * Rgt + b

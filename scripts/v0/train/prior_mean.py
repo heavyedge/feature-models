@@ -3,6 +3,7 @@ import logging
 import pathlib
 
 import model.prior as model_module  # Needs PYTHONPATH=scripts/v0
+import numpy as np
 import pandas as pd
 import torch
 
@@ -33,8 +34,13 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-X = torch.tensor(pd.read_csv(args.X).values).float().to(device)
-y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
+X_df = pd.read_csv(args.X, index_col=["fold"])
+X_arr = np.stack([X_df.loc[fold] for fold in sorted(X_df.index.unique())], axis=0)
+X = torch.tensor(X_arr).float().to(device)  # (K, N, D)
+
+y_df = pd.read_csv(args.y, index_col=["fold"])[args.target]
+y_arr = np.stack([y_df.loc[fold] for fold in sorted(y_df.index.unique())], axis=0)
+y = torch.tensor(y_arr).float().to(device)  # (K, N)
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]

@@ -74,7 +74,7 @@ out_df = df.iloc[idxs][
 ]
 
 fold_dfs = []
-for fold in range(1, args.num_folds + 1):
+for fold in range(args.num_folds):
     _out_df = out_df.copy()
     _out_df.insert(2, "fold", fold)
     train_df, remaining_df = train_test_split(

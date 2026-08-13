@@ -100,12 +100,34 @@ _temp/v0/Xpred_3D.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
 _temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.csv _temp/v0/Xpred_2D.csv
 	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
 
-# Prior mean
+# Models
+
+## Prior mean
+
+_temp/v0/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+
+
+
+
+
+
+
+
 
 # ex) models/v0/feature_models/H.prior_mean.pt
-models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
-	mkdir -p $(@D)
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+# models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
+# 	mkdir -p $(@D)
+# 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+
+
+
+
+
+
+
+
+
 
 # Model selection
 
