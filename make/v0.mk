@@ -114,6 +114,10 @@ _temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.c
 
 # Models
 
+models/v0/feature_models/%.py: scripts/v0/model/%.py
+	mkdir -p $(@D)
+	cp $< $@
+
 ## Prior mean
 
 _temp/v0/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
@@ -147,6 +151,18 @@ _temp/v0/%.cg_gpqr.pt
 
 # Model selection
 
+benchmarks/v0/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/Xtest.csv _temp/v0/ytest.csv _temp/v0/%.gpr.pt
+	mkdir -p $(@D)
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPR_$* --quantile-levels $(QUANTILES) -o $@
+
+
+
+
+
+
+
+
+
 benchmarks/v0/crossing.DirectMTGPQR_%.csv: scripts/v0/model_selection/write-crossing.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/Xpred_3D.csv
 	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
@@ -166,23 +182,6 @@ benchmarks/v0/cv.GPR_%.csv: scripts/v0/model_selection/write-cv.gpr.py _temp/v0/
 benchmarks/v0/cv.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-cv.gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
 	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
-
-# Model
-
-_temp/v0/best-config.%.mean.epoch: scripts/v0/train/write-best.py benchmarks/v0/cv.GPR_%.csv
-	python3 $^ --target epoch -o $@ 0
-
-_temp/v0/best-config.%.quantiles.epoch: scripts/v0/train/write-best.py benchmarks/v0/cv.CenterGapMTGPQR_%.csv
-	python3 $^ --target epoch -o $@ 0
-
-models/v0/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/best-config.%.quantiles.epoch
-	mkdir -p $(@D)
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --num-epochs $(shell cat $(lastword $^)) -o $@
-
-models/v0/feature_models/%.py: scripts/v0/model/%.py
-	mkdir -p $(@D)
-	cp $< $@
-
 
 # Prediction
 
