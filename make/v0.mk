@@ -85,23 +85,16 @@ _temp/v0/y$(1).csv: _temp/v0/y.csv
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v0,$(split))))
 
+_temp/v0/Xpred.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
+	python3 $^ -o $@
 
-
-
-
-
-
-
-_temp/v0/Xpred.csv: _temp/v0/Xtrain.csv
-	python3 -c "import pandas as pd; X = pd.read_csv('$<'); cols = ['gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']; idx = pd.DataFrame({col + '_idx': X[col].map({value: i for i, value in enumerate(sorted(X[col].unique()))}) for col in cols}); pd.concat([idx, X], axis=1).to_csv('$@', index=False)"
-
-_temp/v0/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
+_temp/v0/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
 	python3 $^ --target gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
-_temp/v0/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
+_temp/v0/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number --ngrid $(N_GRID_1) -o $@
 
-_temp/v0/Xpred_3D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xtrain.csv
+_temp/v0/Xpred_3D.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number cosine_of_contact_angle --start=0 --stop=1 --ngrid=$(N_GRID_2) -o $@
 
 _temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.csv _temp/v0/Xpred_2D.csv
