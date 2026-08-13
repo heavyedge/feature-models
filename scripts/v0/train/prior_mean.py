@@ -6,6 +6,7 @@ import model.prior as model_module  # Needs PYTHONPATH=scripts/v0
 import numpy as np
 import pandas as pd
 import torch
+from save import save_prior_mean
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -40,12 +41,10 @@ else:
 X_df = pd.read_csv(args.X, index_col=args.index_col)
 X_arr = np.stack([X_df.loc[fold] for fold in sorted(X_df.index.unique())], axis=0)
 X = torch.tensor(X_arr).float().to(device)  # (*K, N, D)
-print(X.shape)
 
 y_df = pd.read_csv(args.y, index_col=args.index_col)[args.target]
 y_arr = np.stack([y_df.loc[fold] for fold in sorted(y_df.index.unique())], axis=0)
 y = torch.tensor(y_arr).float().to(device)  # (*K, N)
-print(y.shape)
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]
@@ -67,7 +66,4 @@ for epoch in range(args.num_epochs):
         logger.info(f"Epoch [{epoch + 1}/{args.num_epochs}] Loss: {loss.item():.6f}")
 
 
-torch.save(
-    model.state_dict(),
-    args.out,
-)
+save_prior_mean(model, batch_shape, args.out)

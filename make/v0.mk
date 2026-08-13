@@ -117,14 +117,30 @@ _temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.c
 ## Prior mean
 
 _temp/v0/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --index-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xfull.csv _temp/v0/yfull.csv
 	mkdir -p $(@D)
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+
+## GPR
+
+_temp/v0/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
+
+models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xfull.csv _temp/v0/yfull.csv models/v0/feature_models/%.prior_mean.pt
+	mkdir -p $(@D)
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --target $* --model GPR_$* --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
 
 
 
+
+
+
+
+models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/best-config.%.mean.epoch
+	mkdir -p $(@D)
+	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(lastword $^)) -o $@
 
 
 
@@ -157,10 +173,6 @@ benchmarks/v0/cv.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-cv.gpqr
 
 _temp/v0/best-config.%.mean.epoch: scripts/v0/train/write-best.py benchmarks/v0/cv.GPR_%.csv
 	python3 $^ --target epoch -o $@ 0
-
-models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/best-config.%.mean.epoch
-	mkdir -p $(@D)
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --num-epochs $(shell cat $(lastword $^)) -o $@
 
 _temp/v0/best-config.%.quantiles.epoch: scripts/v0/train/write-best.py benchmarks/v0/cv.CenterGapMTGPQR_%.csv
 	python3 $^ --target epoch -o $@ 0

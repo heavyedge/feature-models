@@ -32,9 +32,15 @@ __all__ = [
 
 
 def _load_prior_mean(model_class, path, device=None):
-    state_dict = torch.load(path, map_location=device, weights_only=False)
-    model = model_class().to(device)
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    batch_shape = checkpoint["batch_shape"]
+    state_dict = checkpoint["model_state_dict"]
+    model = model_class(batch_shape=batch_shape)
     model.load_state_dict(state_dict)
+
+    if device is not None:
+        model.to(device)
+
     return model
 
 
