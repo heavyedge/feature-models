@@ -91,6 +91,12 @@ _temp/v0/y$(1).csv: _temp/v0/ysplit.csv
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v0,$(split))))
 
+_temp/v0/Xfull.csv: _temp/v0/X.csv
+	python3 -c "import pandas as pd; df = pd.read_csv('$<'); df[['gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']].to_csv('$@', index=False)"
+
+_temp/v0/yfull.csv: _temp/v0/y.csv
+	python3 -c "import pandas as pd; df = pd.read_csv('$<'); df[['H', 'phi']].to_csv('$@', index=False)"
+
 _temp/v0/Xpred.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
 	python3 $^ -o $@
 
@@ -111,21 +117,11 @@ _temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.c
 ## Prior mean
 
 _temp/v0/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+
+models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xfull.csv _temp/v0/yfull.csv
+	mkdir -p $(@D)
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
-
-
-
-
-
-
-
-
-
-# ex) models/v0/feature_models/H.prior_mean.pt
-# models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
-# 	mkdir -p $(@D)
-# 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $(wordlist 1,3,$^) --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
-
 
 
 

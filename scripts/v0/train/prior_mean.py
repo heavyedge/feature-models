@@ -19,6 +19,9 @@ torch.manual_seed(42)
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
+parser.add_argument(
+    "--index-col", type=int, nargs="*", help="Index columns for X and y."
+)
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", type=str, help="Model name.")
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
@@ -34,13 +37,15 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-X_df = pd.read_csv(args.X, index_col=["fold"])
+X_df = pd.read_csv(args.X, index_col=args.index_col)
 X_arr = np.stack([X_df.loc[fold] for fold in sorted(X_df.index.unique())], axis=0)
-X = torch.tensor(X_arr).float().to(device)  # (K, N, D)
+X = torch.tensor(X_arr).float().to(device)  # (*K, N, D)
+print(X.shape)
 
-y_df = pd.read_csv(args.y, index_col=["fold"])[args.target]
+y_df = pd.read_csv(args.y, index_col=args.index_col)[args.target]
 y_arr = np.stack([y_df.loc[fold] for fold in sorted(y_df.index.unique())], axis=0)
-y = torch.tensor(y_arr).float().to(device)  # (K, N)
+y = torch.tensor(y_arr).float().to(device)  # (*K, N)
+print(y.shape)
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]
