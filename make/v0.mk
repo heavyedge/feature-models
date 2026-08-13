@@ -126,6 +126,7 @@ models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v
 ## GPR
 
 _temp/v0/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
+	mkdir -p benchmarks
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
 
 models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xfull.csv _temp/v0/yfull.csv models/v0/feature_models/%.prior_mean.pt \
