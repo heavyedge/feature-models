@@ -66,4 +66,4 @@ for epoch in range(args.num_epochs):
         logger.info(f"Epoch [{epoch + 1}/{args.num_epochs}] Loss: {loss.item():.6f}")
 
 
-save_prior_mean(model, batch_shape, args.out)
+save_prior_mean(model, args.out)

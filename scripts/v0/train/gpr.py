@@ -11,11 +11,9 @@ import torch
 import v0.model.gpr as model_module  # Needs PYTHONPATH=scripts
 import v0.model.load as load_module  # Needs PYTHONPATH=scripts
 import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
-from gpytorch.constraints import Positive
-from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from gpytorch.priors import LogNormalPrior
 from save import save_gpr  # Needs PYTHONPATH=scripts
+from v0.model.likelihoods import GaussianLikelihood  # Needs PYTHONPATH=scripts
 
 logging.basicConfig(
     level=logging.INFO,
@@ -277,7 +275,13 @@ batch_shape = Xtrain.shape[:-2]
 model_class = getattr(model_module, args.model)
 
 
-def train_with_priors(noise_prior, lengthscale_prior, trial=None):
+def train_with_priors(
+    noise_prior_loc,
+    noise_prior_scale,
+    lengthscale_prior_loc,
+    lengthscale_prior_scale,
+    trial=None,
+):
     """Train one GP trial and return its best batch-mean validation loss."""
     torch.manual_seed(42)
     trial_label = trial.number if trial is not None else "best"
@@ -288,9 +292,9 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
     Xtrain_scaled = X_scaler(Xtrain)
 
     likelihood = GaussianLikelihood(
+        noise_prior_loc=noise_prior_loc,
+        noise_prior_scale=noise_prior_scale,
         batch_shape=batch_shape,
-        noise_prior=noise_prior,
-        noise_constraint=Positive(),
     ).to(device)
     with torch.no_grad():
         y_scaler.train()
@@ -299,9 +303,9 @@ def train_with_priors(noise_prior, lengthscale_prior, trial=None):
         Xtrain_scaled,
         res,
         likelihood,
+        lengthscale_prior_loc=lengthscale_prior_loc,
+        lengthscale_prior_scale=lengthscale_prior_scale,
         batch_shape=batch_shape,
-        lengthscale_prior_loc=lengthscale_prior.loc,
-        lengthscale_prior_scale=lengthscale_prior.scale,
     ).to(device)
 
     mll = ExactMarginalLogLikelihood(likelihood, model)
@@ -447,14 +451,23 @@ def objective(trial):
         log=True,
     )
     val_loss = train_with_priors(
-        LogNormalPrior(noise_prior_loc, noise_prior_scale),
-        LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale),
-        trial,
+        noise_prior_loc=noise_prior_loc,
+        noise_prior_scale=noise_prior_scale,
+        lengthscale_prior_loc=lengthscale_prior_loc,
+        lengthscale_prior_scale=lengthscale_prior_scale,
+        trial=trial,
     )
     return val_loss
 
 
-def train_on_all_data(noise_prior, lengthscale_prior, num_epochs, lr_reductions):
+def train_on_all_data(
+    noise_prior_loc,
+    noise_prior_scale,
+    lengthscale_prior_loc,
+    lengthscale_prior_scale,
+    num_epochs,
+    lr_reductions,
+):
     """Fit on all data while replaying the selected trial's learning-rate path."""
     torch.manual_seed(42)
     if has_validation:
@@ -468,8 +481,8 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs, lr_reductions)
     y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
     likelihood = GaussianLikelihood(
         batch_shape=batch_shape,
-        noise_prior=noise_prior,
-        noise_constraint=Positive(),
+        noise_prior_loc=noise_prior_loc,
+        noise_prior_scale=noise_prior_scale,
     ).to(device)
 
     X_scaler.train()
@@ -482,8 +495,8 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs, lr_reductions)
         res,
         likelihood,
         batch_shape=batch_shape,
-        lengthscale_prior_loc=lengthscale_prior.loc,
-        lengthscale_prior_scale=lengthscale_prior.scale,
+        lengthscale_prior_loc=lengthscale_prior_loc,
+        lengthscale_prior_scale=lengthscale_prior_scale,
     ).to(device)
 
     mll = ExactMarginalLogLikelihood(likelihood, model)
@@ -530,7 +543,7 @@ def train_on_all_data(noise_prior, lengthscale_prior, num_epochs, lr_reductions)
                 loss.item(),
             )
 
-    return Xall, yall, X_scaler, y_scaler, likelihood, model
+    return X_scaler, y_scaler, model
 
 
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
@@ -632,26 +645,21 @@ logger.info(
 # Refit the selected configuration on all available labelled data.  The epoch
 # count is fixed from the best trial because no validation set remains here.
 (
-    Xall,
-    yall,
     X_scaler,
     y_scaler,
-    likelihood,
     model,
 ) = train_on_all_data(
-    LogNormalPrior(best_noise_prior_loc, best_noise_prior_scale),
-    LogNormalPrior(best_lengthscale_prior_loc, best_lengthscale_prior_scale),
+    best_noise_prior_loc,
+    best_noise_prior_scale,
+    best_lengthscale_prior_loc,
+    best_lengthscale_prior_scale,
     best_epoch,
     best_lr_reductions,
 )
 
 save_gpr(
-    Xall,
-    yall,
     X_scaler,
     y_scaler,
-    mean,
-    likelihood,
     model,
     args.out,
 )

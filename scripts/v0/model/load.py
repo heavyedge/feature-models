@@ -1,8 +1,6 @@
 from pathlib import Path
 
 import torch
-from gpytorch.constraints import Positive
-from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.priors import LogNormalPrior
 from gpytorch_qr.likelihoods import CenterGapQuantilesLikelihood
 
@@ -14,6 +12,7 @@ from .gpr import (
     GPR_H,
     GPR_phi,
 )
+from .likelihoods import GaussianLikelihood
 from .prior import (
     PriorMean_H,
     PriorMean_phi,
@@ -34,11 +33,10 @@ __all__ = [
 
 
 def _load_prior_mean(model_class, path, device=None):
-    checkpoint = torch.load(path, map_location=device, weights_only=False)
-    batch_shape = checkpoint["batch_shape"]
-    state_dict = checkpoint["model_state_dict"]
-    model = model_class(batch_shape=batch_shape)
-    model.load_state_dict(state_dict)
+    checkpoint = torch.load(path, map_location=device, weights_only=False)["model"]
+    args = checkpoint["args"]
+    model = model_class(batch_shape=args["batch_shape"])
+    model.load_state_dict(checkpoint["state_dict"])
 
     if device is not None:
         model.to(device)
@@ -46,53 +44,30 @@ def _load_prior_mean(model_class, path, device=None):
     return model
 
 
-def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, device=None):
+def _load_gpr(xscaler_class, yscaler_class, model_class, path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
-    X = checkpoint["train_x"]
-    y = checkpoint["train_y"]
-    dim = X.shape[-1]
-    batch_shape = X.shape[:-2]
 
-    X_scaler = xscaler_class(dim, batch_shape=batch_shape)
-    y_scaler = yscaler_class(1, batch_shape=batch_shape)
-    mean = mean_class(batch_shape=batch_shape)
-    likelihood_state_dict = checkpoint["likelihood_state_dict"]
-    noise_prior_loc = likelihood_state_dict.get("noise_covar.noise_prior._buffered_loc")
-    noise_prior_scale = likelihood_state_dict.get(
-        "noise_covar.noise_prior._buffered_scale"
-    )
-    if noise_prior_loc is not None and noise_prior_scale is not None:
-        likelihood = GaussianLikelihood(
-            batch_shape=batch_shape,
-            noise_prior=LogNormalPrior(noise_prior_loc, noise_prior_scale),
-            noise_constraint=Positive(),
-        )
-    else:
-        likelihood = GaussianLikelihood(batch_shape=batch_shape)
+    X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
+    X_scaler.load_state_dict(checkpoint["X_scaler"]["state_dict"])
 
-    X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
-    y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
-    mean.load_state_dict(checkpoint["mean_state_dict"])
+    y_scaler = yscaler_class(**checkpoint["y_scaler"]["args"])
+    y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
+
+    likelihood = GaussianLikelihood(**checkpoint["likelihood"]["args"])
+    likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
+
+    model_args = checkpoint["model"]["args"]
+    model_args.update(likelihood=likelihood)
+    model = model_class(**model_args)
+    model.load_state_dict(checkpoint["model"]["state_dict"])
 
     if device is not None:
         X_scaler.to(device)
         y_scaler.to(device)
-        mean.to(device)
         likelihood.to(device)
-
-    X_scaler.eval()
-    y_scaler.eval()
-    mean.eval()
-    X_scaled = X_scaler(X)
-    residual = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
-    model = model_class(X_scaled, residual, likelihood, batch_shape=batch_shape)
-
-    likelihood.load_state_dict(likelihood_state_dict)
-    model.load_state_dict(checkpoint["model_state_dict"])
-
-    if device is not None:
         model.to(device)
-    return X_scaler, y_scaler, mean, likelihood, model
+
+    return X_scaler, y_scaler, likelihood, model
 
 
 def _load_gpqr(
@@ -110,11 +85,20 @@ def _load_gpqr(
     X_scaler = xscaler_class(dim, batch_shape=batch_shape)
     y_scaler = yscaler_class(1, batch_shape=batch_shape)
     mean = mean_class(batch_shape=batch_shape)
+
+    likelihood_state_dict = checkpoint["likelihood_state_dict"]
+    print(likelihood_state_dict)
+    noise_prior_loc = likelihood_state_dict.get("noise_covar.noise_prior._buffered_loc")
+    noise_prior_scale = likelihood_state_dict.get(
+        "noise_covar.noise_prior._buffered_scale"
+    )
     likelihood = CenterGapQuantilesLikelihood(
-        quantiles.unsqueeze(0),
+        quantiles,
         num_lower_quantiles,
+        noise_prior=LogNormalPrior(noise_prior_loc, noise_prior_scale),
         batch_shape=batch_shape,
     ).to(device)
+
     model = model_class(
         inducing_points=inducing_points,
         num_quantiles=len(quantiles),
@@ -197,7 +181,6 @@ def load_GPR_H(path=None, device=None):
     return _load_gpr(
         MinMaxScaler,
         StandardScaler,
-        PriorMean_H,
         GPR_H,
         path,
         device=device,
@@ -229,7 +212,6 @@ def load_GPR_phi(path=None, device=None):
     return _load_gpr(
         MinMaxScaler,
         StandardScaler,
-        PriorMean_phi,
         GPR_phi,
         path,
         device=device,

@@ -24,6 +24,7 @@ models/v0/feature_models/prior.py \
 models/v0/feature_models/scale.py \
 models/v0/feature_models/gpr.py \
 models/v0/feature_models/gpqr.py \
+models/v0/feature_models/likelihoods.py \
 models/v0/feature_models/load.py \
 models/v0/feature_models/predict-prior_mean.py \
 models/v0/feature_models/predict-mean.py \
@@ -155,6 +156,9 @@ benchmarks/v0/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py
 	mkdir -p $(@D)
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPR_$* --quantile-levels $(QUANTILES) -o $@
 
+benchmarks/v0/pinball_loss.%.gpqr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/Xtest.csv _temp/v0/ytest.csv _temp/v0/%.cg_gpqr.pt
+	mkdir -p $(@D)
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPQR_$* --quantile-levels $(QUANTILES) -o $@
 
 
 

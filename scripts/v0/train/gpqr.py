@@ -314,11 +314,10 @@ def train_with_hyperparameters(noise_prior, lengthscale_prior, num_latents, tria
     Xtrain_scaled = X_scaler(Xtrain)
 
     likelihood = CenterGapQuantilesLikelihood(
-        quantiles.unsqueeze(0),
+        quantiles,
         args.num_lower_quantiles,
         batch_shape=batch_shape,
         noise_prior=noise_prior,
-        noise_constraint=Positive(),
     ).to(device)
     with torch.no_grad():
         y_scaler.train()

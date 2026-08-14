@@ -5,8 +5,6 @@ import numpy as np
 import pandas as pd
 import torch
 import v0.model.load as load_module  # Needs PYTHONPATH=scripts
-from gpytorch.models import ExactGP
-from gpytorch_qr.models import QuantileGP
 from sklearn.metrics import mean_pinball_loss
 
 parser = argparse.ArgumentParser()
@@ -46,30 +44,26 @@ ret = loader(args.model_file, device=device)
 model = ret[-1]
 
 model.eval()
-if isinstance(model, ExactGP):
-    quantiles = model.quantiles(
-        X, torch.tensor(args.quantile_levels).to(device)
-    )  # (*B, N, Q)
-    y_np = y.cpu().numpy()
-    quantiles_np = quantiles.detach().cpu().numpy()
-    loss_df = pd.DataFrame(
-        [
-            {
-                "fold": fold,
-                "quantile_level": q,
-                "loss": mean_pinball_loss(
-                    y_fold,
-                    quantiles_fold[:, i],
-                    alpha=float(q),
-                ),
-            }
-            for fold, y_fold, quantiles_fold in zip(folds, y_np, quantiles_np)
-            for i, q in enumerate(args.quantile_levels)
-        ]
-    )
-elif isinstance(model, QuantileGP):
-    ...
-else:
-    raise ValueError(f"Unknown model type: {type(model)}")
+
+quantiles = model.quantiles(
+    X, torch.tensor(args.quantile_levels).to(device)
+)  # (*B, N, Q)
+y_np = y.cpu().numpy()
+quantiles_np = quantiles.detach().cpu().numpy()
+loss_df = pd.DataFrame(
+    [
+        {
+            "fold": fold,
+            "quantile_level": q,
+            "loss": mean_pinball_loss(
+                y_fold,
+                quantiles_fold[:, i],
+                alpha=float(q),
+            ),
+        }
+        for fold, y_fold, quantiles_fold in zip(folds, y_np, quantiles_np)
+        for i, q in enumerate(args.quantile_levels)
+    ]
+)
 
 loss_df.to_csv(args.out, index=False)
