@@ -44,6 +44,7 @@ parser.add_argument(
     "--batch-col",
     type=int,
     nargs="*",
+    default=[],
     help=(
         "CSV column(s) defining batch dimensions. Each column becomes one "
         "batch dimension, and every combination of their values must have the "
@@ -73,50 +74,49 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 X_raw_df = pd.read_csv(args.X)
 X_df = pd.read_csv(args.X, index_col=args.index_col if args.index_col else None)
 
-if args.batch_col:
-    try:
-        batch_keys = X_raw_df.iloc[:, args.batch_col]
-    except IndexError:
-        parser.error(
-            f"--batch-col contains a column outside the input range "
-            f"[0, {X_raw_df.shape[1] - 1}]"
-        )
+batch_col = args.batch_col
+try:
+    batch_keys = X_raw_df.iloc[:, batch_col]
+except IndexError:
+    parser.error(
+        f"--batch-col contains a column outside the input range "
+        f"[0, {X_raw_df.shape[1] - 1}]"
+    )
 
-    # Each selected column is its own batch dimension. ``factorize`` keeps the
-    # order in which values first appear, including a single level for NaNs.
-    batch_codes = []
-    batch_shape = []
-    for column_index in range(batch_keys.shape[1]):
-        codes, levels = pd.factorize(batch_keys.iloc[:, column_index], sort=False)
-        if (codes == -1).any():
-            codes = np.where(codes == -1, len(levels), codes)
-            batch_shape.append(len(levels) + 1)
-        else:
-            batch_shape.append(len(levels))
-        batch_codes.append(codes)
+# Each selected column is its own batch dimension. ``factorize`` keeps the
+# order in which values first appear, including a single level for NaNs.
+batch_codes = []
+batch_shape = []
+for column_index in range(batch_keys.shape[1]):
+    codes, levels = pd.factorize(batch_keys.iloc[:, column_index], sort=False)
+    if (codes == -1).any():
+        codes = np.where(codes == -1, len(levels), codes)
+        batch_shape.append(len(levels) + 1)
+    else:
+        batch_shape.append(len(levels))
+    batch_codes.append(codes)
 
-    if not batch_shape or any(size == 0 for size in batch_shape):
-        parser.error("--batch-col requires at least one row for every batch dimension")
+batch_shape = tuple(batch_shape)
+batch_ids = np.zeros(len(X_df), dtype=int)
+num_batches = 1
+for codes, size in zip(reversed(batch_codes), reversed(batch_shape)):
+    batch_ids += codes * num_batches
+    num_batches *= size
 
-    batch_shape = tuple(batch_shape)
-    batch_ids = np.ravel_multi_index(tuple(batch_codes), batch_shape)
-    batch_sizes = np.bincount(batch_ids, minlength=int(np.prod(batch_shape, dtype=int)))
-    if (batch_sizes == 0).any() or len(set(batch_sizes)) != 1:
-        parser.error(
-            "--batch-col must define a complete grid whose every batch has the "
-            "same number of rows; "
-            f"got batch sizes {batch_sizes.tolist()}"
-        )
+batch_sizes = np.bincount(batch_ids, minlength=num_batches)
+if batch_shape and ((batch_sizes == 0).any() or len(set(batch_sizes)) != 1):
+    parser.error(
+        "--batch-col must define a complete grid whose every batch has the "
+        "same number of rows; "
+        f"got batch sizes {batch_sizes.tolist()}"
+    )
 
-    # Stable sorting keeps the original row order within each batch. Reshaping
-    # then yields (*B, N, D), where *B has one dimension per --batch-col.
-    order = np.argsort(batch_ids, kind="stable")
-    batch_size = int(batch_sizes[0])
-    X_values = X_df.iloc[order].values.reshape(*batch_shape, batch_size, -1)
-    X_row_indices = order.reshape(*batch_shape, batch_size)
-else:
-    X_values = X_df.values
-    X_row_indices = np.arange(len(X_df))
+# Stable sorting keeps the original row order within each batch. Reshaping then
+# yields (*B, N, D), where an empty *B is the ordinary (N, D) input shape.
+order = np.argsort(batch_ids, kind="stable")
+batch_size = int(batch_sizes[0])
+X_values = X_df.iloc[order].values.reshape(*batch_shape, batch_size, X_df.shape[1])
+X_row_indices = order.reshape(*batch_shape, batch_size)
 
 X = torch.tensor(X_values, dtype=torch.float32, device=device)
 
