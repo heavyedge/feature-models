@@ -28,6 +28,17 @@ parser.add_argument(
     ),
 )
 parser.add_argument("--index-col", type=int, nargs="*", help="Index columns for X.")
+parser.add_argument(
+    "--batch-col",
+    type=int,
+    nargs="*",
+    default=[],
+    help=(
+        "CSV column(s) defining batch dimensions. Each column becomes one "
+        "batch dimension, and every combination of their values must have the "
+        "same number of rows."
+    ),
+)
 parser.add_argument("--target", required=True, choices=["H", "phi"])
 parser.add_argument(
     "--chunk-size",
