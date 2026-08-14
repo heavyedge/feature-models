@@ -18,7 +18,7 @@ parser.add_argument(
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
 
-index_col_true = [0, "slurry", "name"]
+index_col_true = [0, "name", "slurry", "fold", "split"]
 Xtrue = pd.read_csv(args.X_true, index_col=index_col_true)
 index_col_pred = [
     "gap_to_thickness_ratio_idx",
@@ -30,7 +30,7 @@ Xpred = pd.read_csv(args.X_pred, index_col=index_col_pred)
 simplices = np.zeros(len(Xpred), dtype=bool)
 for cos in Xtrue["cosine_of_contact_angle"].unique():
     xtrue_ok = Xtrue["cosine_of_contact_angle"] == cos
-    xtrue = Xtrue[xtrue_ok][args.grid]
+    xtrue = Xtrue[xtrue_ok][args.grid].drop_duplicates()
     delaunay = Delaunay(xtrue.to_numpy())
 
     xpred_ok = Xpred["cosine_of_contact_angle"] == cos

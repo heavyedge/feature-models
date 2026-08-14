@@ -1,25 +1,12 @@
 from pathlib import Path
 
 import torch
-from gpytorch.likelihoods import GaussianLikelihood
-from gpytorch_qr.likelihoods import CenterGapQuantilesLikelihood
 
-from .gpqr import (
-    CenterGapMTGPQR_H,
-    CenterGapMTGPQR_phi,
-)
-from .gpr import (
-    GPR_H,
-    GPR_phi,
-)
-from .prior import (
-    PriorMean_H,
-    PriorMean_phi,
-)
-from .scale import (
-    MinMaxScaler,
-    StandardScaler,
-)
+from . import gpqr as gpqr_module
+from . import gpr as gpr_module
+from . import likelihoods as likelihood_module
+from . import prior as prior_module
+from . import scale as scale_module
 
 __all__ = [
     "load_PriorMean_H",
@@ -31,91 +18,77 @@ __all__ = [
 ]
 
 
-def _load_prior_mean(model_class, path, device=None):
-    state_dict = torch.load(path, map_location=device, weights_only=False)
-    model = model_class().to(device)
-    model.load_state_dict(state_dict)
+def _load_prior_mean(path, device=None):
+    checkpoint = torch.load(path, map_location=device, weights_only=False)["model"]
+    model_class = getattr(prior_module, checkpoint["type"])
+    args = checkpoint["args"]
+    model = model_class(batch_shape=args["batch_shape"])
+    model.load_state_dict(checkpoint["state_dict"])
+
+    if device is not None:
+        model.to(device)
+
     return model
 
 
-def _load_gpr(xscaler_class, yscaler_class, mean_class, model_class, path, device=None):
+def _load_gpr(path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
-    X = checkpoint["train_x"]
-    y = checkpoint["train_y"]
-    dim = X.shape[-1]
-    batch_shape = X.shape[:-2]
 
-    X_scaler = xscaler_class(dim, batch_shape=batch_shape)
-    y_scaler = yscaler_class(1, batch_shape=batch_shape)
-    mean = mean_class(batch_shape=batch_shape)
-    likelihood = GaussianLikelihood(batch_shape=batch_shape)
+    xscaler_class = getattr(scale_module, checkpoint["X_scaler"]["type"])
+    X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
+    X_scaler.load_state_dict(checkpoint["X_scaler"]["state_dict"])
 
-    X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
-    y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
-    mean.load_state_dict(checkpoint["mean_state_dict"])
+    yscaler_class = getattr(scale_module, checkpoint["y_scaler"]["type"])
+    y_scaler = yscaler_class(**checkpoint["y_scaler"]["args"])
+    y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
+
+    likelihood_class = getattr(likelihood_module, checkpoint["likelihood"]["type"])
+    likelihood = likelihood_class(**checkpoint["likelihood"]["args"])
+    likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
+
+    model_class = getattr(gpr_module, checkpoint["model"]["type"])
+    model_args = checkpoint["model"]["args"]
+    model_args.update(likelihood=likelihood)
+    model = model_class(**model_args)
+    model.load_state_dict(checkpoint["model"]["state_dict"])
 
     if device is not None:
         X_scaler.to(device)
         y_scaler.to(device)
-        mean.to(device)
         likelihood.to(device)
-
-    X_scaler.eval()
-    y_scaler.eval()
-    mean.eval()
-    X_scaled = X_scaler(X)
-    residual = y_scaler((y - mean(X)).unsqueeze(-1)).squeeze(-1)
-    model = model_class(X_scaled, residual, likelihood, batch_shape=batch_shape)
-
-    likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
-    model.load_state_dict(checkpoint["model_state_dict"])
-
-    if device is not None:
         model.to(device)
-    return X_scaler, y_scaler, mean, likelihood, model
+
+    return X_scaler, y_scaler, likelihood, model
 
 
-def _load_gpqr(
-    xscaler_class, yscaler_class, mean_class, model_class, path, device=None
-):
+def _load_gpqr(path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
-    X = checkpoint["train_x"]
-    dim = X.shape[-1]
-    batch_shape = X.shape[:-2]
-    inducing_points = checkpoint["inducing_points"]
+
     quantiles = checkpoint["quantiles"]
-    num_lower_quantiles = checkpoint["num_lower_quantiles"]
-    num_latents = checkpoint["num_latents"]
 
-    X_scaler = xscaler_class(dim, batch_shape=batch_shape)
-    y_scaler = yscaler_class(1, batch_shape=batch_shape)
-    mean = mean_class(batch_shape=batch_shape)
-    likelihood = CenterGapQuantilesLikelihood(
-        quantiles.unsqueeze(0),
-        num_lower_quantiles,
-        batch_shape=batch_shape,
-    ).to(device)
-    model = model_class(
-        inducing_points=inducing_points,
-        num_quantiles=len(quantiles),
-        num_lower_quantiles=num_lower_quantiles,
-        num_latents=num_latents,
-        batch_shape=batch_shape,
-    )
+    xscaler_class = getattr(scale_module, checkpoint["X_scaler"]["type"])
+    X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
+    X_scaler.load_state_dict(checkpoint["X_scaler"]["state_dict"])
 
-    X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
-    y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
-    mean.load_state_dict(checkpoint["mean_state_dict"])
-    likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
-    model.load_state_dict(checkpoint["model_state_dict"])
+    yscaler_class = getattr(scale_module, checkpoint["y_scaler"]["type"])
+    y_scaler = yscaler_class(**checkpoint["y_scaler"]["args"])
+    y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
+
+    likelihood_class = getattr(likelihood_module, checkpoint["likelihood"]["type"])
+    likelihood = likelihood_class(**checkpoint["likelihood"]["args"])
+    likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
+
+    model_class = getattr(gpqr_module, checkpoint["model"]["type"])
+    model = model_class(**checkpoint["model"]["args"])
+    model.load_state_dict(checkpoint["model"]["state_dict"])
 
     if device is not None:
         X_scaler.to(device)
         y_scaler.to(device)
-        mean.to(device)
         likelihood.to(device)
         model.to(device)
-    return quantiles, X_scaler, y_scaler, mean, likelihood, model
+
+    return quantiles, X_scaler, y_scaler, likelihood, model
 
 
 def load_PriorMean_H(path=None, device=None):
@@ -126,13 +99,17 @@ def load_PriorMean_H(path=None, device=None):
     path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
+
+    Returns
+    -------
+    model
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
         path = Path(__file__).parent / "H.prior_mean.pt"
-    return _load_prior_mean(PriorMean_H, path, device=device)
+    return _load_prior_mean(path, device=device)
 
 
 def load_PriorMean_phi(path=None, device=None):
@@ -143,13 +120,17 @@ def load_PriorMean_phi(path=None, device=None):
     path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
+
+    Returns
+    -------
+    model
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if path is None:
         path = Path(__file__).parent / "phi.prior_mean.pt"
-    return _load_prior_mean(PriorMean_phi, path, device=device)
+    return _load_prior_mean(path, device=device)
 
 
 def load_GPR_H(path=None, device=None):
@@ -165,7 +146,6 @@ def load_GPR_H(path=None, device=None):
     -------
     X_scaler
     y_scaler
-    mean
     likelihood
     model
     """
@@ -174,14 +154,7 @@ def load_GPR_H(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "H.gpr.pt"
-    return _load_gpr(
-        MinMaxScaler,
-        StandardScaler,
-        PriorMean_H,
-        GPR_H,
-        path,
-        device=device,
-    )
+    return _load_gpr(path, device=device)
 
 
 def load_GPR_phi(path=None, device=None):
@@ -197,7 +170,6 @@ def load_GPR_phi(path=None, device=None):
     -------
     X_scaler
     y_scaler
-    mean
     likelihood
     model
     """
@@ -206,14 +178,7 @@ def load_GPR_phi(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "phi.gpr.pt"
-    return _load_gpr(
-        MinMaxScaler,
-        StandardScaler,
-        PriorMean_phi,
-        GPR_phi,
-        path,
-        device=device,
-    )
+    return _load_gpr(path, device=device)
 
 
 def load_GPQR_H(path=None, device=None):
@@ -230,7 +195,6 @@ def load_GPQR_H(path=None, device=None):
     quantiles
     X_scaler
     y_scaler
-    mean
     likelihood
     model
     """
@@ -239,14 +203,7 @@ def load_GPQR_H(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "H.gpqr.pt"
-    return _load_gpqr(
-        MinMaxScaler,
-        StandardScaler,
-        PriorMean_H,
-        CenterGapMTGPQR_H,
-        path,
-        device=device,
-    )
+    return _load_gpqr(path, device=device)
 
 
 def load_GPQR_phi(path=None, device=None):
@@ -263,7 +220,6 @@ def load_GPQR_phi(path=None, device=None):
     quantiles
     X_scaler
     y_scaler
-    mean
     likelihood
     model
     """
@@ -272,11 +228,4 @@ def load_GPQR_phi(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "phi.gpqr.pt"
-    return _load_gpqr(
-        MinMaxScaler,
-        StandardScaler,
-        PriorMean_phi,
-        CenterGapMTGPQR_phi,
-        path,
-        device=device,
-    )
+    return _load_gpqr(path, device=device)
