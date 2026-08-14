@@ -20,7 +20,7 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
-    "model_file",
+    "model",
     type=pathlib.Path,
     nargs="?",
     help=(
@@ -47,7 +47,7 @@ X_df = pd.read_csv(args.X, index_col=args.index_col if args.index_col else None)
 X = torch.tensor(X_df.values, dtype=torch.float32, device=device)
 
 loader = getattr(load_module, f"load_PriorMean_{args.target}")
-model = loader(path=args.model_file, device=device)
+model = loader(path=args.model, device=device)
 model.eval()
 
 ret = []

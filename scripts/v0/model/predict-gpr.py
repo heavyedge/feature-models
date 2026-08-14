@@ -1,17 +1,14 @@
 import argparse
-import importlib
 import pathlib
-import sys
 
 import numpy as np
 import pandas as pd
 import torch
 
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+from . import load as load_module
 
 parser = argparse.ArgumentParser(
-    description="Predict posterior distribution of mean from GPR.",
+    description="Predict predictive posterior distribution of shape features using GPR."
 )
 parser.add_argument(
     "X",
@@ -24,6 +21,25 @@ parser.add_argument(
         "the cosine of the contact angle of the fluid on the substrate."
     ),
 )
+parser.add_argument(
+    "prior_mean_model",
+    type=pathlib.Path,
+    nargs="?",
+    help=(
+        "Path to the prior mean model file."
+        "If not passed, default model will be searched using --target option."
+    ),
+)
+parser.add_argument(
+    "gpr_model",
+    type=pathlib.Path,
+    nargs="?",
+    help=(
+        "Path to the gpr model file."
+        "If not passed, default model will be searched using --target option."
+    ),
+)
+parser.add_argument("--index-col", type=int, nargs="*", help="Index columns for X.")
 parser.add_argument("--target", required=True, choices=["H", "phi"])
 parser.add_argument(
     "--chunk-size",
@@ -32,47 +48,36 @@ parser.add_argument(
     help="Number of samples to process at once.",
 )
 parser.add_argument(
-    "-o",
-    "--out",
-    type=pathlib.Path,
-    required=True,
-    help="Output csv file.",
+    "-o", "--out", type=pathlib.Path, required=True, help="Output csv file."
 )
 args = parser.parse_args()
 
-load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
-
-torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if args.target == "H":
-    load_mean = load_module.load_PriorMean_H
-    load_models = load_module.load_GPR_H
-elif args.target == "phi":
-    load_mean = load_module.load_PriorMean_phi
-    load_models = load_module.load_GPR_phi
-mean = load_mean(device=device)
-mean.eval()
-models = load_models(device=device)
-for module in models:
-    try:
-        module.eval()
-    except AttributeError:
-        pass
-X_scaler, y_scaler, likelihood, model = models
+X_df = pd.read_csv(args.X, index_col=args.index_col if args.index_col else None)
+X = torch.tensor(X_df.values, dtype=torch.float32, device=device)
 
-X = torch.tensor(
-    pd.read_csv(args.X, index_col=[0, 1, 2]).values,
-    dtype=torch.float32,
-    device=device,
+prior_mean_loader = getattr(load_module, f"load_PriorMean_{args.target}")
+prior_mean_model = prior_mean_loader(path=args.prior_mean_model, device=device)
+prior_mean_model.eval()
+
+gpr_loader = getattr(load_module, f"load_GPR_{args.target}")
+X_scaler, y_scaler, likelihood, gpr_model = gpr_loader(
+    path=args.gpr_model, device=device
 )
+X_scaler.eval()
+y_scaler.eval()
+gpr_model.eval()
+likelihood.eval()
 
 ret = []
 with torch.no_grad():
     for i in range(0, X.shape[0], args.chunk_size):
-        X_pred = X[i : i + args.chunk_size]
-        X_scaled = X_scaler(X_pred)
-        scaled_res_posterior = model(X_scaled)
+        X_chunk = X[i : i + args.chunk_size]
+
+        prior_mean = prior_mean_model(X_chunk)
+        X_scaled = X_scaler(X_chunk)
+        scaled_res_posterior = gpr_model(X_scaled)
 
         scaled_res_mean = scaled_res_posterior.mean.unsqueeze(-1)
         residual_mean = y_scaler.inverse_transform(scaled_res_mean).squeeze(-1)
@@ -81,8 +86,9 @@ with torch.no_grad():
             * y_scaler.X_scale.abs().unsqueeze(-2)
         ).squeeze(-1)
 
-        posterior_mean = mean(X_pred) + residual_mean
-        ret.append(torch.stack((posterior_mean, residual_std)).cpu().numpy())
-ret = np.concatenate(ret, axis=1)
-df = pd.DataFrame(ret.T, columns=[f"{args.target}_mean", f"{args.target}_std"])
+        posterior_mean = prior_mean + residual_mean
+        ret.append(torch.stack((posterior_mean, residual_std), dim=-1).cpu().numpy())
+
+ret = np.concatenate(ret, axis=0)
+df = pd.DataFrame(ret, columns=["mean", "std"])
 df.to_csv(args.out, index=False)
