@@ -3,9 +3,8 @@ import logging
 import pathlib
 
 import model.prior as model_module  # Needs PYTHONPATH=scripts/v0
-import numpy as np
-import pandas as pd
 import torch
+from batch import load_batched_arrays
 from save import save_prior_mean
 
 logging.basicConfig(
@@ -23,6 +22,12 @@ parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument(
     "--index-col", type=int, nargs="*", help="Index columns for X and y."
 )
+parser.add_argument(
+    "--batch-col",
+    type=int,
+    nargs="*",
+    help="X CSV column(s) defining batch dimensions.",
+)
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", type=str, help="Model name.")
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
@@ -38,13 +43,14 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-X_df = pd.read_csv(args.X, index_col=args.index_col)
-X_arr = np.stack([X_df.loc[fold] for fold in sorted(X_df.index.unique())], axis=0)
-X = torch.tensor(X_arr).float().to(device)  # (*K, N, D)
-
-y_df = pd.read_csv(args.y, index_col=args.index_col)[args.target]
-y_arr = np.stack([y_df.loc[fold] for fold in sorted(y_df.index.unique())], axis=0)
-y = torch.tensor(y_arr).float().to(device)  # (*K, N)
+try:
+    X_arr, y_arr = load_batched_arrays(
+        args.X, args.y, args.target, args.index_col, args.batch_col
+    )
+except ValueError as exc:
+    parser.error(str(exc))
+X = torch.tensor(X_arr).float().to(device)  # (*B, N, D)
+y = torch.tensor(y_arr).float().to(device)  # (*B, N)
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]

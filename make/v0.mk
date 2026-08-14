@@ -118,7 +118,7 @@ models/v0/feature_models/%.py: scripts/v0/model/%.py
 ## Prior mean
 
 _temp/v0/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --index-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xfull.csv _temp/v0/yfull.csv
 	mkdir -p $(@D)
@@ -128,7 +128,7 @@ models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v
 
 _temp/v0/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
 
 models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xfull.csv _temp/v0/yfull.csv models/v0/feature_models/%.prior_mean.pt \
 _temp/v0/%.gpr.pt
@@ -139,11 +139,11 @@ _temp/v0/%.gpr.pt
 
 _temp/v0/%.direct_gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.direct_gpqr -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.direct_gpqr -o $@
 
 _temp/v0/%.cg_gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr -o $@
 
 models/v0/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xfull.csv _temp/v0/yfull.csv models/v0/feature_models/%.prior_mean.pt \
 _temp/v0/%.cg_gpqr.pt
