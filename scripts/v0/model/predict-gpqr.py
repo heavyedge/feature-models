@@ -1,17 +1,14 @@
 import argparse
-import importlib
 import pathlib
-import sys
 
 import numpy as np
 import pandas as pd
 import torch
 
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+from . import load as load_module
 
 parser = argparse.ArgumentParser(
-    description="Predict quantiles from a trained model.",
+    description="Predict posterior distribution of shape features quantiles using GPR."
 )
 parser.add_argument(
     "X",
@@ -24,13 +21,31 @@ parser.add_argument(
         "the cosine of the contact angle of the fluid on the substrate."
     ),
 )
+parser.add_argument(
+    "prior_mean_model",
+    type=pathlib.Path,
+    nargs="?",
+    help=(
+        "Path to the prior mean model file."
+        "If not passed, default model will be searched using --target option."
+    ),
+)
+parser.add_argument(
+    "gpqr_model",
+    type=pathlib.Path,
+    nargs="?",
+    help=(
+        "Path to the gpr model file."
+        "If not passed, default model will be searched using --target option."
+    ),
+)
+parser.add_argument("--index-col", type=int, nargs="*", help="Index columns for X.")
 parser.add_argument("--target", required=True, choices=["H", "phi"])
-parser.add_argument("--method", required=True, choices=["delta", "mc"])
 parser.add_argument(
     "--num-samples",
-    type=int,
     default=10,
-    help="Number of MC samples when using the 'mc' method.",
+    type=int,
+    help="Number of samples to draw from the posterior distribution.",
 )
 parser.add_argument(
     "--chunk-size",
@@ -43,59 +58,62 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
-
-torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if args.target == "H":
-    load_mean = load_module.load_PriorMean_H
-    load_models = load_module.load_GPQR_H
-elif args.target == "phi":
-    load_mean = load_module.load_PriorMean_phi
-    load_models = load_module.load_GPQR_phi
-mean = load_mean(device=device)
-mean.eval()
-models = load_models(device=device)
-for module in models:
-    try:
-        module.eval()
-    except AttributeError:
-        pass
-quantile_levels, X_scaler, y_scaler, likelihood, model = models
+X_df = pd.read_csv(args.X, index_col=args.index_col if args.index_col else None)
+X = torch.tensor(X_df.values, dtype=torch.float32, device=device)
 
-X = torch.tensor(
-    pd.read_csv(args.X, index_col=[0, 1, 2]).values,
-    dtype=torch.float32,
-    device=device,
+prior_mean_loader = getattr(load_module, f"load_PriorMean_{args.target}")
+prior_mean_model = prior_mean_loader(path=args.prior_mean_model, device=device)
+prior_mean_model.eval()
+
+gpqr_loader = getattr(load_module, f"load_GPQR_{args.target}")
+quantiles, X_scaler, y_scaler, likelihood, gpqr_model = gpqr_loader(
+    path=args.gpqr_model, device=device
 )
+X_scaler.eval()
+y_scaler.eval()
+gpqr_model.eval()
+likelihood.eval()
 
-if args.method == "delta":
-    quantiles = model.mean_quantiles_delta
-elif args.method == "mc":
+nsamples = torch.Size([args.num_samples])
+quantile_levels = quantiles.detach().cpu().numpy()
 
-    def quantiles(x):
-        return model.mean_quantiles_mc(x, num_samples=args.num_samples)
-
-else:
-    raise ValueError(f"Unknown method: {args.method}")
-
-ret = []
+wrote_output = False
 with torch.no_grad():
     for i in range(0, X.shape[0], args.chunk_size):
-        X_pred = X[i : i + args.chunk_size]
-        X_scaled = X_scaler(X_pred)
-        scaled_res_quantiles = quantiles(X_scaled)
-        pred_res = y_scaler.inverse_transform(scaled_res_quantiles)
-        pred_mean = mean(X_pred).reshape(-1, 1)
-        pred_quantiles = pred_res + pred_mean
-        ret.append(pred_quantiles.cpu().numpy())
-ret = np.concatenate(ret, axis=0)  # (N, n_quantiles)
+        X_chunk = X[i : i + args.chunk_size]
 
-quantile_levels = quantile_levels.detach().cpu().numpy()
-pd.DataFrame(
-    {
-        f"{args.target} ({quantile_level:.0%})": ret[:, i]
-        for i, quantile_level in enumerate(quantile_levels)
-    }
-).to_csv(args.out, index=False)
+        prior_mean = prior_mean_model(X_chunk)
+        X_scaled = X_scaler(X_chunk)
+        scaled_res_posterior = gpqr_model.joint_quantile_posterior(X_scaled)
+        scaled_res_posterior_samples = scaled_res_posterior.rsample(nsamples)
+
+        res = y_scaler.inverse_transform(scaled_res_posterior_samples)
+        samples = prior_mean.unsqueeze(-1) + res  # (S, N, Q)
+        samples_np = samples.detach().cpu().numpy()
+
+        df = pd.DataFrame(
+            {
+                "quantile": np.broadcast_to(
+                    quantile_levels.reshape(1, 1, -1), samples_np.shape
+                ).ravel(),
+                "sample": np.broadcast_to(
+                    np.arange(samples_np.shape[0]).reshape(-1, 1, 1),
+                    samples_np.shape,
+                ).ravel(),
+                args.target: samples_np.ravel(),
+            }
+        )
+        df.to_csv(
+            args.out,
+            index=False,
+            mode="a" if wrote_output else "w",
+            header=not wrote_output,
+        )
+        wrote_output = True
+
+if not wrote_output:
+    pd.DataFrame(columns=["quantile", "sample", args.target]).to_csv(
+        args.out, index=False
+    )
