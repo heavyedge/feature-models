@@ -27,8 +27,8 @@ models/v0/feature_models/gpqr.py \
 models/v0/feature_models/likelihoods.py \
 models/v0/feature_models/load.py \
 models/v0/feature_models/predict-prior_mean.py \
-models/v0/feature_models/predict-mean.py \
-models/v0/feature_models/predict-quantiles.py
+models/v0/feature_models/predict-gpr.py \
+models/v0/feature_models/predict-gpqr.py
 
 models-v0: $(MODEL_FILES_v0)
 

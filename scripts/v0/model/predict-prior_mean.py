@@ -1,18 +1,13 @@
 import argparse
-import importlib
 import pathlib
-import sys
 
 import numpy as np
 import pandas as pd
 import torch
 
-MODEL_MODULE_PATH = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(MODEL_MODULE_PATH.parent))
+from . import load as load_module
 
-parser = argparse.ArgumentParser(
-    description="Predict prior mean of shape features.",
-)
+parser = argparse.ArgumentParser(description="Predict prior mean of shape features.")
 parser.add_argument(
     "X",
     type=pathlib.Path,
@@ -24,6 +19,16 @@ parser.add_argument(
         "the cosine of the contact angle of the fluid on the substrate."
     ),
 )
+parser.add_argument(
+    "model_file",
+    type=pathlib.Path,
+    nargs="?",
+    help=(
+        "Path to the model file."
+        "If not passed, default model will be searched using --target option."
+    ),
+)
+parser.add_argument("--index-col", type=int, nargs="*", help="Index columns for X.")
 parser.add_argument("--target", required=True, choices=["H", "phi"])
 parser.add_argument(
     "--chunk-size",
@@ -36,23 +41,14 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-load_module = importlib.import_module(f"{MODEL_MODULE_PATH.name}.load")
-
-torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if args.target == "H":
-    load_model = load_module.load_PriorMean_H
-elif args.target == "phi":
-    load_model = load_module.load_PriorMean_phi
-model = load_model(device=device)
-model.eval()
+X_df = pd.read_csv(args.X, index_col=args.index_col if args.index_col else None)
+X = torch.tensor(X_df.values, dtype=torch.float32, device=device)
 
-X = torch.tensor(
-    pd.read_csv(args.X, index_col=[0, 1, 2]).values,
-    dtype=torch.float32,
-    device=device,
-)
+loader = getattr(load_module, f"load_PriorMean_{args.target}")
+model = loader(path=args.model_file, device=device)
+model.eval()
 
 ret = []
 with torch.no_grad():
@@ -61,6 +57,6 @@ with torch.no_grad():
             X[i : i + args.chunk_size], dtype=torch.float32, device=device
         )
         pred_mean = model(X_pred)
-        ret.append(pred_mean.cpu().numpy())
+        ret.append(pred_mean.detach().cpu().numpy())
 ret = np.concatenate(ret, axis=0)
 pd.DataFrame({args.target: ret}).to_csv(args.out, index=False)
