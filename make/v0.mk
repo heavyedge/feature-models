@@ -35,14 +35,8 @@ models-v0: $(MODEL_FILES_v0)
 # examples-v0: $(wildcard examples/v0/*)
 examples-v0:
 
-# test-v0: $(MODEL_FILES_v0)
-# 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_PriorMean_H; load_PriorMean_H()"
-# 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_PriorMean_phi; load_PriorMean_phi()"
-# 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPR_H; load_GPR_H()"
-# 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPR_phi; load_GPR_phi()"
-# 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPQR_H; load_GPQR_H()"
-# 	$(GPU_PYTHON) -c "from models.v0.feature_models.load import load_GPQR_phi; load_GPQR_phi()"
-test-v0:
+test-v0: $(MODEL_FILES_v0)
+	pytest tests/v0 --models-path $(CURDIR)/models/v0
 
 # Data
 
