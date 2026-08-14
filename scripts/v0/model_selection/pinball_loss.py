@@ -5,7 +5,9 @@ import numpy as np
 import pandas as pd
 import torch
 import v0.model.load as load_module  # Needs PYTHONPATH=scripts
+from gpytorch_qr.models import QuantileGP
 from sklearn.metrics import mean_pinball_loss
+from v0.model.gpr import BaseGP  # Needs PYTHONPATH=scripts
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
@@ -45,9 +47,12 @@ model = ret[-1]
 
 model.eval()
 
-quantiles = model.quantiles(
-    X, torch.tensor(args.quantile_levels).to(device)
-)  # (*B, N, Q)
+if isinstance(model, QuantileGP):
+    quantiles = model.mean_quantiles_delta(X)
+elif isinstance(model, BaseGP):
+    quantiles = model.quantiles(
+        X, torch.tensor(args.quantile_levels).to(device)
+    )  # (*B, N, Q)
 y_np = y.cpu().numpy()
 quantiles_np = quantiles.detach().cpu().numpy()
 loss_df = pd.DataFrame(

@@ -1,8 +1,6 @@
 from pathlib import Path
 
 import torch
-from gpytorch.priors import LogNormalPrior
-from gpytorch_qr.likelihoods import CenterGapQuantilesLikelihood
 
 from .gpqr import (
     CenterGapMTGPQR_H,
@@ -12,7 +10,7 @@ from .gpr import (
     GPR_H,
     GPR_phi,
 )
-from .likelihoods import GaussianLikelihood
+from .likelihoods import CenterGapQuantilesLikelihood, GaussianLikelihood
 from .prior import (
     PriorMean_H,
     PriorMean_phi,
@@ -74,52 +72,28 @@ def _load_gpqr(
     xscaler_class, yscaler_class, mean_class, model_class, path, device=None
 ):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
-    X = checkpoint["train_x"]
-    dim = X.shape[-1]
-    batch_shape = X.shape[:-2]
-    inducing_points = checkpoint["inducing_points"]
+
     quantiles = checkpoint["quantiles"]
-    num_lower_quantiles = checkpoint["num_lower_quantiles"]
-    num_latents = checkpoint["num_latents"]
 
-    X_scaler = xscaler_class(dim, batch_shape=batch_shape)
-    y_scaler = yscaler_class(1, batch_shape=batch_shape)
-    mean = mean_class(batch_shape=batch_shape)
+    X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
+    X_scaler.load_state_dict(checkpoint["X_scaler"]["state_dict"])
 
-    likelihood_state_dict = checkpoint["likelihood_state_dict"]
-    print(likelihood_state_dict)
-    noise_prior_loc = likelihood_state_dict.get("noise_covar.noise_prior._buffered_loc")
-    noise_prior_scale = likelihood_state_dict.get(
-        "noise_covar.noise_prior._buffered_scale"
-    )
-    likelihood = CenterGapQuantilesLikelihood(
-        quantiles,
-        num_lower_quantiles,
-        noise_prior=LogNormalPrior(noise_prior_loc, noise_prior_scale),
-        batch_shape=batch_shape,
-    ).to(device)
+    y_scaler = yscaler_class(**checkpoint["y_scaler"]["args"])
+    y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
 
-    model = model_class(
-        inducing_points=inducing_points,
-        num_quantiles=len(quantiles),
-        num_lower_quantiles=num_lower_quantiles,
-        num_latents=num_latents,
-        batch_shape=batch_shape,
-    )
+    likelihood = CenterGapQuantilesLikelihood(**checkpoint["likelihood"]["args"])
+    likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
 
-    X_scaler.load_state_dict(checkpoint["X_scaler_state_dict"])
-    y_scaler.load_state_dict(checkpoint["y_scaler_state_dict"])
-    mean.load_state_dict(checkpoint["mean_state_dict"])
-    likelihood.load_state_dict(checkpoint["likelihood_state_dict"])
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model = model_class(**checkpoint["model"]["args"])
+    model.load_state_dict(checkpoint["model"]["state_dict"])
 
     if device is not None:
         X_scaler.to(device)
         y_scaler.to(device)
-        mean.to(device)
         likelihood.to(device)
         model.to(device)
-    return quantiles, X_scaler, y_scaler, mean, likelihood, model
+
+    return quantiles, X_scaler, y_scaler, likelihood, model
 
 
 def load_PriorMean_H(path=None, device=None):
@@ -130,6 +104,10 @@ def load_PriorMean_H(path=None, device=None):
     path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
+
+    Returns
+    -------
+    model
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -147,6 +125,10 @@ def load_PriorMean_phi(path=None, device=None):
     path : str or Path, optional
     device : torch.device, optional
         Device to run the model on. If None, uses CUDA if available, else CPU.
+
+    Returns
+    -------
+    model
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -169,7 +151,6 @@ def load_GPR_H(path=None, device=None):
     -------
     X_scaler
     y_scaler
-    mean
     likelihood
     model
     """
@@ -200,7 +181,6 @@ def load_GPR_phi(path=None, device=None):
     -------
     X_scaler
     y_scaler
-    mean
     likelihood
     model
     """
@@ -232,7 +212,6 @@ def load_GPQR_H(path=None, device=None):
     quantiles
     X_scaler
     y_scaler
-    mean
     likelihood
     model
     """
@@ -265,7 +244,6 @@ def load_GPQR_phi(path=None, device=None):
     quantiles
     X_scaler
     y_scaler
-    mean
     likelihood
     model
     """

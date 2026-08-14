@@ -61,32 +61,47 @@ def save_gpr(
 
 
 def save_gpqr(
-    train_x,
-    train_y,
+    quantiles,
     X_scaler,
     y_scaler,
-    mean,
     likelihood,
     model,
-    inducing_points,
-    quantiles,
-    num_lower_quantiles,
-    num_latents,
     path,
 ):
+    data = dict(
+        quantiles=quantiles,
+        X_scaler=dict(
+            args=dict(dim=X_scaler.dim, batch_shape=X_scaler.batch_shape),
+            state_dict=X_scaler.state_dict(),
+        ),
+        y_scaler=dict(
+            args=dict(dim=y_scaler.dim, batch_shape=y_scaler.batch_shape),
+            state_dict=y_scaler.state_dict(),
+        ),
+        likelihood=dict(
+            args=dict(
+                quantile_levels=likelihood.quantile_levels,
+                central_quantile_idxs=likelihood.central_quantile_idxs,
+                noise_prior_loc=likelihood.noise_prior_loc,
+                noise_prior_scale=likelihood.noise_prior_scale,
+                batch_shape=likelihood.batch_shape,
+            ),
+            state_dict=likelihood.state_dict(),
+        ),
+        model=dict(
+            args=dict(
+                inducing_points=model.inducing_points,
+                num_quantiles=model.num_quantiles[0],
+                num_lower_quantiles=model.num_lower_quantiles[0],
+                num_latents=model.num_latents,
+                lengthscale_prior_loc=model.lengthscale_prior_loc,
+                lengthscale_prior_scale=model.lengthscale_prior_scale,
+                batch_shape=model.batch_shape,
+            ),
+            state_dict=model.state_dict(),
+        ),
+    )
     torch.save(
-        {
-            "train_x": train_x,
-            "train_y": train_y,
-            "X_scaler_state_dict": X_scaler.state_dict(),
-            "y_scaler_state_dict": y_scaler.state_dict(),
-            "mean_state_dict": mean.state_dict(),
-            "likelihood_state_dict": likelihood.state_dict(),
-            "model_state_dict": model.state_dict(),
-            "inducing_points": inducing_points,
-            "quantiles": quantiles,
-            "num_lower_quantiles": num_lower_quantiles,
-            "num_latents": num_latents,
-        },
+        data,
         path,
     )

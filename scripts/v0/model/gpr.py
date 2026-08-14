@@ -10,7 +10,7 @@ __all__ = [
 ]
 
 
-class _GPR_Base(ExactGP):
+class BaseGP(ExactGP):
     def __init__(
         self,
         train_x,
@@ -69,9 +69,9 @@ class _GPR_Base(ExactGP):
         return mean[..., None] + std[..., None] * z  # (*B, N, Q)
 
 
-class GPR_H(_GPR_Base):
+class GPR_H(BaseGP):
     pass
 
 
-class GPR_phi(_GPR_Base):
+class GPR_phi(BaseGP):
     pass

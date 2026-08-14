@@ -15,7 +15,7 @@ __all__ = [
 ]
 
 
-class CenterGapMTGPQR_H(CenterGapQuantileGP):
+class _CGMTGPQR_Base(CenterGapQuantileGP):
     def __init__(
         self,
         inducing_points,
@@ -62,54 +62,25 @@ class CenterGapMTGPQR_H(CenterGapQuantileGP):
             [num_lower_quantiles],
         )
 
-    quantiles = CenterGapQuantileGP.mean_quantiles_delta
+        self.num_latents = num_latents
+        self.batch_shape = batch_shape
+
+    @property
+    def inducing_points(self):
+        return self.variational_strategy.base_variational_strategy.inducing_points
+
+    @property
+    def lengthscale_prior_loc(self):
+        return self.covar_module.base_kernel.lengthscale_prior.loc
+
+    @property
+    def lengthscale_prior_scale(self):
+        return self.covar_module.base_kernel.lengthscale_prior.scale
 
 
-class CenterGapMTGPQR_phi(CenterGapQuantileGP):
-    def __init__(
-        self,
-        inducing_points,
-        num_quantiles,
-        num_lower_quantiles,
-        num_latents,
-        lengthscale_prior_loc=0.0,
-        lengthscale_prior_scale=1.0,
-        batch_shape=torch.Size(),
-    ):
-        N, D = inducing_points.shape[-2:]
-        full_batch_shape = torch.Size([*batch_shape, num_latents])
-        variational_distribution = CholeskyVariationalDistribution(
-            N,
-            batch_shape=full_batch_shape,
-        )
-        variational_strategy = CenterGapLMCVariationalStrategy(
-            UnwhitenedVariationalStrategy(
-                self,
-                inducing_points,
-                variational_distribution,
-                learn_inducing_locations=False,
-            ),
-            num_tasks=num_quantiles,
-            num_latents=num_latents,
-        )
+class CenterGapMTGPQR_H(_CGMTGPQR_Base):
+    pass
 
-        mean = ConstantMean(batch_shape=full_batch_shape)
-        ls_prior = LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale)
-        covar = ScaleKernel(
-            RBFKernel(
-                ard_num_dims=D,
-                batch_shape=full_batch_shape,
-                lengthscale_prior=ls_prior,
-            ),
-            batch_shape=full_batch_shape,
-        )
 
-        super().__init__(
-            variational_strategy,
-            mean,
-            covar,
-            [num_quantiles],
-            [num_lower_quantiles],
-        )
-
-    quantiles = CenterGapQuantileGP.mean_quantiles_delta
+class CenterGapMTGPQR_phi(_CGMTGPQR_Base):
+    pass

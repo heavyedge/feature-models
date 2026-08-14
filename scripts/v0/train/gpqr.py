@@ -11,11 +11,9 @@ import torch
 import v0.model.gpqr as model_module  # Needs PYTHONPATH=scripts
 import v0.model.load as load_module  # Needs PYTHONPATH=scripts
 import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
-from gpytorch.constraints import Positive
 from gpytorch.mlls import VariationalELBO
-from gpytorch.priors import LogNormalPrior
-from gpytorch_qr.likelihoods import CenterGapQuantilesLikelihood
 from save import save_gpqr  # Needs PYTHONPATH=scripts
+from v0.model.likelihoods import CenterGapQuantilesLikelihood
 
 logging.basicConfig(
     level=logging.INFO,
@@ -303,7 +301,14 @@ num_quantiles = len(quantiles)
 model_class = getattr(model_module, args.model)
 
 
-def train_with_hyperparameters(noise_prior, lengthscale_prior, num_latents, trial=None):
+def train_with_hyperparameters(
+    noise_prior_loc,
+    noise_prior_scale,
+    lengthscale_prior_loc,
+    lengthscale_prior_scale,
+    num_latents,
+    trial=None,
+):
     """Train one GPQR trial and return its best batch-mean validation loss."""
     torch.manual_seed(42)
     trial_label = trial.number if trial is not None else "best"
@@ -317,7 +322,8 @@ def train_with_hyperparameters(noise_prior, lengthscale_prior, num_latents, tria
         quantiles,
         args.num_lower_quantiles,
         batch_shape=batch_shape,
-        noise_prior=noise_prior,
+        noise_prior_loc=noise_prior_loc,
+        noise_prior_scale=noise_prior_scale,
     ).to(device)
     with torch.no_grad():
         y_scaler.train()
@@ -328,8 +334,8 @@ def train_with_hyperparameters(noise_prior, lengthscale_prior, num_latents, tria
         num_lower_quantiles=args.num_lower_quantiles,
         num_latents=num_latents,
         batch_shape=batch_shape,
-        lengthscale_prior_loc=lengthscale_prior.loc,
-        lengthscale_prior_scale=lengthscale_prior.scale,
+        lengthscale_prior_loc=lengthscale_prior_loc,
+        lengthscale_prior_scale=lengthscale_prior_scale,
     ).to(device)
 
     mll = VariationalELBO(likelihood, model, num_data=num_data)
@@ -474,8 +480,10 @@ def objective(trial):
     )
     num_latents = trial.suggest_int("num_latents", 2, num_quantiles)
     val_loss = train_with_hyperparameters(
-        LogNormalPrior(noise_prior_loc, noise_prior_scale),
-        LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale),
+        noise_prior_loc,
+        noise_prior_scale,
+        lengthscale_prior_loc,
+        lengthscale_prior_scale,
         num_latents,
         trial,
     )
@@ -483,7 +491,13 @@ def objective(trial):
 
 
 def train_on_all_data(
-    noise_prior, lengthscale_prior, num_latents, num_epochs, lr_reductions
+    noise_prior_loc,
+    noise_prior_scale,
+    lengthscale_prior_loc,
+    lengthscale_prior_scale,
+    num_latents,
+    num_epochs,
+    lr_reductions,
 ):
     """Fit on all data while replaying the selected trial's learning-rate path."""
     torch.manual_seed(42)
@@ -497,11 +511,11 @@ def train_on_all_data(
     X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
     y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
     likelihood = CenterGapQuantilesLikelihood(
-        quantiles.unsqueeze(0),
+        quantiles,
         args.num_lower_quantiles,
         batch_shape=batch_shape,
-        noise_prior=noise_prior,
-        noise_constraint=Positive(),
+        noise_prior_loc=noise_prior_loc,
+        noise_prior_scale=noise_prior_scale,
     ).to(device)
 
     X_scaler.train()
@@ -516,8 +530,8 @@ def train_on_all_data(
         num_lower_quantiles=args.num_lower_quantiles,
         num_latents=num_latents,
         batch_shape=batch_shape,
-        lengthscale_prior_loc=lengthscale_prior.loc,
-        lengthscale_prior_scale=lengthscale_prior.scale,
+        lengthscale_prior_loc=lengthscale_prior_loc,
+        lengthscale_prior_scale=lengthscale_prior_scale,
     ).to(device)
 
     mll = VariationalELBO(likelihood, model, num_data=Xall.shape[-2])
@@ -563,13 +577,10 @@ def train_on_all_data(
             )
 
     return (
-        Xall,
-        yall,
         X_scaler,
         y_scaler,
         likelihood,
         model,
-        inducing_points,
     )
 
 
@@ -675,32 +686,25 @@ logger.info(
 # Refit the selected configuration on all available labelled data.  The epoch
 # count is fixed from the best trial because no validation set remains here.
 (
-    Xall,
-    yall,
     X_scaler,
     y_scaler,
     likelihood,
     model,
-    inducing_points,
 ) = train_on_all_data(
-    LogNormalPrior(best_noise_prior_loc, best_noise_prior_scale),
-    LogNormalPrior(best_lengthscale_prior_loc, best_lengthscale_prior_scale),
+    best_noise_prior_loc,
+    best_noise_prior_scale,
+    best_lengthscale_prior_loc,
+    best_lengthscale_prior_scale,
     best_num_latents,
     best_epoch,
     best_lr_reductions,
 )
 
 save_gpqr(
-    Xall,
-    yall,
+    quantiles,
     X_scaler,
     y_scaler,
-    mean,
     likelihood,
     model,
-    inducing_points,
-    quantiles,
-    args.num_lower_quantiles,
-    best_num_latents,
     args.out,
 )
