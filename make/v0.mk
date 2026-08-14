@@ -26,6 +26,7 @@ models/v0/feature_models/gpr.py \
 models/v0/feature_models/gpqr.py \
 models/v0/feature_models/likelihoods.py \
 models/v0/feature_models/load.py \
+models/v0/feature_models/batch.py \
 models/v0/feature_models/predict-prior_mean.py \
 models/v0/feature_models/predict-gpr.py \
 models/v0/feature_models/predict-gpqr.py

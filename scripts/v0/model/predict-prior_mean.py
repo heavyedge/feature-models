@@ -5,6 +5,7 @@ import pandas as pd
 import torch
 
 from . import load as load_module
+from .batch import load_batched_features
 
 parser = argparse.ArgumentParser(description="Predict prior mean of shape features.")
 parser.add_argument(
@@ -53,8 +54,13 @@ args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-X_df = pd.read_csv(args.X, index_col=args.index_col if args.index_col else None)
-X = torch.tensor(X_df.values, dtype=torch.float32, device=device)
+try:
+    X_values, X_row_indices = load_batched_features(
+        args.X, args.index_col, args.batch_col
+    )
+except ValueError as exc:
+    parser.error(str(exc))
+X = torch.tensor(X_values, dtype=torch.float32, device=device)
 
 loader = getattr(load_module, f"load_PriorMean_{args.target}")
 model = loader(path=args.model, device=device)
@@ -62,9 +68,12 @@ model.eval()
 
 wrote_output = False
 with torch.no_grad():
-    for i in range(0, X.shape[0], args.chunk_size):
-        pred_mean = model(X[i : i + args.chunk_size])
-        pd.DataFrame({args.target: pred_mean.detach().cpu().numpy()}).to_csv(
+    for i in range(0, X.shape[-2], args.chunk_size):
+        pred_mean = model(X[..., i : i + args.chunk_size, :]).detach().cpu().numpy()
+        row_indices = X_row_indices[..., i : i + pred_mean.shape[-1]]
+        data = {"index": row_indices.ravel(), args.target: pred_mean.ravel()}
+
+        pd.DataFrame(data).to_csv(
             args.out,
             index=False,
             mode="a" if wrote_output else "w",
@@ -73,4 +82,5 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    pd.DataFrame(columns=[args.target]).to_csv(args.out, index=False)
+    columns = (["index"] if args.batch_col else []) + [args.target]
+    pd.DataFrame(columns=columns).to_csv(args.out, index=False)
