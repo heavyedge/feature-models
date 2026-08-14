@@ -9,12 +9,12 @@ import optuna
 import pandas as pd
 import torch
 import v0.model.gpqr as model_module  # Needs PYTHONPATH=scripts
-import v0.model.gpqr_other as other_model_module  # Needs PYTHONPATH=scripts
 import v0.model.load as load_module  # Needs PYTHONPATH=scripts
 import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
 from gpytorch.mlls import VariationalELBO
-from save import save_gpqr  # Needs PYTHONPATH=scripts
-from v0.model.likelihoods import CenterGapQuantilesLikelihood
+from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
+from save import save_gpqr
+from v0.model.likelihoods import CenterGapQuantilesLikelihood, DirectQuantilesLikelihood
 
 logging.basicConfig(
     level=logging.INFO,
@@ -316,12 +316,14 @@ central_quantile_idx = np.argmin(np.abs(quantiles.detach().cpu().numpy() - 0.5))
 num_quantiles = len(quantiles)
 num_lower_quantiles = central_quantile_idx
 
-if hasattr(model_module, args.model):
-    model_class = getattr(model_module, args.model)
-elif hasattr(other_model_module, args.model):
-    model_class = getattr(other_model_module, args.model)
+model_class = getattr(model_module, args.model)
+
+if issubclass(model_class, CenterGapQuantileGP):
+    likelihood_class = CenterGapQuantilesLikelihood
+elif issubclass(model_class, DirectQuantileGP):
+    likelihood_class = DirectQuantilesLikelihood
 else:
-    raise ValueError(f"Model {args.model} not found.")
+    raise ValueError(f"Unknown model class: {model_class}")
 
 
 def train_with_hyperparameters(
@@ -336,9 +338,9 @@ def train_with_hyperparameters(
     torch.manual_seed(42)
     trial_label = trial.number if trial is not None else "best"
 
-    likelihood = CenterGapQuantilesLikelihood(
-        quantiles,
-        central_quantile_idx,
+    likelihood = likelihood_class(
+        quantile_levels=quantiles,
+        central_quantile_idx=central_quantile_idx,
         batch_shape=batch_shape,
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
@@ -511,9 +513,9 @@ def train_on_all_data(
         Xall = Xtrain
         yall = ytrain
 
-    likelihood = CenterGapQuantilesLikelihood(
-        quantiles,
-        central_quantile_idx,
+    likelihood = likelihood_class(
+        quantile_levels=quantiles,
+        central_quantile_idx=central_quantile_idx,
         batch_shape=batch_shape,
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,

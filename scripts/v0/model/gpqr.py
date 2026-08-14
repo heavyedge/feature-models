@@ -4,14 +4,17 @@ from gpytorch.means import ConstantMean
 from gpytorch.priors import LogNormalPrior
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
+    LMCVariationalStrategy,
     UnwhitenedVariationalStrategy,
 )
-from gpytorch_qr.models import CenterGapQuantileGP
+from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
 from gpytorch_qr.variational import CenterGapLMCVariationalStrategy
 
 __all__ = [
     "CenterGapMTGPQR_H",
     "CenterGapMTGPQR_phi",
+    "DirectMTGPQR_H",
+    "DirectMTGPQR_phi",
 ]
 
 
@@ -83,4 +86,71 @@ class CenterGapMTGPQR_H(_CGMTGPQR_Base):
 
 
 class CenterGapMTGPQR_phi(_CGMTGPQR_Base):
+    pass
+
+
+class _DirectMTGPQR_Base(DirectQuantileGP):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_latents,
+        lengthscale_prior_loc=0.0,
+        lengthscale_prior_scale=1.0,
+        batch_shape=torch.Size(),
+        num_lower_quantiles=0,  # dummy argument
+    ):
+        N, D = inducing_points.shape[-2:]
+        full_batch_shape = torch.Size([*batch_shape, num_latents])
+        variational_distribution = CholeskyVariationalDistribution(
+            N,
+            batch_shape=full_batch_shape,
+        )
+        variational_strategy = LMCVariationalStrategy(
+            UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            ),
+            num_quantiles,
+            num_latents,
+        )
+
+        mean = ConstantMean(batch_shape=full_batch_shape)
+        ls_prior = LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale)
+        covar = ScaleKernel(
+            RBFKernel(
+                ard_num_dims=D,
+                batch_shape=full_batch_shape,
+                lengthscale_prior=ls_prior,
+            ),
+            batch_shape=full_batch_shape,
+        )
+
+        super().__init__(variational_strategy, mean, covar)
+
+        self.num_latents = num_latents
+        self.batch_shape = batch_shape
+        self.num_quantiles = [num_quantiles]  # dummy argument
+        self.num_lower_quantiles = [num_lower_quantiles]  # dummy argument
+
+    @property
+    def inducing_points(self):
+        return self.variational_strategy.base_variational_strategy.inducing_points
+
+    @property
+    def lengthscale_prior_loc(self):
+        return self.covar_module.base_kernel.lengthscale_prior.loc
+
+    @property
+    def lengthscale_prior_scale(self):
+        return self.covar_module.base_kernel.lengthscale_prior.scale
+
+
+class DirectMTGPQR_H(_DirectMTGPQR_Base):
+    pass
+
+
+class DirectMTGPQR_phi(_DirectMTGPQR_Base):
     pass

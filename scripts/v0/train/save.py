@@ -81,7 +81,7 @@ def save_gpqr(
         likelihood=dict(
             args=dict(
                 quantile_levels=likelihood.quantile_levels,
-                central_quantile_idxs=likelihood.central_quantile_idxs,
+                central_quantile_idx=likelihood.central_quantile_idx,
                 noise_prior_loc=likelihood.noise_prior_loc,
                 noise_prior_scale=likelihood.noise_prior_scale,
                 batch_shape=likelihood.batch_shape,
