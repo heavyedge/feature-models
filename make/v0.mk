@@ -88,15 +88,6 @@ _temp/v0/y$(1).csv: _temp/v0/ysplit.csv
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v0,$(split))))
 
-_temp/v0/Xfull.csv: _temp/v0/X.csv
-	python3 -c "import pandas as pd; df = pd.read_csv('$<'); df[['gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']].to_csv('$@', index=False)"
-
-_temp/v0/yfull.csv: _temp/v0/y.csv
-	python3 -c "import pandas as pd; df = pd.read_csv('$<'); df[['H', 'phi']].to_csv('$@', index=False)"
-
-_temp/v0/Xpred.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
-	python3 $^ -o $@
-
 _temp/v0/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
 	python3 $^ --target gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
@@ -120,9 +111,9 @@ models/v0/feature_models/%.py: scripts/v0/model/%.py
 _temp/v0/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
-models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/Xfull.csv _temp/v0/yfull.csv
+models/v0/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v0/X.csv _temp/v0/y.csv
 	mkdir -p $(@D)
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --index-col 0 1 2 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 ## GPR
 
@@ -130,10 +121,10 @@ _temp/v0/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.c
 	mkdir -p benchmarks
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
 
-models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/Xfull.csv _temp/v0/yfull.csv models/v0/feature_models/%.prior_mean.pt \
+models/v0/feature_models/%.gpr.pt: scripts/v0/train/gpr.py _temp/v0/X.csv _temp/v0/y.csv models/v0/feature_models/%.prior_mean.pt \
 _temp/v0/%.gpr.pt
 	mkdir -p $(@D)
-	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model GPR_$* --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --target $* --model GPR_$* --storage=$(OPTUNA_DB) --study-name=v0/$*.gpr -o $@
 
 ## GPQR
 
@@ -145,10 +136,10 @@ _temp/v0/%.cg_gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytr
 	mkdir -p benchmarks
 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr -o $@
 
-models/v0/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xfull.csv _temp/v0/yfull.csv models/v0/feature_models/%.prior_mean.pt \
+models/v0/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/X.csv _temp/v0/y.csv models/v0/feature_models/%.prior_mean.pt \
 _temp/v0/%.cg_gpqr.pt
 	mkdir -p $(@D)
-	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr -o $@
 
 # Prediction
 
@@ -199,7 +190,7 @@ _temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
 # 	mkdir -p $(@D)
 # 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-# benchmarks/v0/cv.GPR_%.csv: scripts/v0/model_selection/write-cv.gpr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
+# benchmarks/v0/cv.GPR_%.csv: scripts/v0/model_selection/write-cv.gpr.pmy _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
 # 	mkdir -p $(@D)
 # 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model GPR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
 
