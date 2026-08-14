@@ -162,10 +162,15 @@ _temp/v0/%.gpqr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 _temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
+_temp/v0/%.direct_gpqr.Xpred_3D.csv: _temp/v0/Xpred_3D.csv _temp/v0/%.prior_mean.pt _temp/v0/%.direct_gpqr.pt $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 1 2 --target $* -o $@
+
 _temp/v0/%.cg_gpqr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.cg_gpqr.pt $(MODEL_FILES_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* -o $@
 
 # # Model selection
+
+benchmarks/v0/quantile_crossing.%.direct_gpqr.csv:
 
 benchmarks/v0/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/%.gpr.Xtest.csv _temp/v0/ytest.csv
 	mkdir -p $(@D)
