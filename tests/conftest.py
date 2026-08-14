@@ -16,5 +16,5 @@ def pytest_addoption(parser):
 def models_path(request):
     models_path = request.config.getoption("--models-path")
     if models_path is None:
-        raise pytest.UsageError("--models-path is required for v0 tests")
+        raise pytest.UsageError("--models-path is required")
     return Path(models_path).resolve()
