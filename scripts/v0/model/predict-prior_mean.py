@@ -53,10 +53,7 @@ model.eval()
 ret = []
 with torch.no_grad():
     for i in range(0, X.shape[0], args.chunk_size):
-        X_pred = torch.tensor(
-            X[i : i + args.chunk_size], dtype=torch.float32, device=device
-        )
-        pred_mean = model(X_pred)
+        pred_mean = model(X[i : i + args.chunk_size])
         ret.append(pred_mean.detach().cpu().numpy())
 ret = np.concatenate(ret, axis=0)
 pd.DataFrame({args.target: ret}).to_csv(args.out, index=False)

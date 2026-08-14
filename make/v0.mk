@@ -187,13 +187,10 @@ _temp/v0/%.cg_gpqr.pt
 # 	mkdir -p $(@D)
 # 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
 
-# # Prediction
+# Prediction
 
-# _temp/v0/%.prior_mean.Xpred_1D.csv: models/v0/feature_models/predict-prior_mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
-# 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
-
-# _temp/v0/%.prior_mean.Xpred_2D.csv: models/v0/feature_models/predict-prior_mean.py _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
-# 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
+_temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-prior_mean $< --index-col 0 1 2 --target $* -o $@
 
 # _temp/v0/%.mean.Xpred_1D.csv: models/v0/feature_models/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 # 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@

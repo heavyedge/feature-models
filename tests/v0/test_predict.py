@@ -19,4 +19,4 @@ def test_predict_priormean_H(models_path, Xtest_path, tmp_path):
         check=True,
         cwd=models_path,
     )
-    # assert output_path.exists()
+    assert output_path.exists()
