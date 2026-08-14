@@ -40,10 +40,19 @@ parser.add_argument(
     ),
 )
 parser.add_argument("--index-col", type=int, nargs="*", help="Index columns for X.")
+parser.add_argument(
+    "--batch-col",
+    type=int,
+    nargs="*",
+    help=(
+        "CSV column(s) whose equal values form batches. All batches must have "
+        "the same number of rows."
+    ),
+)
 parser.add_argument("--target", required=True, choices=["H", "phi"])
 parser.add_argument(
     "--num-samples",
-    default=10,
+    default=20,
     type=int,
     help="Number of samples to draw from the posterior distribution.",
 )
@@ -60,8 +69,39 @@ args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+X_raw_df = pd.read_csv(args.X)
 X_df = pd.read_csv(args.X, index_col=args.index_col if args.index_col else None)
-X = torch.tensor(X_df.values, dtype=torch.float32, device=device)
+
+if args.batch_col:
+    try:
+        batch_keys = X_raw_df.iloc[:, args.batch_col]
+    except IndexError:
+        parser.error(
+            f"--batch-col contains a column outside the input range "
+            f"[0, {X_raw_df.shape[1] - 1}]"
+        )
+
+    # ``sort=False`` preserves the order in which batches appear in the CSV.
+    batch_indices = [
+        group.index.to_numpy()
+        for _, group in batch_keys.groupby(
+            list(batch_keys.columns), sort=False, dropna=False
+        )
+    ]
+    batch_sizes = {len(indices) for indices in batch_indices}
+    if len(batch_sizes) != 1:
+        parser.error(
+            "--batch-col must identify batches with the same number of rows; "
+            f"got batch sizes {[len(indices) for indices in batch_indices]}"
+        )
+
+    X_values = np.stack([X_df.iloc[indices].values for indices in batch_indices])
+    X_row_indices = np.stack(batch_indices)
+else:
+    X_values = X_df.values
+    X_row_indices = np.arange(len(X_df))
+
+X = torch.tensor(X_values, dtype=torch.float32, device=device)
 
 prior_mean_loader = getattr(load_module, f"load_PriorMean_{args.target}")
 prior_mean_model = prior_mean_loader(path=args.prior_mean_model, device=device)
@@ -81,8 +121,8 @@ quantile_levels = quantiles.detach().cpu().numpy()
 
 wrote_output = False
 with torch.no_grad():
-    for i in range(0, X.shape[0], args.chunk_size):
-        X_chunk = X[i : i + args.chunk_size]
+    for i in range(0, X.shape[-2], args.chunk_size):
+        X_chunk = X[..., i : i + args.chunk_size, :]
 
         prior_mean = prior_mean_model(X_chunk)
         X_scaled = X_scaler(X_chunk)
@@ -90,25 +130,27 @@ with torch.no_grad():
         scaled_res_posterior_samples = scaled_res_posterior.rsample(nsamples)
 
         res = y_scaler.inverse_transform(scaled_res_posterior_samples)
-        samples = prior_mean.unsqueeze(-1) + res  # (S, N, Q)
+        samples = prior_mean.unsqueeze(-1) + res  # (S, *B, N, Q)
         samples_np = samples.detach().cpu().numpy()
 
-        df = pd.DataFrame(
-            {
-                "index": np.broadcast_to(
-                    np.arange(i, i + samples_np.shape[1]).reshape(1, -1, 1),
-                    samples_np.shape,
-                ).ravel(),
-                "quantile": np.broadcast_to(
-                    quantile_levels.reshape(1, 1, -1), samples_np.shape
-                ).ravel(),
-                "sample": np.broadcast_to(
-                    np.arange(samples_np.shape[0]).reshape(-1, 1, 1),
-                    samples_np.shape,
-                ).ravel(),
-                args.target: samples_np.ravel(),
-            }
-        )
+        ndim = samples_np.ndim
+        row_indices = X_row_indices[..., i : i + samples_np.shape[-2]]
+        data = {
+            "index": np.broadcast_to(
+                row_indices.reshape((1,) + row_indices.shape + (1,)),
+                samples_np.shape,
+            ).ravel(),
+            "quantile": np.broadcast_to(
+                quantile_levels.reshape((1,) * (ndim - 1) + (-1,)),
+                samples_np.shape,
+            ).ravel(),
+            "sample": np.broadcast_to(
+                np.arange(samples_np.shape[0]).reshape((-1,) + (1,) * (ndim - 1)),
+                samples_np.shape,
+            ).ravel(),
+            args.target: samples_np.ravel(),
+        }
+        df = pd.DataFrame(data)
         df.to_csv(
             args.out,
             index=False,

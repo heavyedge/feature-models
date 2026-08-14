@@ -150,6 +150,26 @@ _temp/v0/%.cg_gpqr.pt
 	mkdir -p $(@D)
 	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --target $* --model CenterGapMTGPQR_$* --quantiles $(QUANTILES) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr -o $@
 
+# Prediction
+
+_temp/v0/%.cg_gpqr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.cg_gpqr.pt $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* -o $@
+
+_temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-prior_mean $< --index-col 0 1 2 --target $* -o $@
+
+_temp/v0/%.gpr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $< --index-col 0 1 2 --target $* -o $@
+
+_temp/v0/%.gpqr.Xpred.csv: _temp/v0/Xpred.csv $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
+
+_temp/v0/%.gpqr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
+
+_temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
+
 # # Model selection
 
 # benchmarks/v0/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/Xtest.csv _temp/v0/ytest.csv _temp/v0/%.gpr.pt
@@ -186,23 +206,6 @@ _temp/v0/%.cg_gpqr.pt
 # benchmarks/v0/cv.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-cv.gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
 # 	mkdir -p $(@D)
 # 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
-
-# Prediction
-
-_temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
-	$(GPU_PYTHON) -m models.v0.feature_models.predict-prior_mean $< --index-col 0 1 2 --target $* -o $@
-
-_temp/v0/%.gpr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
-	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $< --index-col 0 1 2 --target $* -o $@
-
-_temp/v0/%.gpqr.Xpred.csv: _temp/v0/Xpred.csv $(MODEL_FILES_v0)
-	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
-
-_temp/v0/%.gpqr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
-	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
-
-_temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
-	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
 # # Window prediction
 
