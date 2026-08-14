@@ -1,7 +1,6 @@
 import argparse
 import pathlib
 
-import numpy as np
 import pandas as pd
 import torch
 
@@ -70,7 +69,7 @@ y_scaler.eval()
 gpr_model.eval()
 likelihood.eval()
 
-ret = []
+wrote_output = False
 with torch.no_grad():
     for i in range(0, X.shape[0], args.chunk_size):
         X_chunk = X[i : i + args.chunk_size]
@@ -87,8 +86,14 @@ with torch.no_grad():
         ).squeeze(-1)
 
         posterior_mean = prior_mean + residual_mean
-        ret.append(torch.stack((posterior_mean, residual_std), dim=-1).cpu().numpy())
+        chunk_result = torch.stack((posterior_mean, residual_std), dim=-1).cpu().numpy()
+        pd.DataFrame(chunk_result, columns=["mean", "std"]).to_csv(
+            args.out,
+            index=False,
+            mode="a" if wrote_output else "w",
+            header=not wrote_output,
+        )
+        wrote_output = True
 
-ret = np.concatenate(ret, axis=0)
-df = pd.DataFrame(ret, columns=["mean", "std"])
-df.to_csv(args.out, index=False)
+if not wrote_output:
+    pd.DataFrame(columns=["mean", "std"]).to_csv(args.out, index=False)

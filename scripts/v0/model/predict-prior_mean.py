@@ -1,7 +1,6 @@
 import argparse
 import pathlib
 
-import numpy as np
 import pandas as pd
 import torch
 
@@ -50,10 +49,17 @@ loader = getattr(load_module, f"load_PriorMean_{args.target}")
 model = loader(path=args.model, device=device)
 model.eval()
 
-ret = []
+wrote_output = False
 with torch.no_grad():
     for i in range(0, X.shape[0], args.chunk_size):
         pred_mean = model(X[i : i + args.chunk_size])
-        ret.append(pred_mean.detach().cpu().numpy())
-ret = np.concatenate(ret, axis=0)
-pd.DataFrame({args.target: ret}).to_csv(args.out, index=False)
+        pd.DataFrame({args.target: pred_mean.detach().cpu().numpy()}).to_csv(
+            args.out,
+            index=False,
+            mode="a" if wrote_output else "w",
+            header=not wrote_output,
+        )
+        wrote_output = True
+
+if not wrote_output:
+    pd.DataFrame(columns=[args.target]).to_csv(args.out, index=False)
