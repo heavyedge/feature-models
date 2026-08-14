@@ -8,3 +8,4 @@ pandas
 optuna
 xarray
 packaging
+pytest

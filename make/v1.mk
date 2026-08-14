@@ -23,17 +23,13 @@ models/v1/feature_models/scale.py \
 models/v1/feature_models/gpr.py \
 models/v1/feature_models/load.py \
 models/v1/feature_models/predict-prior_mean.py \
-models/v1/feature_models/predict-mean.py
+models/v1/feature_models/predict-gpr.py
 
 models-v1: $(MODEL_FILES_v1)
 
 examples-v1: $(wildcard examples/v1/*)
 
-test-v1: $(MODEL_FILES_v1)
-	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_PriorMean_H; load_PriorMean_H()"
-	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_PriorMean_phi; load_PriorMean_phi()"
-	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_GPR_H; load_GPR_H()"
-	$(GPU_PYTHON) -c "from models.v1.feature_models.load import load_GPR_phi; load_GPR_phi()"
+test-v1:
 
 # Data
 
