@@ -150,6 +150,9 @@ _temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 _temp/v0/%.gpr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $< --index-col 0 1 2 --target $* -o $@
 
+_temp/v0/%.gpr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.gpr.pt $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* -o $@
+
 _temp/v0/%.gpqr.X.csv: _temp/v0/X.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
@@ -162,16 +165,15 @@ _temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
 _temp/v0/%.cg_gpqr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.cg_gpqr.pt $(MODEL_FILES_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* -o $@
 
-
 # # Model selection
 
-# benchmarks/v0/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/Xtest.csv _temp/v0/ytest.csv _temp/v0/%.gpr.pt
-# 	mkdir -p $(@D)
-# 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPR_$* --quantile-levels $(QUANTILES) -o $@
+benchmarks/v0/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/%.gpr.Xtest.csv _temp/v0/ytest.csv
+	mkdir -p $(@D)
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --type GPR --quantile-levels $(QUANTILES) -o $@
 
-# benchmarks/v0/pinball_loss.%.gpqr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/Xtest.csv _temp/v0/ytest.csv _temp/v0/%.cg_gpqr.pt
-# 	mkdir -p $(@D)
-# 	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --model GPQR_$* --quantile-levels $(QUANTILES) -o $@
+benchmarks/v0/pinball_loss.%.cg_gpqr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/%.cg_gpqr.Xtest.csv _temp/v0/ytest.csv
+	mkdir -p $(@D)
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --type GPQR --quantile-levels $(QUANTILES) -o $@
 
 
 
