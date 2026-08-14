@@ -192,8 +192,8 @@ _temp/v0/%.cg_gpqr.pt
 _temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-prior_mean $< --index-col 0 1 2 --target $* -o $@
 
-# _temp/v0/%.mean.Xpred_1D.csv: models/v0/feature_models/predict-mean.py _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
-# 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* -o $@
+_temp/v0/%.gpr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
+	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $< --index-col 0 1 2 --target $* -o $@
 
 # _temp/v0/%.quantiles.X.csv: models/v0/feature_models/predict-quantiles.py _temp/v0/Xpred.csv $(MODEL_FILES_v0)
 # 	$(GPU_PYTHON) $(wordlist 1,2,$^) --target $* --method delta -o $@
@@ -235,7 +235,7 @@ _temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
 # examples/v0/CV.ipynb: benchmarks/v0/cv.GPR_H.csv benchmarks/v0/cv.CenterGapMTGPQR_H.csv benchmarks/v0/cv.GPR_phi.csv benchmarks/v0/cv.CenterGapMTGPQR_phi.csv .FORCE
 # 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-# examples/v0/Models.ipynb: _temp/v0/X.csv _temp/v0/y.csv _temp/v0/Xpred_1D.csv _temp/v0/H.prior_mean.Xpred_1D.csv _temp/v0/phi.prior_mean.Xpred_1D.csv _temp/v0/H.mean.Xpred_1D.csv _temp/v0/phi.mean.Xpred_1D.csv _temp/v0/H.quantiles.Xpred_1D.csv _temp/v0/phi.quantiles.Xpred_1D.csv .FORCE
+# examples/v0/Models.ipynb: _temp/v0/X.csv _temp/v0/y.csv _temp/v0/Xpred_1D.csv _temp/v0/H.prior_mean.Xpred_1D.csv _temp/v0/phi.prior_mean.Xpred_1D.csv _temp/v0/H.gpr.Xpred_1D.csv _temp/v0/phi.gpr.Xpred_1D.csv _temp/v0/H.quantiles.Xpred_1D.csv _temp/v0/phi.quantiles.Xpred_1D.csv .FORCE
 # 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 # examples/v0/Window.ipynb: _temp/v0/X.csv _temp/v0/y.csv _temp/v0/Xpred_2D.csv _temp/v0/delaunay.Xpred_2D.csv _temp/v0/H.marginal.Xpred_2D.csv _temp/v0/phi.marginal.Xpred_2D.csv _temp/v0/joint_probability.Xpred_2D.csv .FORCE
