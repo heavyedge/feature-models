@@ -9,6 +9,7 @@ import optuna
 import pandas as pd
 import torch
 import v0.model.gpqr as model_module  # Needs PYTHONPATH=scripts
+import v0.model.gpqr_other as other_model_module  # Needs PYTHONPATH=scripts
 import v0.model.load as load_module  # Needs PYTHONPATH=scripts
 import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
 from gpytorch.mlls import VariationalELBO
@@ -31,8 +32,6 @@ BASELINE_PRIOR_PARAMS = {
     "lengthscale_prior_loc": -1.0,
     "lengthscale_prior_scale": 0.5,
 }
-DEFAULT_QUANTILES = [0.05, 0.25, 0.5, 0.75, 0.95]
-DEFAULT_NUM_LOWER_QUANTILES = 2
 DEFAULT_NUM_LATENTS = 3
 
 parser = argparse.ArgumentParser()
@@ -62,14 +61,7 @@ model_group.add_argument(
     "--quantiles",
     type=float,
     nargs="+",
-    default=DEFAULT_QUANTILES,
     help="Quantiles for the model.",
-)
-model_group.add_argument(
-    "--num-lower-quantiles",
-    type=int,
-    default=DEFAULT_NUM_LOWER_QUANTILES,
-    help="Number of quantiles below the central quantile.",
 )
 model_group.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 model_group.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
@@ -225,8 +217,6 @@ if not all(np.isfinite(q) and 0 < q < 1 for q in args.quantiles):
     parser.error("--quantiles values must be finite and in (0, 1).")
 if any(left >= right for left, right in zip(args.quantiles, args.quantiles[1:])):
     parser.error("--quantiles values must be strictly increasing.")
-if not 0 <= args.num_lower_quantiles < len(args.quantiles):
-    parser.error("--num-lower-quantiles must be between 0 and len(--quantiles) - 1.")
 if not 0 <= args.pruning_warmup_ratio <= 1:
     parser.error("--pruning-warmup-ratio must be in [0, 1].")
 if not 0 <= args.pruning_patience_ratio <= 1:
@@ -276,29 +266,62 @@ ytrain_arr = np.stack(
 )
 ytrain = torch.tensor(ytrain_arr).float().to(device)  # (*K, N)
 
+priormean_loader = getattr(load_module, "load_PriorMean_" + args.target)
+mean = priormean_loader(path=args.prior_mean, device=device)
+mean.eval()
+with torch.no_grad():
+    train_mean = mean(Xtrain)
+res_train = ytrain - train_mean
+
 if has_validation:
     Xval_df = pd.read_csv(args.Xval, index_col=args.index_col)
     Xval_arr = np.stack(
         [Xval_df.loc[fold] for fold in sorted(Xval_df.index.unique())], axis=0
     )
     Xval = torch.tensor(Xval_arr).float().to(device)  # (*K, N, D)
+
     yval_df = pd.read_csv(args.yval, index_col=args.index_col)[args.target]
     yval_arr = np.stack(
         [yval_df.loc[fold] for fold in sorted(yval_df.index.unique())], axis=0
     )
     yval = torch.tensor(yval_arr).float().to(device)  # (*K, N)
 
-priormean_loader = getattr(load_module, "load_PriorMean_" + args.target)
-mean = priormean_loader(path=args.prior_mean, device=device)
-mean.eval()
+    with torch.no_grad():
+        val_mean = mean(Xval)
+    res_val = yval - val_mean
 
 dim = Xtrain.shape[-1]
 num_data = Xtrain.shape[-2]
 batch_shape = Xtrain.shape[:-2]
-quantiles = torch.tensor(args.quantiles, dtype=torch.float32, device=device)
-num_quantiles = len(quantiles)
 
-model_class = getattr(model_module, args.model)
+X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
+X_scaler.train()
+with torch.no_grad():
+    Xtrain_scaled = X_scaler(Xtrain)
+X_scaler.eval()
+
+y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+y_scaler.train()
+with torch.no_grad():
+    res_train_scaled = y_scaler(res_train.unsqueeze(-1)).squeeze(-1)
+y_scaler.eval()
+
+if has_validation:
+    with torch.no_grad():
+        Xval_scaled = X_scaler(Xval)
+        res_val_scaled = y_scaler(res_val.unsqueeze(-1)).squeeze(-1)
+
+quantiles = torch.tensor(args.quantiles, dtype=torch.float32, device=device)
+central_quantile_idx = np.argmin(np.abs(quantiles.detach().cpu().numpy() - 0.5))
+num_quantiles = len(quantiles)
+num_lower_quantiles = central_quantile_idx
+
+if hasattr(model_module, args.model):
+    model_class = getattr(model_module, args.model)
+elif hasattr(other_model_module, args.model):
+    model_class = getattr(other_model_module, args.model)
+else:
+    raise ValueError(f"Model {args.model} not found.")
 
 
 def train_with_hyperparameters(
@@ -313,25 +336,17 @@ def train_with_hyperparameters(
     torch.manual_seed(42)
     trial_label = trial.number if trial is not None else "best"
 
-    X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-    y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
-    X_scaler.train()
-    Xtrain_scaled = X_scaler(Xtrain)
-
     likelihood = CenterGapQuantilesLikelihood(
         quantiles,
-        args.num_lower_quantiles,
+        central_quantile_idx,
         batch_shape=batch_shape,
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
     ).to(device)
-    with torch.no_grad():
-        y_scaler.train()
-        res = y_scaler((ytrain - mean(Xtrain)).unsqueeze(-1)).squeeze(-1)
     model = model_class(
         inducing_points=Xtrain_scaled.clone().detach(),
         num_quantiles=num_quantiles,
-        num_lower_quantiles=args.num_lower_quantiles,
+        num_lower_quantiles=num_lower_quantiles,
         num_latents=num_latents,
         batch_shape=batch_shape,
         lengthscale_prior_loc=lengthscale_prior_loc,
@@ -340,10 +355,7 @@ def train_with_hyperparameters(
 
     mll = VariationalELBO(likelihood, model, num_data=num_data)
     optimizer = torch.optim.Adam(
-        list(X_scaler.parameters())
-        + list(y_scaler.parameters())
-        + list(model.parameters())
-        + list(likelihood.parameters()),
+        list(model.parameters()) + list(likelihood.parameters()),
         lr=args.learning_rate,
     )
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -371,20 +383,13 @@ def train_with_hyperparameters(
         trial.set_user_attr("stop_reason", stop_reason)
 
     for epoch in range(args.num_epochs):
-        X_scaler.train()
-        y_scaler.train()
         likelihood.train()
         model.train()
         optimizer.zero_grad()
 
-        Xtrain_scaled = X_scaler(Xtrain)
-        with torch.no_grad():
-            train_mean = mean(Xtrain)
-        res = y_scaler((ytrain - train_mean).unsqueeze(-1)).squeeze(-1)
-
         output = model(Xtrain_scaled)
         # VariationalELBO returns values over the model's batched folds.
-        train_loss = -mll(output, res).mean()
+        train_loss = -mll(output, res_train_scaled).mean()
         if not torch.isfinite(train_loss):
             save_trial_progress("non_finite_train_loss")
             if trial is not None:
@@ -394,13 +399,11 @@ def train_with_hyperparameters(
         optimizer.step()
 
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            X_scaler.eval()
-            y_scaler.eval()
             likelihood.eval()
             model.eval()
-            Xval_scaled = X_scaler(Xval)
-            val_res = y_scaler((yval - mean(Xval)).unsqueeze(-1)).squeeze(-1)
-            val_log_prob = likelihood.expected_log_prob(val_res, model(Xval_scaled))
+            val_log_prob = likelihood.expected_log_prob(
+                res_val_scaled, model(Xval_scaled)
+            )
             # Average observations and quantiles within each fold, then average
             # the folds so Optuna receives one fold-balanced scalar score.
             val_loss = -val_log_prob.mean(dim=(-2, -1)).mean()
@@ -508,26 +511,29 @@ def train_on_all_data(
         Xall = Xtrain
         yall = ytrain
 
-    X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=batch_shape).to(device)
-    y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
     likelihood = CenterGapQuantilesLikelihood(
         quantiles,
-        args.num_lower_quantiles,
+        central_quantile_idx,
         batch_shape=batch_shape,
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
     ).to(device)
 
     X_scaler.train()
-    Xall_scaled = X_scaler(Xall)
     with torch.no_grad():
-        y_scaler.train()
-        res = y_scaler((yall - mean(Xall)).unsqueeze(-1)).squeeze(-1)
+        Xall_scaled = X_scaler(Xall)
+    X_scaler.eval()
+
+    y_scaler.train()
+    with torch.no_grad():
+        res_all_scaled = y_scaler((yall - mean(Xall)).unsqueeze(-1)).squeeze(-1)
+    y_scaler.eval()
+
     inducing_points = Xall_scaled.clone().detach()
     model = model_class(
         inducing_points=inducing_points,
         num_quantiles=num_quantiles,
-        num_lower_quantiles=args.num_lower_quantiles,
+        num_lower_quantiles=num_lower_quantiles,
         num_latents=num_latents,
         batch_shape=batch_shape,
         lengthscale_prior_loc=lengthscale_prior_loc,
@@ -536,27 +542,18 @@ def train_on_all_data(
 
     mll = VariationalELBO(likelihood, model, num_data=Xall.shape[-2])
     optimizer = torch.optim.Adam(
-        list(X_scaler.parameters())
-        + list(y_scaler.parameters())
-        + list(model.parameters())
-        + list(likelihood.parameters()),
+        list(model.parameters()) + list(likelihood.parameters()),
         lr=args.learning_rate,
     )
     lr_reductions_by_epoch = {
         int(completed_epoch): float(new_lr) for completed_epoch, new_lr in lr_reductions
     }
     for epoch in range(num_epochs):
-        X_scaler.train()
-        y_scaler.train()
         likelihood.train()
         model.train()
         optimizer.zero_grad()
 
-        Xall_scaled = X_scaler(Xall)
-        with torch.no_grad():
-            all_mean = mean(Xall)
-        res = y_scaler((yall - all_mean).unsqueeze(-1)).squeeze(-1)
-        loss = -mll(model(Xall_scaled), res).mean()
+        loss = -mll(model(Xall_scaled), res_all_scaled).mean()
         if not torch.isfinite(loss):
             raise RuntimeError("Non-finite training loss during final fit.")
         loss.backward()
@@ -576,12 +573,7 @@ def train_on_all_data(
                 loss.item(),
             )
 
-    return (
-        X_scaler,
-        y_scaler,
-        likelihood,
-        model,
-    )
+    return X_scaler, y_scaler, likelihood, model
 
 
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))

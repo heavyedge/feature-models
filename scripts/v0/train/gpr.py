@@ -373,7 +373,9 @@ def train_with_priors(
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
             likelihood.eval()
             model.eval()
-            val_log_prob = likelihood.expected_log_prob(res_val_scaled, model(Xval_scaled))
+            val_log_prob = likelihood.expected_log_prob(
+                res_val_scaled, model(Xval_scaled)
+            )
             # Average observations within each fold, then average the folds so
             # Optuna receives one fold-balanced scalar score.
             val_loss = -val_log_prob.mean(dim=-1).mean()

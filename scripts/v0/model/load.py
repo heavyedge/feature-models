@@ -68,9 +68,7 @@ def _load_gpr(xscaler_class, yscaler_class, model_class, path, device=None):
     return X_scaler, y_scaler, likelihood, model
 
 
-def _load_gpqr(
-    xscaler_class, yscaler_class, mean_class, model_class, path, device=None
-):
+def _load_gpqr(xscaler_class, yscaler_class, model_class, path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
 
     quantiles = checkpoint["quantiles"]
@@ -223,7 +221,6 @@ def load_GPQR_H(path=None, device=None):
     return _load_gpqr(
         MinMaxScaler,
         StandardScaler,
-        PriorMean_H,
         CenterGapMTGPQR_H,
         path,
         device=device,
@@ -255,7 +252,6 @@ def load_GPQR_phi(path=None, device=None):
     return _load_gpqr(
         MinMaxScaler,
         StandardScaler,
-        PriorMean_phi,
         CenterGapMTGPQR_phi,
         path,
         device=device,

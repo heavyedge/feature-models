@@ -54,8 +54,11 @@ elif args.target == "phi":
 mean = load_mean(device=device)
 mean.eval()
 models = load_models(device=device)
-for module in models[1:]:
-    module.eval()
+for module in models:
+    try:
+        module.eval()
+    except AttributeError:
+        pass
 X_scaler, y_scaler, likelihood, model = models
 
 X = torch.tensor(
