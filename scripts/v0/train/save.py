@@ -10,6 +10,7 @@ __all__ = [
 def save_prior_mean(model, path):
     data = dict(
         model=dict(
+            type=model.__class__.__name__,
             args=dict(batch_shape=model.batch_shape),
             state_dict=model.state_dict(),
         )
@@ -28,14 +29,17 @@ def save_gpr(
 ):
     data = dict(
         X_scaler=dict(
+            type=X_scaler.__class__.__name__,
             args=dict(dim=X_scaler.dim, batch_shape=X_scaler.batch_shape),
             state_dict=X_scaler.state_dict(),
         ),
         y_scaler=dict(
+            type=y_scaler.__class__.__name__,
             args=dict(dim=y_scaler.dim, batch_shape=y_scaler.batch_shape),
             state_dict=y_scaler.state_dict(),
         ),
         likelihood=dict(
+            type=model.likelihood.__class__.__name__,
             args=dict(
                 noise_prior_loc=model.likelihood.noise_prior_loc,
                 noise_prior_scale=model.likelihood.noise_prior_scale,
@@ -44,6 +48,7 @@ def save_gpr(
             state_dict=model.likelihood.state_dict(),
         ),
         model=dict(
+            type=model.__class__.__name__,
             args=dict(
                 train_x=model.train_inputs[0],
                 train_y=model.train_targets,
@@ -71,14 +76,17 @@ def save_gpqr(
     data = dict(
         quantiles=quantiles,
         X_scaler=dict(
+            type=X_scaler.__class__.__name__,
             args=dict(dim=X_scaler.dim, batch_shape=X_scaler.batch_shape),
             state_dict=X_scaler.state_dict(),
         ),
         y_scaler=dict(
+            type=y_scaler.__class__.__name__,
             args=dict(dim=y_scaler.dim, batch_shape=y_scaler.batch_shape),
             state_dict=y_scaler.state_dict(),
         ),
         likelihood=dict(
+            type=likelihood.__class__.__name__,
             args=dict(
                 quantile_levels=likelihood.quantile_levels,
                 central_quantile_idx=likelihood.central_quantile_idx,
@@ -89,6 +97,7 @@ def save_gpqr(
             state_dict=likelihood.state_dict(),
         ),
         model=dict(
+            type=model.__class__.__name__,
             args=dict(
                 inducing_points=model.inducing_points,
                 num_quantiles=model.num_quantiles[0],

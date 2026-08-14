@@ -2,23 +2,11 @@ from pathlib import Path
 
 import torch
 
-from .gpqr import (
-    CenterGapMTGPQR_H,
-    CenterGapMTGPQR_phi,
-)
-from .gpr import (
-    GPR_H,
-    GPR_phi,
-)
-from .likelihoods import CenterGapQuantilesLikelihood, GaussianLikelihood
-from .prior import (
-    PriorMean_H,
-    PriorMean_phi,
-)
-from .scale import (
-    MinMaxScaler,
-    StandardScaler,
-)
+from . import gpqr as gpqr_module
+from . import gpr as gpr_module
+from . import likelihoods as likelihood_module
+from . import prior as prior_module
+from . import scale as scale_module
 
 __all__ = [
     "load_PriorMean_H",
@@ -30,8 +18,9 @@ __all__ = [
 ]
 
 
-def _load_prior_mean(model_class, path, device=None):
+def _load_prior_mean(path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)["model"]
+    model_class = getattr(prior_module, checkpoint["type"])
     args = checkpoint["args"]
     model = model_class(batch_shape=args["batch_shape"])
     model.load_state_dict(checkpoint["state_dict"])
@@ -42,18 +31,22 @@ def _load_prior_mean(model_class, path, device=None):
     return model
 
 
-def _load_gpr(xscaler_class, yscaler_class, model_class, path, device=None):
+def _load_gpr(path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
 
+    xscaler_class = getattr(scale_module, checkpoint["X_scaler"]["type"])
     X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
     X_scaler.load_state_dict(checkpoint["X_scaler"]["state_dict"])
 
+    yscaler_class = getattr(scale_module, checkpoint["y_scaler"]["type"])
     y_scaler = yscaler_class(**checkpoint["y_scaler"]["args"])
     y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
 
-    likelihood = GaussianLikelihood(**checkpoint["likelihood"]["args"])
+    likelihood_class = getattr(likelihood_module, checkpoint["likelihood"]["type"])
+    likelihood = likelihood_class(**checkpoint["likelihood"]["args"])
     likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
 
+    model_class = getattr(gpr_module, checkpoint["model"]["type"])
     model_args = checkpoint["model"]["args"]
     model_args.update(likelihood=likelihood)
     model = model_class(**model_args)
@@ -68,20 +61,24 @@ def _load_gpr(xscaler_class, yscaler_class, model_class, path, device=None):
     return X_scaler, y_scaler, likelihood, model
 
 
-def _load_gpqr(xscaler_class, yscaler_class, model_class, path, device=None):
+def _load_gpqr(path, device=None):
     checkpoint = torch.load(path, map_location=device, weights_only=False)
 
     quantiles = checkpoint["quantiles"]
 
+    xscaler_class = getattr(scale_module, checkpoint["X_scaler"]["type"])
     X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
     X_scaler.load_state_dict(checkpoint["X_scaler"]["state_dict"])
 
+    yscaler_class = getattr(scale_module, checkpoint["y_scaler"]["type"])
     y_scaler = yscaler_class(**checkpoint["y_scaler"]["args"])
     y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
 
-    likelihood = CenterGapQuantilesLikelihood(**checkpoint["likelihood"]["args"])
+    likelihood_class = getattr(likelihood_module, checkpoint["likelihood"]["type"])
+    likelihood = likelihood_class(**checkpoint["likelihood"]["args"])
     likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
 
+    model_class = getattr(gpqr_module, checkpoint["model"]["type"])
     model = model_class(**checkpoint["model"]["args"])
     model.load_state_dict(checkpoint["model"]["state_dict"])
 
@@ -112,7 +109,7 @@ def load_PriorMean_H(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "H.prior_mean.pt"
-    return _load_prior_mean(PriorMean_H, path, device=device)
+    return _load_prior_mean(path, device=device)
 
 
 def load_PriorMean_phi(path=None, device=None):
@@ -133,7 +130,7 @@ def load_PriorMean_phi(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "phi.prior_mean.pt"
-    return _load_prior_mean(PriorMean_phi, path, device=device)
+    return _load_prior_mean(path, device=device)
 
 
 def load_GPR_H(path=None, device=None):
@@ -157,13 +154,7 @@ def load_GPR_H(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "H.gpr.pt"
-    return _load_gpr(
-        MinMaxScaler,
-        StandardScaler,
-        GPR_H,
-        path,
-        device=device,
-    )
+    return _load_gpr(path, device=device)
 
 
 def load_GPR_phi(path=None, device=None):
@@ -187,13 +178,7 @@ def load_GPR_phi(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "phi.gpr.pt"
-    return _load_gpr(
-        MinMaxScaler,
-        StandardScaler,
-        GPR_phi,
-        path,
-        device=device,
-    )
+    return _load_gpr(path, device=device)
 
 
 def load_GPQR_H(path=None, device=None):
@@ -218,13 +203,7 @@ def load_GPQR_H(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "H.gpqr.pt"
-    return _load_gpqr(
-        MinMaxScaler,
-        StandardScaler,
-        CenterGapMTGPQR_H,
-        path,
-        device=device,
-    )
+    return _load_gpqr(path, device=device)
 
 
 def load_GPQR_phi(path=None, device=None):
@@ -249,10 +228,4 @@ def load_GPQR_phi(path=None, device=None):
 
     if path is None:
         path = Path(__file__).parent / "phi.gpqr.pt"
-    return _load_gpqr(
-        MinMaxScaler,
-        StandardScaler,
-        CenterGapMTGPQR_phi,
-        path,
-        device=device,
-    )
+    return _load_gpqr(path, device=device)
