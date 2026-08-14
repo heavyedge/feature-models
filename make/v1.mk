@@ -23,7 +23,7 @@ models/v1/feature_models/scale.py \
 models/v1/feature_models/gpr.py \
 models/v1/feature_models/load.py \
 models/v1/feature_models/predict-prior_mean.py \
-models/v1/feature_models/predict-mean.py
+models/v1/feature_models/predict-gpr.py
 
 models-v1: $(MODEL_FILES_v1)
 
