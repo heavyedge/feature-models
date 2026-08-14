@@ -95,6 +95,10 @@ with torch.no_grad():
 
         df = pd.DataFrame(
             {
+                "index": np.broadcast_to(
+                    np.arange(i, i + samples_np.shape[1]).reshape(1, -1, 1),
+                    samples_np.shape,
+                ).ravel(),
                 "quantile": np.broadcast_to(
                     quantile_levels.reshape(1, 1, -1), samples_np.shape
                 ).ravel(),
@@ -114,6 +118,6 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    pd.DataFrame(columns=["quantile", "sample", args.target]).to_csv(
+    pd.DataFrame(columns=["index", "quantile", "sample", args.target]).to_csv(
         args.out, index=False
     )
