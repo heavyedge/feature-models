@@ -159,4 +159,4 @@ jobs:
           done
 
       - name: test models in inference environment
-        run: HEAVYEDGE_TEST_MODE=1 make tests
+        run: uv pip install --system pytest && HEAVYEDGE_TEST_MODE=1 make tests
