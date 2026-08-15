@@ -1,72 +1,65 @@
+import argparse
+import pathlib
+
 import numpy as np
-import torch
-from gpytorch.mlls import VariationalELBO
+import pandas as pd
 
-__all__ = [
-    "quantile_crossing",
-]
+parser = argparse.ArgumentParser(
+    description="Quantify quantile crossing in GPQR predictions."
+)
+parser.add_argument("pred", type=pathlib.Path, help="Prediction csv file.")
+parser.add_argument(
+    "-o", "--out", type=pathlib.Path, required=True, help="Output csv file."
+)
+args = parser.parse_args()
 
+pred = pd.read_csv(args.pred, index_col=["index", "batch", "sample", "quantile"])
+targets = pred.columns
+records = []
 
-def quantile_crossing(
-    X_train,  # (N_train, D)
-    y_train,  # (N_train)
-    X_pred,  # (N_pred, D)
-    X_scaler,
-    y_scaler,
-    mean,
-    model,
-    likelihood,
-    n_epochs,
-    learning_rate=0.001,
-    logger=lambda msg: None,
-):
-    mean.eval()
-    mll = VariationalELBO(likelihood, model, num_data=y_train.shape[-1])
-    optimizer = torch.optim.Adam(
-        list(X_scaler.parameters())
-        + list(y_scaler.parameters())
-        + list(model.parameters())
-        + list(likelihood.parameters()),
-        lr=learning_rate,
-    )
+# Keep the prediction index and quantile-difference axes, while reducing the
+# batch and sample axes for each prediction index independently.
+for index, index_pred in pred.groupby(level="index", sort=False):
+    quantile_diffs = []
+    quantiles = None
+    for _, group in index_pred.groupby(level=["batch", "sample"], sort=False):
+        group = group.sort_index(level="quantile")
+        group_quantiles = group.index.get_level_values("quantile").to_numpy()
+        if quantiles is None:
+            quantiles = group_quantiles
+        elif not np.array_equal(quantiles, group_quantiles):
+            raise ValueError(
+                f"Inconsistent quantile levels for prediction index {index!r}."
+            )
+        quantile_diffs.append(np.diff(group.to_numpy(), axis=0))
 
-    crossing_rates = np.empty((n_epochs,))
-    mean_crossings = np.empty((n_epochs,))
-    max_crossings = np.empty((n_epochs,))
-    for i in range(n_epochs):
-        X_scaler.train()
-        y_scaler.train()
-        likelihood.train()
-        model.train()
-        optimizer.zero_grad()
+    # (batch * sample, Q-1, D)
+    quantile_diff = np.stack(quantile_diffs, axis=0)
+    crossing = quantile_diff < 0
+    crossing_size = np.where(crossing, -quantile_diff, 0)
 
-        train_x_scaled = X_scaler(X_train)
-        with torch.no_grad():
-            train_mean = mean(X_train)
-        train_res = y_scaler((y_train - train_mean).unsqueeze(-1)).squeeze(-1)
-        train_output = model(train_x_scaled)
-        train_loss = -mll(train_output, train_res)
-        train_loss.mean().backward()
-        optimizer.step()
+    # (Q-1, D): aggregate only over batch and sample.
+    crossing_rate = crossing.mean(axis=0)
+    mean_crossing = crossing_size.mean(axis=0)
+    max_crossing = crossing_size.max(axis=0)
 
-        X_scaler.eval()
-        y_scaler.eval()
-        model.eval()
-        likelihood.eval()
-        with torch.no_grad():
-            output = model.quantiles(X_scaler(X_pred))
-            quantile_diff = output.diff(axis=-1)
-            crossing = quantile_diff < 0
+    for q1, q2, rate, mean, maximum in zip(
+        quantiles[:-1], quantiles[1:], crossing_rate, mean_crossing, max_crossing
+    ):
+        for target, target_rate, target_mean, target_maximum in zip(
+            targets, rate, mean, maximum
+        ):
+            records.append(
+                {
+                    "index": index,
+                    "q1": q1,
+                    "q2": q2,
+                    "target": target,
+                    "crossing_rate": target_rate,
+                    "mean_crossing": target_mean,
+                    "max_crossing": target_maximum,
+                }
+            )
 
-            crossing_rates[i] = (
-                crossing.count_nonzero() / quantile_diff.numel()
-            ).item()
-            mean_crossings[i] = (
-                -quantile_diff[crossing].sum() / quantile_diff.numel()
-            ).item()
-            max_crossings[i] = (-quantile_diff).clip(0).max().item()
-
-        if (i + 1) % 100 == 0:
-            logger(f"Epoch {i+1}/{n_epochs}, Loss: {train_loss.mean().item():.4f}")
-
-    return crossing_rates, mean_crossings, max_crossings
+out = pd.DataFrame.from_records(records).set_index(["index", "q1", "q2", "target"])
+out.to_csv(args.out)

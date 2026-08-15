@@ -170,42 +170,17 @@ _temp/v0/%.cg_gpqr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/
 
 # Model selection
 
-benchmarks/v0/quantile_crossing.%.direct_gpqr.csv:
+benchmarks/v0/quantile_crossing.%.direct_gpqr.csv: scripts/v0/model_selection/crossing.py _temp/v0/%.direct_gpqr.Xpred_3D.csv
+	mkdir -p $(@D)
+	python3 $^ -o $@
 
 benchmarks/v0/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/%.gpr.Xtest.csv _temp/v0/ytest.csv
 	mkdir -p $(@D)
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --type GPR --quantile-levels $(QUANTILES) -o $@
+	python3 $^ --target $* --type GPR --quantile-levels $(QUANTILES) -o $@
 
 benchmarks/v0/pinball_loss.%.cg_gpqr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/%.cg_gpqr.Xtest.csv _temp/v0/ytest.csv
 	mkdir -p $(@D)
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --target $* --type GPQR --quantile-levels $(QUANTILES) -o $@
-
-
-
-
-
-
-
-
-# benchmarks/v0/crossing.DirectMTGPQR_%.csv: scripts/v0/model_selection/write-crossing.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt _temp/v0/Xpred_3D.csv
-# 	mkdir -p $(@D)
-# 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
-
-# benchmarks/v0/extrapolation.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
-# 	mkdir -p $(@D)
-# 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
-
-# benchmarks/v0/extrapolation.CenterGapMTGPQR_%_ConstantMean.csv: scripts/v0/model_selection/write-extrapolation.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv
-# 	mkdir -p $(@D)
-# 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --split-ratio=0.5 --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
-
-# benchmarks/v0/cv.GPR_%.csv: scripts/v0/model_selection/write-cv.gpr.pmy _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
-# 	mkdir -p $(@D)
-# 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model GPR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --n-epochs $(N_EPOCHS) -o $@
-
-# benchmarks/v0/cv.CenterGapMTGPQR_%.csv: scripts/v0/model_selection/write-cv.gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv models/v0/feature_models/%.prior_mean.pt
-# 	mkdir -p $(@D)
-# 	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --target $* --model CenterGapMTGPQR_$* --num-folds=$(N_FOLDS) --quantiles $(QUANTILES) --num-lower-quantiles $(NUM_LOWER_QUANTILES) --num-latents $(NUM_LATENTS) --n-epochs $(N_EPOCHS) -o $@
+	python3 $^ --target $* --type GPQR --quantile-levels $(QUANTILES) -o $@
 
 # # Window prediction
 
