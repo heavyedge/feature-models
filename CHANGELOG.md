@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Model: `gpytorch-qr==0.9.0rc0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0rc4`
+  - `heavyedge/shape-features:v1.0.0b1`
+
+### Added
+
+**v0**
+
+- Direct GPQR with independent multitask variational strategy is added.
+- Center-gap GPQR with independent multitask variational strategy is added.
+- Center-gap GPQR with standard LMC multitask variational strategy is added.
+
+### Changed
+
+**v0**
+
+- Direct GPQR is renamed to explicitly specify LMC variational strategy.
+- Center-gap GPQR is renamed to explicitly specify center-gap LMC variational strategy.
+
 ## [0.3.0.dev1] - 2026-08-15
 
 - Model: `gpytorch-qr==0.9.0rc0`
