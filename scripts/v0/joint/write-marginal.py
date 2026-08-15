@@ -7,10 +7,11 @@ from pit import quantile_interpolation
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "pred_quantiles",
+    "pred",
     type=pathlib.Path,
     help="csv file of quantile predictions on the prediction grid",
 )
+parser.add_argument("--target", required=True, choices=["H", "phi"])
 parser.add_argument(
     "--quantiles",
     type=float,
@@ -29,14 +30,28 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-pred_quantiles = pd.read_csv(args.pred_quantiles).values
-quantile_levels = np.array(args.quantiles)
-
-threshold = args.threshold
-marginal = quantile_interpolation(
-    pred_quantiles,
-    quantile_levels,
-    threshold=threshold,
+pred = pd.read_csv(
+    args.pred, index_col=["index", "batch", "target", "quantile", "sample"]
 )
-df = pd.DataFrame(dict(marginal_prob=marginal))
-df.to_csv(args.out, index=False)
+
+# A prediction file can contain multiple targets.  Select the requested target
+# before grouping its quantile predictions into one row per marginal value.
+try:
+    pred = pred.xs(args.target, level="target")
+except KeyError as exc:
+    raise ValueError(f"No predictions found for target {args.target!r}.") from exc
+
+pred_values = pred["value"].unstack("quantile").sort_index(axis="columns")
+quantile_levels = np.asarray(args.quantiles)
+prediction_levels = pred_values.columns.to_numpy()
+if not np.array_equal(prediction_levels, quantile_levels):
+    raise ValueError(
+        "Prediction quantile levels do not match --quantiles: "
+        f"got {prediction_levels.tolist()}, expected {quantile_levels.tolist()}."
+    )
+
+out = pred_values.index.to_frame(index=False)
+out["marginal_prob"] = quantile_interpolation(
+    pred_values.to_numpy(), quantile_levels, threshold=args.threshold
+)
+out.to_csv(args.out, index=False)
