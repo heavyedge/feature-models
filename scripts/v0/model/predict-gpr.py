@@ -1,6 +1,7 @@
 import argparse
 import pathlib
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -104,8 +105,19 @@ with torch.no_grad():
 
         posterior_mean = prior_mean + residual_mean
         chunk_result = torch.stack((posterior_mean, residual_std), dim=-1).cpu().numpy()
+        batch_shape = chunk_result.shape[:-2]
+        result_shape = chunk_result.shape[:-1]
+        if batch_shape:
+            batch = np.broadcast_to(
+                np.arange(np.prod(batch_shape)).reshape(batch_shape + (1,)),
+                result_shape,
+            ).ravel()
+        else:
+            batch = np.full(np.prod(result_shape), "", dtype=object)
+
         data = {
             "index": X_row_indices[..., i : i + chunk_result.shape[-2]].ravel(),
+            "batch": batch,
             "mean": chunk_result[..., 0].ravel(),
             "std": chunk_result[..., 1].ravel(),
         }
@@ -119,5 +131,6 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    columns = (["index"] if args.batch_col else []) + ["mean", "std"]
-    pd.DataFrame(columns=columns).to_csv(args.out, index=False)
+    pd.DataFrame(columns=["index", "batch", "mean", "std"]).to_csv(
+        args.out, index=False
+    )

@@ -113,11 +113,21 @@ with torch.no_grad():
 
         ndim = samples_np.ndim
         row_indices = X_row_indices[..., i : i + samples_np.shape[-2]]
+        batch_shape = samples_np.shape[1:-2]
+        if batch_shape:
+            batch = np.broadcast_to(
+                np.arange(np.prod(batch_shape)).reshape((1,) + batch_shape + (1, 1)),
+                samples_np.shape,
+            ).ravel()
+        else:
+            batch = np.full(samples_np.size, "", dtype=object)
+
         data = {
             "index": np.broadcast_to(
                 row_indices.reshape((1,) + row_indices.shape + (1,)),
                 samples_np.shape,
             ).ravel(),
+            "batch": batch,
             "quantile": np.broadcast_to(
                 quantile_levels.reshape((1,) * (ndim - 1) + (-1,)),
                 samples_np.shape,
@@ -138,6 +148,6 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    pd.DataFrame(columns=["index", "quantile", "sample", args.target]).to_csv(
+    pd.DataFrame(columns=["index", "batch", "quantile", "sample", args.target]).to_csv(
         args.out, index=False
     )

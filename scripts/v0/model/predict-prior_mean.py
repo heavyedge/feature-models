@@ -1,6 +1,7 @@
 import argparse
 import pathlib
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -71,7 +72,20 @@ with torch.no_grad():
     for i in range(0, X.shape[-2], args.chunk_size):
         pred_mean = model(X[..., i : i + args.chunk_size, :]).detach().cpu().numpy()
         row_indices = X_row_indices[..., i : i + pred_mean.shape[-1]]
-        data = {"index": row_indices.ravel(), args.target: pred_mean.ravel()}
+        batch_shape = pred_mean.shape[:-1]
+        if batch_shape:
+            batch = np.broadcast_to(
+                np.arange(np.prod(batch_shape)).reshape(batch_shape + (1,)),
+                pred_mean.shape,
+            ).ravel()
+        else:
+            batch = np.full(pred_mean.size, "", dtype=object)
+
+        data = {
+            "index": row_indices.ravel(),
+            "batch": batch,
+            args.target: pred_mean.ravel(),
+        }
 
         pd.DataFrame(data).to_csv(
             args.out,
@@ -82,5 +96,4 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    columns = (["index"] if args.batch_col else []) + [args.target]
-    pd.DataFrame(columns=columns).to_csv(args.out, index=False)
+    pd.DataFrame(columns=["index", "batch", args.target]).to_csv(args.out, index=False)
