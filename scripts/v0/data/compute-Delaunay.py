@@ -18,14 +18,8 @@ parser.add_argument(
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
 
-index_col_true = [0, "name", "slurry", "fold", "split"]
-Xtrue = pd.read_csv(args.X_true, index_col=index_col_true)
-index_col_pred = [
-    "gap_to_thickness_ratio_idx",
-    "capillary_number_idx",
-    "cosine_of_contact_angle_idx",
-]
-Xpred = pd.read_csv(args.X_pred, index_col=index_col_pred)
+Xtrue = pd.read_csv(args.X_true, index_col=[0, 1, 2])
+Xpred = pd.read_csv(args.X_pred, index_col=[0, 1, 2])
 
 simplices = np.zeros(len(Xpred), dtype=bool)
 for cos in Xtrue["cosine_of_contact_angle"].unique():
