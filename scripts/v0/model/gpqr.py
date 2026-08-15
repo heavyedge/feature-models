@@ -4,6 +4,7 @@ from gpytorch.means import ConstantMean
 from gpytorch.priors import LogNormalPrior
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
+    IndependentMultitaskVariationalStrategy,
     LMCVariationalStrategy,
     UnwhitenedVariationalStrategy,
 )
@@ -13,6 +14,8 @@ from gpytorch_qr.variational import CenterGapLMCVariationalStrategy
 __all__ = [
     "CenterGapMTGPQR_H",
     "CenterGapMTGPQR_phi",
+    "DirectMTGPQR_Independent_H",
+    "DirectMTGPQR_Independent_phi",
     "DirectMTGPQR_LMC_H",
     "DirectMTGPQR_LMC_phi",
 ]
@@ -150,6 +153,66 @@ class _DirectMTGPQR_Base(DirectQuantileGP):
     @property
     def lengthscale_prior_scale(self):
         return self.covar_module.base_kernel.lengthscale_prior.scale
+
+
+class DirectMTGPQR_Independent_H(_DirectMTGPQR_Base):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_latents,
+        lengthscale_prior_loc=0.0,
+        lengthscale_prior_scale=1.0,
+        batch_shape=torch.Size(),
+        num_lower_quantiles=0,  # dummy argument
+    ):
+        num_latents = num_quantiles
+        super().__init__(
+            inducing_points,
+            num_quantiles,
+            num_latents,
+            lengthscale_prior_loc,
+            lengthscale_prior_scale,
+            batch_shape,
+            num_lower_quantiles,
+        )
+
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return IndependentMultitaskVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+        )
+
+
+class DirectMTGPQR_Independent_phi(_DirectMTGPQR_Base):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_latents,
+        lengthscale_prior_loc=0.0,
+        lengthscale_prior_scale=1.0,
+        batch_shape=torch.Size(),
+        num_lower_quantiles=0,  # dummy argument
+    ):
+        num_latents = num_quantiles
+        super().__init__(
+            inducing_points,
+            num_quantiles,
+            num_latents,
+            lengthscale_prior_loc,
+            lengthscale_prior_scale,
+            batch_shape,
+            num_lower_quantiles,
+        )
+
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return IndependentMultitaskVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+        )
 
 
 class DirectMTGPQR_LMC_H(_DirectMTGPQR_Base):
