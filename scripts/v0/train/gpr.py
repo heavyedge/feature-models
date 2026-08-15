@@ -6,11 +6,11 @@ import sys
 import gpytorch
 import numpy as np
 import optuna
-import pandas as pd
 import torch
 import v0.model.gpr as model_module  # Needs PYTHONPATH=scripts
 import v0.model.load as load_module  # Needs PYTHONPATH=scripts
 import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
+from batch import load_batched_arrays
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from save import save_gpr  # Needs PYTHONPATH=scripts
 from v0.model.likelihoods import GaussianLikelihood  # Needs PYTHONPATH=scripts
@@ -52,6 +52,12 @@ model_group.add_argument(
 )
 parser.add_argument(
     "--index-col", type=int, nargs="*", help="Index columns for X and y."
+)
+parser.add_argument(
+    "--batch-col",
+    type=int,
+    nargs="*",
+    help="X CSV column(s) defining batch dimensions.",
 )
 model_group.add_argument("--target", type=str, help="Target variable name.")
 model_group.add_argument("--model", type=str, help="Model name.")
@@ -240,17 +246,14 @@ if has_validation:
         pruning_patience,
     )
 
-Xtrain_df = pd.read_csv(args.Xtrain, index_col=args.index_col)
-Xtrain_arr = np.stack(
-    [Xtrain_df.loc[fold] for fold in sorted(Xtrain_df.index.unique())], axis=0
-)
-Xtrain = torch.tensor(Xtrain_arr).float().to(device)  # (*K, N, D)
-
-ytrain_df = pd.read_csv(args.ytrain, index_col=args.index_col)[args.target]
-ytrain_arr = np.stack(
-    [ytrain_df.loc[fold] for fold in sorted(ytrain_df.index.unique())], axis=0
-)
-ytrain = torch.tensor(ytrain_arr).float().to(device)  # (*K, N)
+try:
+    Xtrain_arr, ytrain_arr = load_batched_arrays(
+        args.Xtrain, args.ytrain, args.target, args.index_col, args.batch_col
+    )
+except ValueError as exc:
+    parser.error(str(exc))
+Xtrain = torch.tensor(Xtrain_arr).float().to(device)  # (*B, N, D)
+ytrain = torch.tensor(ytrain_arr).float().to(device)  # (*B, N)
 
 priormean_loader = getattr(load_module, "load_PriorMean_" + args.target)
 mean = priormean_loader(path=args.prior_mean, device=device)
@@ -260,17 +263,16 @@ with torch.no_grad():
 res_train = ytrain - train_mean
 
 if has_validation:
-    Xval_df = pd.read_csv(args.Xval, index_col=args.index_col)
-    Xval_arr = np.stack(
-        [Xval_df.loc[fold] for fold in sorted(Xval_df.index.unique())], axis=0
-    )
-    Xval = torch.tensor(Xval_arr).float().to(device)  # (*K, N, D)
-
-    yval_df = pd.read_csv(args.yval, index_col=args.index_col)[args.target]
-    yval_arr = np.stack(
-        [yval_df.loc[fold] for fold in sorted(yval_df.index.unique())], axis=0
-    )
-    yval = torch.tensor(yval_arr).float().to(device)  # (*K, N)
+    try:
+        Xval_arr, yval_arr = load_batched_arrays(
+            args.Xval, args.yval, args.target, args.index_col, args.batch_col
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    Xval = torch.tensor(Xval_arr).float().to(device)  # (*B, N, D)
+    yval = torch.tensor(yval_arr).float().to(device)  # (*B, N)
+    if Xval.shape[:-2] != Xtrain.shape[:-2]:
+        parser.error("Training and validation data must have the same batch shape.")
 
     with torch.no_grad():
         val_mean = mean(Xval)
