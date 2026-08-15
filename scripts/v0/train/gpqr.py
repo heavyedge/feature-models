@@ -75,6 +75,15 @@ model_group.add_argument("--device", choices=["cpu", "cuda"], help="Device to tr
 
 training_group.add_argument("--num-epochs", type=int, help="Number of maximum epochs.")
 training_group.add_argument(
+    "--num-likelihood-samples",
+    type=int,
+    default=10,
+    help=(
+        "Number of latent GP samples used to estimate expected log likelihoods "
+        "during training and validation."
+    ),
+)
+training_group.add_argument(
     "--learning-rate",
     type=float,
     default=0.001,
@@ -202,6 +211,8 @@ if not has_validation and args.storage is None:
     parser.error("--storage is required when validation data is not provided.")
 if has_validation and args.num_epochs <= 0:
     parser.error("--num-epochs must be positive.")
+if args.num_likelihood_samples <= 0:
+    parser.error("--num-likelihood-samples must be positive.")
 if args.learning_rate <= 0:
     parser.error("--learning-rate must be positive.")
 if args.min_learning_rate < 0 or args.min_learning_rate > args.learning_rate:
@@ -400,7 +411,8 @@ def train_with_hyperparameters(
 
         output = model(Xtrain_scaled)
         # VariationalELBO returns values over the model's batched folds.
-        train_loss = -mll(output, res_train_scaled).mean()
+        with gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples):
+            train_loss = -mll(output, res_train_scaled).mean()
         if not torch.isfinite(train_loss):
             save_trial_progress("non_finite_train_loss")
             if trial is not None:
@@ -409,7 +421,11 @@ def train_with_hyperparameters(
         train_loss.backward()
         optimizer.step()
 
-        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+        with (
+            torch.no_grad(),
+            gpytorch.settings.fast_pred_var(),
+            gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples),
+        ):
             likelihood.eval()
             model.eval()
             val_log_prob = likelihood.expected_log_prob(
@@ -564,7 +580,8 @@ def train_on_all_data(
         model.train()
         optimizer.zero_grad()
 
-        loss = -mll(model(Xall_scaled), res_all_scaled).mean()
+        with gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples):
+            loss = -mll(model(Xall_scaled), res_all_scaled).mean()
         if not torch.isfinite(loss):
             raise RuntimeError("Non-finite training loss during final fit.")
         loss.backward()
