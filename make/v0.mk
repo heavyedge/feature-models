@@ -207,9 +207,6 @@ benchmarks/v0/pinball_loss.%.cg_gpqr.csv: scripts/v0/model_selection/pinball_los
 # examples/v0/Crossing.ipynb: benchmarks/v0/crossing.DirectMTGPQR_H.csv benchmarks/v0/crossing.DirectMTGPQR_phi.csv .FORCE
 # 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-# examples/v0/Extrapolation.ipynb: benchmarks/v0/extrapolation.CenterGapMTGPQR_H.csv benchmarks/v0/extrapolation.CenterGapMTGPQR_H_ConstantMean.csv .FORCE
-# 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
-
 # examples/v0/CV.ipynb: benchmarks/v0/cv.GPR_H.csv benchmarks/v0/cv.CenterGapMTGPQR_H.csv benchmarks/v0/cv.GPR_phi.csv benchmarks/v0/cv.CenterGapMTGPQR_phi.csv .FORCE
 # 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
