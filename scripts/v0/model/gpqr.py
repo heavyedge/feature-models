@@ -4,6 +4,7 @@ from gpytorch.means import ConstantMean
 from gpytorch.priors import LogNormalPrior
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
+    IndependentMultitaskVariationalStrategy,
     LMCVariationalStrategy,
     UnwhitenedVariationalStrategy,
 )
@@ -106,7 +107,7 @@ class _DirectMTGPQR_Base(DirectQuantileGP):
             N,
             batch_shape=full_batch_shape,
         )
-        variational_strategy = LMCVariationalStrategy(
+        variational_strategy = self.construct_variational_strategy(
             UnwhitenedVariationalStrategy(
                 self,
                 inducing_points,
@@ -135,6 +136,10 @@ class _DirectMTGPQR_Base(DirectQuantileGP):
         self.num_quantiles = [num_quantiles]  # dummy argument
         self.num_lower_quantiles = [num_lower_quantiles]  # dummy argument
 
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        raise NotImplementedError
+
     @property
     def inducing_points(self):
         return self.variational_strategy.base_variational_strategy.inducing_points
@@ -149,8 +154,20 @@ class _DirectMTGPQR_Base(DirectQuantileGP):
 
 
 class DirectMTGPQR_H(_DirectMTGPQR_Base):
-    pass
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return LMCVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
 
 
 class DirectMTGPQR_phi(_DirectMTGPQR_Base):
-    pass
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return LMCVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
