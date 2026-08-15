@@ -13,13 +13,15 @@ N_TRIALS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
 
-MODEL_FILES_v0 := \
+MODELS_v0 := \
 models/v0/feature_models/H.prior_mean.pt \
 models/v0/feature_models/phi.prior_mean.pt \
 models/v0/feature_models/H.gpr.pt \
 models/v0/feature_models/phi.gpr.pt \
 models/v0/feature_models/H.gpqr.pt \
-models/v0/feature_models/phi.gpqr.pt \
+models/v0/feature_models/phi.gpqr.pt
+
+SCRIPTS_v0 := \
 models/v0/feature_models/prior.py \
 models/v0/feature_models/scale.py \
 models/v0/feature_models/gpr.py \
@@ -31,12 +33,11 @@ models/v0/feature_models/predict-prior_mean.py \
 models/v0/feature_models/predict-gpr.py \
 models/v0/feature_models/predict-gpqr.py
 
-models-v0: $(MODEL_FILES_v0)
+models-v0: $(MODELS_v0) $(SCRIPTS_v0)
 
-# examples-v0: $(wildcard examples/v0/*)
-examples-v0:
+examples-v0: $(wildcard examples/v0/*)
 
-test-v0: $(MODEL_FILES_v0)
+test-v0: $(MODELS_v0) $(SCRIPTS_v0)
 	pytest tests/v0 --models-path $(CURDIR)/models/v0
 
 # Data
@@ -144,28 +145,28 @@ _temp/v0/%.cg_gpqr.pt
 
 # Prediction
 
-_temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
+_temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-prior_mean $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.gpr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
+_temp/v0/%.gpr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.gpr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.gpr.pt $(MODEL_FILES_v0)
+_temp/v0/%.gpr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.gpr.pt $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* -o $@
 
-_temp/v0/%.gpqr.X.csv: _temp/v0/X.csv $(MODEL_FILES_v0)
+_temp/v0/%.gpqr.X.csv: _temp/v0/X.csv $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.gpqr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(MODEL_FILES_v0)
+_temp/v0/%.gpqr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(MODEL_FILES_v0)
+_temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.direct_gpqr.Xpred_3D.csv: _temp/v0/Xpred_3D.csv _temp/v0/%.prior_mean.pt _temp/v0/%.direct_gpqr.pt $(MODEL_FILES_v0)
+_temp/v0/%.direct_gpqr.Xpred_3D.csv: _temp/v0/Xpred_3D.csv _temp/v0/%.prior_mean.pt _temp/v0/%.direct_gpqr.pt $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.cg_gpqr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.cg_gpqr.pt $(MODEL_FILES_v0)
+_temp/v0/%.cg_gpqr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.cg_gpqr.pt $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* -o $@
 
 # Model selection
@@ -204,8 +205,8 @@ benchmarks/v0/pinball_loss.%.cg_gpqr.csv: scripts/v0/model_selection/pinball_los
 
 # Examples
 
-# examples/v0/Crossing.ipynb: benchmarks/v0/crossing.DirectMTGPQR_H.csv benchmarks/v0/crossing.DirectMTGPQR_phi.csv .FORCE
-# 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
+examples/v0/Crossing.ipynb: benchmarks/v0/quantile_crossing.H.direct_gpqr.csv benchmarks/v0/quantile_crossing.phi.direct_gpqr.csv .FORCE
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 # examples/v0/CV.ipynb: benchmarks/v0/cv.GPR_H.csv benchmarks/v0/cv.CenterGapMTGPQR_H.csv benchmarks/v0/cv.GPR_phi.csv benchmarks/v0/cv.CenterGapMTGPQR_phi.csv .FORCE
 # 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
