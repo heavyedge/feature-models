@@ -52,7 +52,7 @@ parser.add_argument(
         "same number of rows."
     ),
 )
-parser.add_argument("--target", required=True, choices=["H", "phi"])
+parser.add_argument("--target", required=True, nargs="+", choices=["H", "phi"])
 parser.add_argument(
     "--num-samples",
     default=20,
@@ -81,11 +81,11 @@ except ValueError as exc:
 
 X = torch.tensor(X_values, dtype=torch.float32, device=device)
 
-prior_mean_loader = getattr(load_module, f"load_PriorMean_{args.target}")
+prior_mean_loader = getattr(load_module, f"load_PriorMean_{args.target[0]}")
 prior_mean_model = prior_mean_loader(path=args.prior_mean_model, device=device)
 prior_mean_model.eval()
 
-gpqr_loader = getattr(load_module, f"load_GPQR_{args.target}")
+gpqr_loader = getattr(load_module, f"load_GPQR_{args.target[0]}")
 quantiles, X_scaler, y_scaler, likelihood, gpqr_model = gpqr_loader(
     path=args.gpqr_model, device=device
 )
@@ -112,11 +112,27 @@ with torch.no_grad():
         samples_np = samples.detach().cpu().numpy()
 
         ndim = samples_np.ndim
-        row_indices = X_row_indices[..., i : i + samples_np.shape[-2]]
-        batch_shape = samples_np.shape[1:-2]
+        chunk_size = X_chunk.shape[-2]
+        if samples_np.shape[-2] == chunk_size:
+            multitask = False
+        elif samples_np.ndim >= 4 and samples_np.shape[-3] == chunk_size:
+            multitask = True
+        else:
+            parser.error(f"unexpected model output shape {samples_np.shape}")
+        num_tasks = samples_np.shape[-2] if multitask else 1
+        if len(args.target) != num_tasks:
+            parser.error(
+                f"--target requires {num_tasks} value(s) for this model; "
+                f"got {len(args.target)}"
+            )
+
+        row_indices = X_row_indices[..., i : i + chunk_size]
+        batch_shape = samples_np.shape[1 : -3 if multitask else -2]
         if batch_shape:
             batch = np.broadcast_to(
-                np.arange(np.prod(batch_shape)).reshape((1,) + batch_shape + (1, 1)),
+                np.arange(np.prod(batch_shape)).reshape(
+                    (1,) + batch_shape + (1,) * (3 if multitask else 2)
+                ),
                 samples_np.shape,
             ).ravel()
         else:
@@ -124,10 +140,19 @@ with torch.no_grad():
 
         data = {
             "index": np.broadcast_to(
-                row_indices.reshape((1,) + row_indices.shape + (1,)),
+                row_indices.reshape(
+                    (1,) + row_indices.shape + ((1,) if multitask else ()) + (1,)
+                ),
                 samples_np.shape,
             ).ravel(),
             "batch": batch,
+            "target": np.broadcast_to(
+                np.asarray(args.target).reshape(
+                    (1,) * (ndim - (2 if multitask else 0))
+                    + ((num_tasks, 1) if multitask else ())
+                ),
+                samples_np.shape,
+            ).ravel(),
             "quantile": np.broadcast_to(
                 quantile_levels.reshape((1,) * (ndim - 1) + (-1,)),
                 samples_np.shape,
@@ -136,7 +161,7 @@ with torch.no_grad():
                 np.arange(samples_np.shape[0]).reshape((-1,) + (1,) * (ndim - 1)),
                 samples_np.shape,
             ).ravel(),
-            args.target: samples_np.ravel(),
+            "value": samples_np.ravel(),
         }
         df = pd.DataFrame(data)
         df.to_csv(
@@ -148,6 +173,6 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    pd.DataFrame(columns=["index", "batch", "quantile", "sample", args.target]).to_csv(
-        args.out, index=False
-    )
+    pd.DataFrame(
+        columns=["index", "batch", "target", "quantile", "sample", "value"]
+    ).to_csv(args.out, index=False)
