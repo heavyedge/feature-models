@@ -13,6 +13,7 @@ import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
 from batch import load_batched_arrays
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
+from inducing import unique_inducing_points_per_fold
 from save import save_gpqr
 from v0.model.likelihoods import CenterGapQuantilesLikelihood, DirectQuantilesLikelihood
 
@@ -326,45 +327,6 @@ elif issubclass(model_class, DirectQuantileGP):
     likelihood_class = DirectQuantilesLikelihood
 else:
     raise ValueError(f"Unknown model class: {model_class}")
-
-
-def unique_inducing_points_per_fold(X):
-    """Return duplicate-free inducing points with a common count per fold.
-
-    The variational distribution has one inducing-point dimension shared by all
-    batch/fold dimensions.  We therefore deduplicate rows independently in
-    each fold, then retain the largest count that every fold can support.
-    Observations in ``X`` are deliberately left unchanged.
-    """
-    num_observations, dim = X.shape[-2:]
-    flat_folds = X.reshape(-1, num_observations, dim)
-    unique_folds = [torch.unique(fold, dim=0) for fold in flat_folds]
-    num_inducing = min(fold.shape[0] for fold in unique_folds)
-    if num_inducing == 0:
-        raise ValueError("At least one inducing point is required per fold.")
-
-    # When folds have different duplicate counts, choose evenly-spaced unique
-    # points from the larger folds rather than making the retained prefix an
-    # artefact of row ordering.
-    selected_folds = []
-    for fold in unique_folds:
-        if fold.shape[0] == num_inducing:
-            selected_folds.append(fold)
-        else:
-            indices = (
-                torch.linspace(0, fold.shape[0] - 1, num_inducing, device=X.device)
-                .round()
-                .long()
-            )
-            selected_folds.append(fold.index_select(0, indices))
-
-    if num_inducing < num_observations:
-        logger.info(
-            "Using %d duplicate-free inducing points per fold (from %d training rows).",
-            num_inducing,
-            num_observations,
-        )
-    return torch.stack(selected_folds).reshape(*X.shape[:-2], num_inducing, dim)
 
 
 # Keep the full training set for the ELBO; only the variational inducing set
