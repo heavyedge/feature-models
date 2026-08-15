@@ -12,6 +12,12 @@ from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
 from gpytorch_qr.variational import CenterGapLMCVariationalStrategy
 
 __all__ = [
+    "CenterGapMTGPQR_Independent_H",
+    "CenterGapMTGPQR_Independent_phi",
+    "CenterGapMTGPQR_LMC_H",
+    "CenterGapMTGPQR_LMC_phi",
+    "CenterGapMTGPQR_CenterGapLMC_H",
+    "CenterGapMTGPQR_CenterGapLMC_phi",
     "CenterGapMTGPQR_H",
     "CenterGapMTGPQR_phi",
     "DirectMTGPQR_Independent_H",
@@ -38,15 +44,15 @@ class _CGMTGPQR_Base(CenterGapQuantileGP):
             N,
             batch_shape=full_batch_shape,
         )
-        variational_strategy = CenterGapLMCVariationalStrategy(
+        variational_strategy = self.construct_variational_strategy(
             UnwhitenedVariationalStrategy(
                 self,
                 inducing_points,
                 variational_distribution,
                 learn_inducing_locations=False,
             ),
-            num_tasks=num_quantiles,
-            num_latents=num_latents,
+            num_quantiles,
+            num_latents,
         )
 
         mean = ConstantMean(batch_shape=full_batch_shape)
@@ -71,6 +77,10 @@ class _CGMTGPQR_Base(CenterGapQuantileGP):
         self.num_latents = num_latents
         self.batch_shape = batch_shape
 
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        raise NotImplementedError
+
     @property
     def inducing_points(self):
         return self.variational_strategy.base_variational_strategy.inducing_points
@@ -84,12 +94,110 @@ class _CGMTGPQR_Base(CenterGapQuantileGP):
         return self.covar_module.base_kernel.lengthscale_prior.scale
 
 
-class CenterGapMTGPQR_H(_CGMTGPQR_Base):
-    pass
+class CenterGapMTGPQR_Independent_H(_CGMTGPQR_Base):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        lengthscale_prior_loc=0.0,
+        lengthscale_prior_scale=1.0,
+        batch_shape=torch.Size(),
+    ):
+        num_latents = num_quantiles
+        super().__init__(
+            inducing_points,
+            num_quantiles,
+            num_lower_quantiles,
+            num_latents,
+            lengthscale_prior_loc,
+            lengthscale_prior_scale,
+            batch_shape,
+        )
+
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return IndependentMultitaskVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+        )
 
 
-class CenterGapMTGPQR_phi(_CGMTGPQR_Base):
-    pass
+class CenterGapMTGPQR_Independent_phi(_CGMTGPQR_Base):
+    def __init__(
+        self,
+        inducing_points,
+        num_quantiles,
+        num_lower_quantiles,
+        num_latents,
+        lengthscale_prior_loc=0.0,
+        lengthscale_prior_scale=1.0,
+        batch_shape=torch.Size(),
+    ):
+        num_latents = num_quantiles
+        super().__init__(
+            inducing_points,
+            num_quantiles,
+            num_lower_quantiles,
+            num_latents,
+            lengthscale_prior_loc,
+            lengthscale_prior_scale,
+            batch_shape,
+        )
+
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return IndependentMultitaskVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+        )
+
+
+class CenterGapMTGPQR_LMC_H(_CGMTGPQR_Base):
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return LMCVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
+
+
+class CenterGapMTGPQR_LMC_phi(_CGMTGPQR_Base):
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return LMCVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
+
+
+class CenterGapMTGPQR_CenterGapLMC_H(_CGMTGPQR_Base):
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return CenterGapLMCVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
+
+
+class CenterGapMTGPQR_CenterGapLMC_phi(_CGMTGPQR_Base):
+    @staticmethod
+    def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
+        return CenterGapLMCVariationalStrategy(
+            base_strategy,
+            num_tasks=num_quantiles,
+            num_latents=num_latents,
+        )
+
+
+CenterGapMTGPQR_H = CenterGapMTGPQR_CenterGapLMC_H
+
+
+CenterGapMTGPQR_phi = CenterGapMTGPQR_CenterGapLMC_phi
 
 
 class _DirectMTGPQR_Base(DirectQuantileGP):
