@@ -145,22 +145,22 @@ _temp/v0/%.cg_gpqr.pt
 
 # Prediction
 
-_temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0)
+_temp/v0/%.prior_mean.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0) models/v0/feature_models/%.prior_mean.pt
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-prior_mean $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.gpr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0)
+_temp/v0/%.gpr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0) models/v0/feature_models/%.prior_mean.pt models/v0/feature_models/%.gpr.pt
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $< --index-col 0 1 2 --target $* -o $@
 
 _temp/v0/%.gpr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.gpr.pt $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* -o $@
 
-_temp/v0/%.gpqr.X.csv: _temp/v0/X.csv $(SCRIPTS_v0)
+_temp/v0/%.gpqr.X.csv: _temp/v0/X.csv $(SCRIPTS_v0) models/v0/feature_models/%.prior_mean.pt models/v0/feature_models/%.gpqr.pt
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.gpqr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0)
+_temp/v0/%.gpqr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0) models/v0/feature_models/%.prior_mean.pt models/v0/feature_models/%.gpqr.pt
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(SCRIPTS_v0)
+_temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(SCRIPTS_v0) models/v0/feature_models/%.prior_mean.pt models/v0/feature_models/%.gpqr.pt
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
 _temp/v0/%.direct_gpqr.Xpred_3D.csv: _temp/v0/Xpred_3D.csv _temp/v0/%.prior_mean.pt _temp/v0/%.direct_gpqr.pt $(SCRIPTS_v0)
@@ -185,8 +185,8 @@ benchmarks/v0/pinball_loss.%.cg_gpqr.csv: scripts/v0/model_selection/pinball_los
 
 # # Window prediction
 
-# _temp/v0/%.pit.csv: scripts/v0/joint/write-pit.py _temp/v0/ytrain.csv _temp/v0/%.gpqr.Xpred.csv
-# 	python3 $^ --target $* --quantiles $(QUANTILES) -o $@
+_temp/v0/%.pit.csv: scripts/v0/joint/write-pit.py _temp/v0/ytrain.csv _temp/v0/%.gpqr.X.csv
+	python3 $^ --target $* --quantiles $(QUANTILES) -o $@
 
 # _temp/v0/H.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v0/H.gpqr.Xpred_2D.csv
 # 	python3 $^ --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
