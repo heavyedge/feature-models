@@ -194,11 +194,11 @@ _temp/v0/H.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v0/H.
 _temp/v0/phi.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v0/phi.gpqr.Xpred_2D.csv
 	python3 $^ --target phi --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
-# _temp/v0/H_phi.pit.csv: _temp/v0/H.pit.csv _temp/v0/phi.pit.csv
-# 	python3 -c "import pandas as pd; pit_H, pit_phi = map(lambda f: pd.read_csv(f).values, '$^'.split(' ')); pd.DataFrame({'H': pit_H.flatten(), 'phi': pit_phi.flatten()}).to_csv('$@', index=False)"
+_temp/v0/H_phi.pit.csv: _temp/v0/H.pit.csv _temp/v0/phi.pit.csv
+	python3 -c "import pandas as pd; H, phi = map(lambda f: pd.read_csv(f), '$^'.split(' ')); H['target'] = 'H'; phi['target'] = 'phi'; pd.concat([H, phi], ignore_index=True).to_csv('$@', index=False)"
 
-# _temp/v0/H_phi.marginal.Xpred_2D.csv: _temp/v0/H.marginal.Xpred_2D.csv _temp/v0/phi.marginal.Xpred_2D.csv
-# 	python3 -c "import pandas as pd; marginal_H, marginal_phi = map(lambda f: pd.read_csv(f).values, '$^'.split(' ')); pd.DataFrame({'H': marginal_H.flatten(), 'phi': marginal_phi.flatten()}).to_csv('$@', index=False)"
+_temp/v0/H_phi.marginal.Xpred_2D.csv: _temp/v0/H.marginal.Xpred_2D.csv _temp/v0/phi.marginal.Xpred_2D.csv
+	python3 -c "import pandas as pd; H, phi = map(lambda f: pd.read_csv(f), '$^'.split(' ')); H['target'] = 'H'; phi['target'] = 'phi'; pd.concat([H, phi], ignore_index=True).to_csv('$@', index=False)"
 
 # _temp/v0/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v0/H_phi.pit.csv _temp/v0/Xpred_2D.csv _temp/v0/H_phi.marginal.Xpred_2D.csv
 # 	python3 $^ -o $@
