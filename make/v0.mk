@@ -208,8 +208,8 @@ benchmarks/v0/pinball_loss.%.cg_gpqr.csv: scripts/v0/model_selection/pinball_los
 examples/v0/Crossing.ipynb: benchmarks/v0/quantile_crossing.H.direct_gpqr.csv benchmarks/v0/quantile_crossing.phi.direct_gpqr.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-# examples/v0/CV.ipynb: benchmarks/v0/cv.GPR_H.csv benchmarks/v0/cv.CenterGapMTGPQR_H.csv benchmarks/v0/cv.GPR_phi.csv benchmarks/v0/cv.CenterGapMTGPQR_phi.csv .FORCE
-# 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
+examples/v0/CV.ipynb: benchmarks/v0/pinball_loss.H.gpr.csv benchmarks/v0/pinball_loss.phi.gpr.csv benchmarks/v0/pinball_loss.H.cg_gpqr.csv benchmarks/v0/pinball_loss.phi.cg_gpqr.csv .FORCE
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v0/Models.ipynb: _temp/v0/X.csv _temp/v0/y.csv _temp/v0/Xpred_1D.csv _temp/v0/H.prior_mean.Xpred_1D.csv _temp/v0/phi.prior_mean.Xpred_1D.csv _temp/v0/H.gpr.Xpred_1D.csv _temp/v0/phi.gpr.Xpred_1D.csv _temp/v0/H.gpqr.Xpred_1D.csv _temp/v0/phi.gpqr.Xpred_1D.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
