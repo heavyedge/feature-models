@@ -186,19 +186,19 @@ benchmarks/v0/pinball_loss.%.cg_gpqr.csv: scripts/v0/model_selection/pinball_los
 # # Window prediction
 
 _temp/v0/%.pit.csv: scripts/v0/joint/write-pit.py _temp/v0/ytrain.csv _temp/v0/%.gpqr.X.csv
-	python3 $^ --index-col 0 --target $* --quantiles $(QUANTILES) -o $@
+	python3 $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
 _temp/v0/H.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v0/H.gpqr.Xpred_2D.csv
-	python3 $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
+	python3 $^ --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
 _temp/v0/phi.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v0/phi.gpqr.Xpred_2D.csv
-	python3 $^ --target phi --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
+	python3 $^ --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
 _temp/v0/H_phi.pit.csv: _temp/v0/H.pit.csv _temp/v0/phi.pit.csv
-	python3 -c "import pandas as pd; H, phi = map(lambda f: pd.read_csv(f), '$^'.split(' ')); H['target'] = 'H'; phi['target'] = 'phi'; pd.concat([H, phi], ignore_index=True).to_csv('$@', index=False)"
+	python3 -c "import pandas as pd; H, phi = map(lambda f: pd.read_csv(f), '$^'.split(' ')); pd.concat([H, phi], ignore_index=True).to_csv('$@', index=False)"
 
 _temp/v0/H_phi.marginal.Xpred_2D.csv: _temp/v0/H.marginal.Xpred_2D.csv _temp/v0/phi.marginal.Xpred_2D.csv
-	python3 -c "import pandas as pd; H, phi = map(lambda f: pd.read_csv(f), '$^'.split(' ')); H['target'] = 'H'; phi['target'] = 'phi'; pd.concat([H, phi], ignore_index=True).to_csv('$@', index=False)"
+	python3 -c "import pandas as pd; H, phi = map(lambda f: pd.read_csv(f), '$^'.split(' ')); pd.concat([H, phi], ignore_index=True).to_csv('$@', index=False)"
 
 _temp/v0/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v0/Xpred_2D.csv _temp/v0/H_phi.pit.csv _temp/v0/H_phi.marginal.Xpred_2D.csv
 	python3 $^ --index-col 0 1 2 -o $@
