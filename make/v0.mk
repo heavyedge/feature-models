@@ -176,11 +176,11 @@ benchmarks/v0/quantile_crossing.%.direct_gpqr.csv: scripts/v0/model_selection/cr
 
 benchmarks/v0/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/%.gpr.Xtest.csv _temp/v0/ytest.csv
 	mkdir -p $(@D)
-	python3 $^ --target $* --type GPR --quantile-levels $(QUANTILES) -o $@
+	python3 $^ --type GPR --quantile-levels $(QUANTILES) -o $@
 
 benchmarks/v0/pinball_loss.%.cg_gpqr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v0/%.cg_gpqr.Xtest.csv _temp/v0/ytest.csv
 	mkdir -p $(@D)
-	python3 $^ --target $* --type GPQR --quantile-levels $(QUANTILES) -o $@
+	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
 
 # # Window prediction
 

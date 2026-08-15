@@ -37,8 +37,8 @@ def gpr_quantile_predictions(pred_df, quantile_levels, n_targets):
     return indices, predictions
 
 
-def gpqr_quantile_predictions(pred_df, quantile_levels, target, n_targets):
-    required = {"index", "quantile", target}
+def gpqr_quantile_predictions(pred_df, quantile_levels, n_targets):
+    required = {"index", "quantile", "value"}
     missing = required.difference(pred_df.columns)
     if missing:
         raise ValueError(f"GPQR prediction is missing columns: {sorted(missing)}")
@@ -56,8 +56,8 @@ def gpqr_quantile_predictions(pred_df, quantile_levels, target, n_targets):
             f"Prediction indices must be between 0 and {n_targets - 1}, inclusive."
         )
     pred_df["quantile"] = pd.to_numeric(pred_df["quantile"], errors="coerce")
-    pred_df[target] = pd.to_numeric(pred_df[target], errors="coerce")
-    if not np.isfinite(pred_df[["quantile", target]].to_numpy()).all():
+    pred_df["value"] = pd.to_numeric(pred_df["value"], errors="coerce")
+    if not np.isfinite(pred_df[["quantile", "value"]].to_numpy()).all():
         raise ValueError("GPQR quantile levels and predictions must be finite.")
 
     available_levels = pred_df["quantile"].unique()
@@ -72,24 +72,23 @@ def gpqr_quantile_predictions(pred_df, quantile_levels, target, n_targets):
             )
         matched_levels.append(matches[0])
 
-    mean_predictions = pred_df.groupby(["index", "quantile"], sort=False)[target].mean()
-    index_sets = [
-        set(mean_predictions.xs(level, level="quantile").index)
+    prediction_groups = [
+        pred_df[np.isclose(pred_df["quantile"], level, rtol=1e-7, atol=1e-12)]
         for level in matched_levels
     ]
+    index_sets = [set(group["index"]) for group in prediction_groups]
     if any(index_set != index_sets[0] for index_set in index_sets[1:]):
         raise ValueError(
             "Every GPQR quantile level must contain the same prediction indices."
         )
 
-    indices = np.asarray(sorted(index_sets[0]), dtype=np.int64)
-    predictions = np.column_stack(
-        [
-            mean_predictions.xs(level, level="quantile").reindex(indices).to_numpy()
-            for level in matched_levels
-        ]
-    )
-    return indices, predictions
+    return [
+        (
+            group["index"].to_numpy(dtype=np.int64),
+            group["value"].to_numpy(dtype=float),
+        )
+        for group in prediction_groups
+    ]
 
 
 parser = argparse.ArgumentParser(
@@ -98,7 +97,6 @@ parser = argparse.ArgumentParser(
 parser.add_argument("pred", type=pathlib.Path, help="Prediction csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
 parser.add_argument("--index-col", type=int, nargs="*", help="Index columns for y.")
-parser.add_argument("--target", type=str, required=True, help="Target variable name.")
 parser.add_argument(
     "--type", type=str, choices=["GPR", "GPQR"], required=True, help="Prediction type."
 )
@@ -124,28 +122,48 @@ if len(np.unique(quantile_levels)) != len(quantile_levels):
     parser.error("Quantile levels must not contain duplicates.")
 
 y_df = pd.read_csv(args.y, index_col=args.index_col)
-if args.target not in y_df.columns:
-    parser.error(f"Target column {args.target!r} is missing from {args.y}.")
-y = y_df[args.target].to_numpy(dtype=float)
 pred_df = pd.read_csv(args.pred)
 
-try:
-    if args.type == "GPR":
-        indices, predictions = gpr_quantile_predictions(
-            pred_df, quantile_levels, len(y)
-        )
-    else:
-        indices, predictions = gpqr_quantile_predictions(
-            pred_df, quantile_levels, args.target, len(y)
-        )
-except (KeyError, TypeError, ValueError) as exc:
-    parser.error(str(exc))
+if "target" not in pred_df.columns:
+    parser.error(f"Prediction column 'target' is missing from {args.pred}.")
+if pred_df["target"].isna().any():
+    parser.error("Prediction targets must not be missing.")
 
-errors = y[indices, None] - predictions
-losses = np.maximum(
-    quantile_levels[None, :] * errors,
-    (quantile_levels[None, :] - 1.0) * errors,
-).mean(axis=0)
-pd.DataFrame({"quantile_level": quantile_levels, "loss": losses}).to_csv(
-    args.out, index=False
-)
+records = []
+for target, target_pred_df in pred_df.groupby("target", sort=False):
+    if target not in y_df.columns:
+        parser.error(f"Target column {target!r} is missing from {args.y}.")
+    try:
+        y = y_df[target].to_numpy(dtype=float)
+        if args.type == "GPR":
+            indices, predictions = gpr_quantile_predictions(
+                target_pred_df, quantile_levels, len(y)
+            )
+            prediction_groups = [
+                (indices, predictions[:, quantile_index])
+                for quantile_index in range(len(quantile_levels))
+            ]
+        else:
+            prediction_groups = gpqr_quantile_predictions(
+                target_pred_df, quantile_levels, len(y)
+            )
+    except (KeyError, TypeError, ValueError) as exc:
+        parser.error(str(exc))
+
+    for level, (indices, predictions) in zip(quantile_levels, prediction_groups):
+        errors = y[indices] - predictions
+        losses = np.maximum(level * errors, (level - 1.0) * errors)
+        mean_losses = pd.Series(losses, index=indices).groupby(level=0).mean()
+        records.extend(
+            {
+                "index": index,
+                "target": target,
+                "quantile_level": level,
+                "loss": loss,
+            }
+            for index, loss in mean_losses.items()
+        )
+
+pd.DataFrame.from_records(
+    records, columns=["index", "target", "quantile_level", "loss"]
+).to_csv(args.out, index=False)
