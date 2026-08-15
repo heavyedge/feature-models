@@ -8,7 +8,9 @@ import torch
 from . import load as load_module
 from .batch import load_batched_features
 
-parser = argparse.ArgumentParser(description="Predict prior mean of shape features.")
+parser = argparse.ArgumentParser(
+    description="Predict predictive posterior distribution of shape features using GPR."
+)
 parser.add_argument(
     "X",
     type=pathlib.Path,
@@ -21,11 +23,20 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
-    "model",
+    "prior_mean_model",
     type=pathlib.Path,
     nargs="?",
     help=(
-        "Path to the model file."
+        "Path to the prior mean model file."
+        "If not passed, default model will be searched using --target option."
+    ),
+)
+parser.add_argument(
+    "gpr_model",
+    type=pathlib.Path,
+    nargs="?",
+    help=(
+        "Path to the gpr model file."
         "If not passed, default model will be searched using --target option."
     ),
 )
@@ -63,30 +74,53 @@ except ValueError as exc:
     parser.error(str(exc))
 X = torch.tensor(X_values, dtype=torch.float32, device=device)
 
-loader = getattr(load_module, f"load_PriorMean_{args.target[0]}")
-model = loader(path=args.model, device=device)
-model.eval()
+prior_mean_loader = getattr(load_module, f"load_PriorMean_{args.target[0]}")
+prior_mean_model = prior_mean_loader(path=args.prior_mean_model, device=device)
+prior_mean_model.eval()
+
+gpr_loader = getattr(load_module, f"load_GPR_{args.target[0]}")
+X_scaler, y_scaler, likelihood, gpr_model = gpr_loader(
+    path=args.gpr_model, device=device
+)
+X_scaler.eval()
+y_scaler.eval()
+gpr_model.eval()
+likelihood.eval()
 
 wrote_output = False
 with torch.no_grad():
     for i in range(0, X.shape[-2], args.chunk_size):
-        pred_mean = model(X[..., i : i + args.chunk_size, :]).detach().cpu().numpy()
-        chunk_size = min(args.chunk_size, X.shape[-2] - i)
-        if pred_mean.shape[-1] == chunk_size:
+        X_chunk = X[..., i : i + args.chunk_size, :]
+
+        prior_mean = prior_mean_model(X_chunk)
+        X_scaled = X_scaler(X_chunk)
+        scaled_res_posterior = gpr_model(X_scaled)
+
+        scaled_res_mean = scaled_res_posterior.mean.unsqueeze(-1)
+        residual_mean = y_scaler.inverse_transform(scaled_res_mean).squeeze(-1)
+        residual_std = (
+            scaled_res_posterior.variance.sqrt().unsqueeze(-1)
+            * y_scaler.X_scale.abs().unsqueeze(-2)
+        ).squeeze(-1)
+
+        posterior_mean = prior_mean + residual_mean
+        chunk_result = torch.stack((posterior_mean, residual_std), dim=-1).cpu().numpy()
+        chunk_size = X_chunk.shape[-2]
+        if posterior_mean.shape[-1] == chunk_size:
             multitask = False
-        elif pred_mean.ndim >= 2 and pred_mean.shape[-2] == chunk_size:
+        elif posterior_mean.ndim >= 2 and posterior_mean.shape[-2] == chunk_size:
             multitask = True
         else:
-            parser.error(f"unexpected model output shape {pred_mean.shape}")
-        num_tasks = pred_mean.shape[-1] if multitask else 1
+            parser.error(f"unexpected model output shape {tuple(posterior_mean.shape)}")
+        num_tasks = posterior_mean.shape[-1] if multitask else 1
         if len(args.target) != num_tasks:
             parser.error(
                 f"--target requires {num_tasks} value(s) for this model; "
                 f"got {len(args.target)}"
             )
 
-        result_shape = pred_mean.shape
-        batch_shape = pred_mean.shape[: -2 if multitask else -1]
+        result_shape = chunk_result.shape[:-1]
+        batch_shape = chunk_result.shape[: -3 if multitask else -2]
         if batch_shape:
             batch = np.broadcast_to(
                 np.arange(np.prod(batch_shape)).reshape(
@@ -95,7 +129,7 @@ with torch.no_grad():
                 result_shape,
             ).ravel()
         else:
-            batch = np.full(pred_mean.size, "", dtype=object)
+            batch = np.full(np.prod(result_shape), "", dtype=object)
 
         data = {
             "index": np.broadcast_to(
@@ -109,12 +143,13 @@ with torch.no_grad():
             "batch": batch,
             "target": np.broadcast_to(
                 np.asarray(args.target).reshape(
-                    (1,) * (pred_mean.ndim - (1 if multitask else 0))
+                    (1,) * (posterior_mean.ndim - (1 if multitask else 0))
                     + ((num_tasks,) if multitask else ())
                 ),
                 result_shape,
             ).ravel(),
-            "value": pred_mean.ravel(),
+            "mean": chunk_result[..., 0].ravel(),
+            "std": chunk_result[..., 1].ravel(),
         }
 
         pd.DataFrame(data).to_csv(
@@ -126,6 +161,6 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    pd.DataFrame(columns=["index", "batch", "target", "value"]).to_csv(
+    pd.DataFrame(columns=["index", "batch", "target", "mean", "std"]).to_csv(
         args.out, index=False
     )

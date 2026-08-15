@@ -22,7 +22,7 @@ tests: test-v0 test-v1
 
 clean:
 	shopt -s globstar nullglob
-	rm -rf _temp models/**/*.pt models/**/*.py
+	rm -rf _temp benchmarks models/**/*.pt models/**/*.py
 
 include make/v0.mk
 include make/v1.mk

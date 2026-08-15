@@ -30,7 +30,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--ngrid",
-    nargs="+",
+    nargs="*",
     type=int,
     help="Number of grid points per target column.",
 )
@@ -55,7 +55,7 @@ if not isinstance(args.ngrid, Iterable) or len(args.ngrid) == 1:
         args.target
     )
 
-X = pd.read_csv(args.X)
+X = pd.read_csv(args.X, index_col=[0, 1, 2])
 ranges = [
     (
         X[col].min() + s * (X[col].max() - X[col].min()),
@@ -64,7 +64,11 @@ ranges = [
     for col, s, e in zip(args.target, args.start, args.stop)
 ]
 grids = [np.linspace(r[0], r[1], n) for r, n in zip(ranges, args.ngrid)]
-mesh_array = np.stack(np.meshgrid(*grids, indexing="ij"), axis=-1)
+# With no targets, use one empty grid point.  The common code below then
+# expands it against the unique combinations of all (non-target) columns.
+mesh_array = (
+    np.stack(np.meshgrid(*grids, indexing="ij"), axis=-1) if grids else np.empty((1, 0))
+)
 
 other_columns = [col for col in X.columns if col not in args.target]
 if other_columns:
@@ -78,6 +82,7 @@ else:
 grid_shape = mesh_array.shape[:-1]  # e.g. (200, 200)
 G = int(np.prod(grid_shape)) if grid_shape else 1
 grid_indices = np.indices(grid_shape).reshape(len(grid_shape), -1)
+mesh_values = mesh_array.reshape(G, len(args.target))
 
 # Non-target TARGET_COLUMNS get indices based on rank in sorted unique values
 other_target_columns = [col for col in TARGET_COLUMNS if col not in args.target]
@@ -101,15 +106,13 @@ for col in TARGET_COLUMNS:
 
 index = pd.MultiIndex.from_arrays(index_arrays, names=index_names)
 Xpred = pd.DataFrame(
-    np.tile(mesh_array.reshape(-1, len(args.target)), (len(other_values), 1)),
+    np.tile(mesh_values, (len(other_values), 1)),
     columns=args.target,
     index=index,
 )
 
 other_values_expanded = pd.DataFrame(
-    np.repeat(
-        other_values.values, mesh_array.reshape(-1, len(args.target)).shape[0], axis=0
-    ),
+    np.repeat(other_values.values, G, axis=0),
     columns=other_columns,
     index=index,
 )

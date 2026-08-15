@@ -23,7 +23,7 @@ Run `predict-quantiles.py` script to evaluate quantile funtions.
 Help:
 
 ```
-python feature_models/predict-prior_mean.py -h
-python feature_models/predict-mean.py -h
-python feature_models/predict-quantiles.py -h
+python -m feature_models.predict-prior_mean.py -h
+python -m feature_models.predict-mean.py -h
+python -m feature_models.predict-quantiles.py -h
 ```

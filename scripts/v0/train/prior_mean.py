@@ -3,8 +3,9 @@ import logging
 import pathlib
 
 import model.prior as model_module  # Needs PYTHONPATH=scripts/v0
-import pandas as pd
 import torch
+from batch import load_batched_arrays
+from save import save_prior_mean
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -18,6 +19,15 @@ torch.manual_seed(42)
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Feature csv file.")
 parser.add_argument("y", type=pathlib.Path, help="Target csv file.")
+parser.add_argument(
+    "--index-col", type=int, nargs="*", help="Index columns for X and y."
+)
+parser.add_argument(
+    "--batch-col",
+    type=int,
+    nargs="*",
+    help="X CSV column(s) defining batch dimensions.",
+)
 parser.add_argument("--target", type=str, help="Target variable name.")
 parser.add_argument("--model", type=str, help="Model name.")
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
@@ -33,8 +43,14 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-X = torch.tensor(pd.read_csv(args.X).values).float().to(device)
-y = torch.tensor(pd.read_csv(args.y)[args.target].values).float().to(device)
+try:
+    X_arr, y_arr = load_batched_arrays(
+        args.X, args.y, args.target, args.index_col, args.batch_col
+    )
+except ValueError as exc:
+    parser.error(str(exc))
+X = torch.tensor(X_arr).float().to(device)  # (*B, N, D)
+y = torch.tensor(y_arr).float().to(device)  # (*B, N)
 
 dim = X.shape[-1]
 batch_shape = X.shape[:-2]
@@ -56,7 +72,4 @@ for epoch in range(args.num_epochs):
         logger.info(f"Epoch [{epoch + 1}/{args.num_epochs}] Loss: {loss.item():.6f}")
 
 
-torch.save(
-    model.state_dict(),
-    args.out,
-)
+save_prior_mean(model, args.out)
