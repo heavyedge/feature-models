@@ -4,7 +4,6 @@ from gpytorch.means import ConstantMean
 from gpytorch.priors import LogNormalPrior
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
-    IndependentMultitaskVariationalStrategy,
     LMCVariationalStrategy,
     UnwhitenedVariationalStrategy,
 )
@@ -14,8 +13,8 @@ from gpytorch_qr.variational import CenterGapLMCVariationalStrategy
 __all__ = [
     "CenterGapMTGPQR_H",
     "CenterGapMTGPQR_phi",
-    "DirectMTGPQR_H",
-    "DirectMTGPQR_phi",
+    "DirectMTGPQR_LMC_H",
+    "DirectMTGPQR_LMC_phi",
 ]
 
 
@@ -153,7 +152,7 @@ class _DirectMTGPQR_Base(DirectQuantileGP):
         return self.covar_module.base_kernel.lengthscale_prior.scale
 
 
-class DirectMTGPQR_H(_DirectMTGPQR_Base):
+class DirectMTGPQR_LMC_H(_DirectMTGPQR_Base):
     @staticmethod
     def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
         return LMCVariationalStrategy(
@@ -163,7 +162,7 @@ class DirectMTGPQR_H(_DirectMTGPQR_Base):
         )
 
 
-class DirectMTGPQR_phi(_DirectMTGPQR_Base):
+class DirectMTGPQR_LMC_phi(_DirectMTGPQR_Base):
     @staticmethod
     def construct_variational_strategy(base_strategy, num_quantiles, num_latents):
         return LMCVariationalStrategy(

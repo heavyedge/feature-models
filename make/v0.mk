@@ -130,9 +130,9 @@ _temp/v0/%.gpr.pt
 
 ## GPQR
 
-_temp/v0/%.direct_gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
+_temp/v0/%.direct_gpqr_lmc.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model DirectMTGPQR_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.direct_gpqr -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model DirectMTGPQR_LMC_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.direct_gpqr_lmc -o $@
 
 _temp/v0/%.cg_gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
@@ -163,7 +163,7 @@ _temp/v0/%.gpqr.Xpred_1D.csv: _temp/v0/Xpred_1D.csv $(SCRIPTS_v0) models/v0/feat
 _temp/v0/%.gpqr.Xpred_2D.csv: _temp/v0/Xpred_2D.csv $(SCRIPTS_v0) models/v0/feature_models/%.prior_mean.pt models/v0/feature_models/%.gpqr.pt
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $< --index-col 0 1 2 --target $* -o $@
 
-_temp/v0/%.direct_gpqr.Xpred_3D.csv: _temp/v0/Xpred_3D.csv _temp/v0/%.prior_mean.pt _temp/v0/%.direct_gpqr.pt $(SCRIPTS_v0)
+_temp/v0/%.direct_gpqr_lmc.Xpred_3D.csv: _temp/v0/Xpred_3D.csv _temp/v0/%.prior_mean.pt _temp/v0/%.direct_gpqr_lmc.pt $(SCRIPTS_v0)
 	$(GPU_PYTHON) -m models.v0.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 1 2 --target $* -o $@
 
 _temp/v0/%.cg_gpqr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/v0/%.cg_gpqr.pt $(SCRIPTS_v0)
@@ -171,7 +171,7 @@ _temp/v0/%.cg_gpqr.Xtest.csv: _temp/v0/Xtest.csv _temp/v0/%.prior_mean.pt _temp/
 
 # Model selection
 
-benchmarks/v0/quantile_crossing.%.direct_gpqr.csv: scripts/v0/model_selection/crossing.py _temp/v0/%.direct_gpqr.Xpred_3D.csv
+benchmarks/v0/quantile_crossing.%.direct_gpqr_lmc.csv: scripts/v0/model_selection/crossing.py _temp/v0/%.direct_gpqr_lmc.Xpred_3D.csv
 	mkdir -p $(@D)
 	python3 $^ -o $@
 
@@ -205,7 +205,7 @@ _temp/v0/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v
 
 # Examples
 
-examples/v0/Crossing.ipynb: benchmarks/v0/quantile_crossing.H.direct_gpqr.csv benchmarks/v0/quantile_crossing.phi.direct_gpqr.csv .FORCE
+examples/v0/Crossing.ipynb: benchmarks/v0/quantile_crossing.H.direct_gpqr_lmc.csv benchmarks/v0/quantile_crossing.phi.direct_gpqr_lmc.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v0/CV.ipynb: benchmarks/v0/pinball_loss.H.gpr.csv benchmarks/v0/pinball_loss.phi.gpr.csv benchmarks/v0/pinball_loss.H.cg_gpqr.csv benchmarks/v0/pinball_loss.phi.cg_gpqr.csv .FORCE
