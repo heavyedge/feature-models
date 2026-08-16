@@ -15,7 +15,9 @@ PHI_THRESHOLD := 1.0
 
 MODELS_v1 := \
 models/v1/feature_models/H.prior_mean.pt \
-models/v1/feature_models/phi.prior_mean.pt
+models/v1/feature_models/phi.prior_mean.pt \
+models/v1/feature_models/H.gpr.pt \
+models/v1/feature_models/phi.gpr.pt
 
 SCRIPTS_v1 := \
 models/v1/feature_models/prior.py \
@@ -119,6 +121,11 @@ _temp/v1/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.c
 $(SCRIPTS_v1)
 	mkdir -p benchmarks
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.gpr -o $@
+
+models/v1/feature_models/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/X.csv _temp/v1/y.csv models/v1/feature_models/%.prior_mean.pt \
+_temp/v1/%.gpr.pt $(SCRIPTS_v0)
+	mkdir -p $(@D)
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --target $* --model GPR_$* --storage=$(OPTUNA_DB) --study-name=v1/$*.gpr -o $@
 
 # Prediction
 
