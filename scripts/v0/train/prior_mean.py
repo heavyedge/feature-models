@@ -4,7 +4,7 @@ import pathlib
 
 import model.prior as model_module  # Needs PYTHONPATH
 import torch
-from batch import load_batched_arrays
+from train.batch import load_batched_arrays  # Needs PYTHONPATH
 from train.save import save_prior_mean  # Needs PYTHONPATH
 
 logging.basicConfig(

@@ -10,9 +10,9 @@ import model.scale as scaler_module  # Needs PYTHONPATH
 import numpy as np
 import optuna
 import torch
-from batch import load_batched_arrays
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from model.likelihoods import GaussianLikelihood  # Needs PYTHONPATH
+from train.batch import load_batched_arrays  # Needs PYTHONPATH
 from train.save import save_gpr  # Needs PYTHONPATH
 
 logging.basicConfig(

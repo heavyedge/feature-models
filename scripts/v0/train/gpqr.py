@@ -10,14 +10,14 @@ import model.scale as scaler_module  # Needs PYTHONPATH
 import numpy as np
 import optuna
 import torch
-from batch import load_batched_arrays
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
-from inducing import unique_inducing_points_per_fold
 from model.likelihoods import (  # Needs PYTHONPATH
     CenterGapQuantilesLikelihood,
     DirectQuantilesLikelihood,
 )
+from train.batch import load_batched_arrays  # Needs PYTHONPATH
+from train.inducing import unique_inducing_points_per_fold  # Needs PYTHONPATH
 from train.save import save_gpqr  # Needs PYTHONPATH
 
 logging.basicConfig(
