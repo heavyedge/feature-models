@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.3.0rc0] - 2026-08-16
 
 - Model: `gpytorch-qr==0.9.0rc0`
 - Dataset:
@@ -14,8 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-**v0**
-
 - `train/gpqr.py` now has `--num-likelihood-samples` argument.
 - Direct GPQR with independent multitask variational strategy is added.
 - Center-gap GPQR with independent multitask variational strategy is added.
@@ -23,14 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-**v0**
-
 - Direct GPQR is renamed to explicitly specify LMC variational strategy.
 - Center-gap GPQR is renamed to explicitly specify center-gap LMC variational strategy.
 
 ### Fixed
-
-**v0**
 
 - `train/gpqr.py` now removes duplicate inducing points.
 
