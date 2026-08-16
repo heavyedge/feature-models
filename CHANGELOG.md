@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `heavyedge/profiles:v1.0.0rc4`
   - `heavyedge/shape-features:v1.0.0b1`
 
+### Added
+
+**v1**
+
+- `examples/v1/CV.ipynb` is added.
+
+### Changed
+
+**v1**
+
+- GPR models are now `ApproximateGP` with inducing points.
+
 ## [0.3.0rc0] - 2026-08-16
 
 - Model: `gpytorch-qr==0.9.0rc0`

@@ -2,10 +2,11 @@ import argparse
 import logging
 import pathlib
 
-import model.prior as model_module  # Needs PYTHONPATH=scripts/v0
 import torch
-from batch import load_batched_arrays
-from save import save_prior_mean
+
+from models.v0.feature_models import prior as model_module
+from scripts.v0.train.batch import load_batched_arrays
+from scripts.v0.train.save import save_prior_mean
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),

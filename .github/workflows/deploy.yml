@@ -107,6 +107,7 @@ jobs:
           MLXP_ZONE: ${{ secrets.MLXP_ZONE }}
           CPU_REQUEST: ${{ vars.CPU_REQUEST }}
           GPU_REQUEST: ${{ vars.GPU_REQUEST }}
+          MEMORY_REQUEST: ${{ vars.MEMORY_REQUEST }}
         run: |
           event_name="${{ github.event_name }}"
           job_name="feature-models.${GIT_SHA::7}-${event_name//_/}.${{ github.run_id }}-${{ github.run_attempt }}"

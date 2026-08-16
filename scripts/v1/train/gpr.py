@@ -8,18 +8,14 @@ import numpy as np
 import optuna
 import torch
 from gpytorch.mlls import VariationalELBO
-from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
 
-from models.v0.feature_models import gpqr as model_module
-from models.v0.feature_models import load as load_module
-from models.v0.feature_models import scale as scaler_module
-from models.v0.feature_models.likelihoods import (
-    CenterGapQuantilesLikelihood,
-    DirectQuantilesLikelihood,
-)
+from models.v1.feature_models import gpr as model_module
+from models.v1.feature_models import load as load_module
+from models.v1.feature_models import scale as scaler_module
+from models.v1.feature_models.likelihoods import GaussianLikelihood
 from scripts.v0.train.batch import load_batched_arrays
 from scripts.v0.train.inducing import unique_inducing_points_per_fold
-from scripts.v0.train.save import save_gpqr
+from scripts.v1.train.save import save_gpr
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,7 +33,6 @@ BASELINE_PRIOR_PARAMS = {
     "lengthscale_prior_loc": -1.0,
     "lengthscale_prior_scale": 0.5,
 }
-DEFAULT_NUM_LATENTS = 3
 
 parser = argparse.ArgumentParser()
 model_group = parser.add_argument_group("input data and model")
@@ -68,25 +63,10 @@ parser.add_argument(
 )
 model_group.add_argument("--target", type=str, help="Target variable name.")
 model_group.add_argument("--model", type=str, help="Model name.")
-model_group.add_argument(
-    "--quantiles",
-    type=float,
-    nargs="+",
-    help="Quantiles for the model.",
-)
 model_group.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 model_group.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 
 training_group.add_argument("--num-epochs", type=int, help="Number of maximum epochs.")
-training_group.add_argument(
-    "--num-likelihood-samples",
-    type=int,
-    default=10,
-    help=(
-        "Number of latent GP samples used to estimate expected log likelihoods "
-        "during training and validation."
-    ),
-)
 training_group.add_argument(
     "--learning-rate",
     type=float,
@@ -206,6 +186,7 @@ hpo_group.add_argument(
 )
 args = parser.parse_args()
 
+
 has_validation = args.Xval is not None or args.yval is not None
 if (args.Xval is None) != (args.yval is None):
     parser.error("Xval and yval must be provided together.")
@@ -215,8 +196,6 @@ if not has_validation and args.storage is None:
     parser.error("--storage is required when validation data is not provided.")
 if has_validation and args.num_epochs <= 0:
     parser.error("--num-epochs must be positive.")
-if args.num_likelihood_samples <= 0:
-    parser.error("--num-likelihood-samples must be positive.")
 if args.learning_rate <= 0:
     parser.error("--learning-rate must be positive.")
 if args.min_learning_rate < 0 or args.min_learning_rate > args.learning_rate:
@@ -233,12 +212,6 @@ if args.n_trials <= 0:
     parser.error("--n-trials must be positive.")
 if args.n_startup_trials < 0:
     parser.error("--n-startup-trials cannot be negative.")
-if len(args.quantiles) < 2:
-    parser.error("--quantiles must contain at least two values.")
-if not all(np.isfinite(q) and 0 < q < 1 for q in args.quantiles):
-    parser.error("--quantiles values must be finite and in (0, 1).")
-if any(left >= right for left, right in zip(args.quantiles, args.quantiles[1:])):
-    parser.error("--quantiles values must be strictly increasing.")
 if not 0 <= args.pruning_warmup_ratio <= 1:
     parser.error("--pruning-warmup-ratio must be in [0, 1].")
 if not 0 <= args.pruning_patience_ratio <= 1:
@@ -329,51 +302,29 @@ if has_validation:
         Xval_scaled = X_scaler(Xval)
         res_val_scaled = y_scaler(res_val.unsqueeze(-1)).squeeze(-1)
 
-quantiles = torch.tensor(args.quantiles, dtype=torch.float32, device=device)
-central_quantile_idx = np.argmin(np.abs(quantiles.detach().cpu().numpy() - 0.5))
-num_quantiles = len(quantiles)
-num_lower_quantiles = central_quantile_idx
-
 model_class = getattr(model_module, args.model)
 
-if issubclass(model_class, CenterGapQuantileGP):
-    likelihood_class = CenterGapQuantilesLikelihood
-elif issubclass(model_class, DirectQuantileGP):
-    likelihood_class = DirectQuantilesLikelihood
-else:
-    raise ValueError(f"Unknown model class: {model_class}")
-
-
-# Keep the full training set for the ELBO; only the variational inducing set
-# is deduplicated.
 Xtrain_inducing_points = unique_inducing_points_per_fold(Xtrain_scaled)
 
 
-def train_with_hyperparameters(
+def train_with_priors(
     noise_prior_loc,
     noise_prior_scale,
     lengthscale_prior_loc,
     lengthscale_prior_scale,
-    num_latents,
     trial=None,
 ):
-    """Train one GPQR trial and return its best batch-mean validation loss."""
+    """Train one GP trial and return its best batch-mean validation loss."""
     torch.manual_seed(42)
     trial_label = trial.number if trial is not None else "best"
 
-    likelihood = likelihood_class(
-        quantile_levels=quantiles,
-        central_quantile_idx=central_quantile_idx,
-        batch_shape=batch_shape,
+    likelihood = GaussianLikelihood(
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
+        batch_shape=batch_shape,
     ).to(device)
     model = model_class(
-        # Each HPO trial must start from the same immutable inducing set.
         inducing_points=Xtrain_inducing_points.clone().detach(),
-        num_quantiles=num_quantiles,
-        num_lower_quantiles=num_lower_quantiles,
-        num_latents=num_latents,
         batch_shape=batch_shape,
         lengthscale_prior_loc=lengthscale_prior_loc,
         lengthscale_prior_scale=lengthscale_prior_scale,
@@ -414,9 +365,8 @@ def train_with_hyperparameters(
         optimizer.zero_grad()
 
         output = model(Xtrain_scaled)
-        # VariationalELBO returns values over the model's batched folds.
-        with gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples):
-            train_loss = -mll(output, res_train_scaled).mean()
+        # ExactMarginalLogLikelihood returns one value per batched fold.
+        train_loss = -mll(output, res_train_scaled).mean()
         if not torch.isfinite(train_loss):
             save_trial_progress("non_finite_train_loss")
             if trial is not None:
@@ -425,19 +375,15 @@ def train_with_hyperparameters(
         train_loss.backward()
         optimizer.step()
 
-        with (
-            torch.no_grad(),
-            gpytorch.settings.fast_pred_var(),
-            gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples),
-        ):
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
             likelihood.eval()
             model.eval()
             val_log_prob = likelihood.expected_log_prob(
                 res_val_scaled, model(Xval_scaled)
             )
-            # Average observations and quantiles within each fold, then average
-            # the folds so Optuna receives one fold-balanced scalar score.
-            val_loss = -val_log_prob.mean(dim=(-2, -1)).mean()
+            # Average observations within each fold, then average the folds so
+            # Optuna receives one fold-balanced scalar score.
+            val_loss = -val_log_prob.mean(dim=-1).mean()
 
         current_val_loss = val_loss.item()
         training_loss_history.append(train_loss.item())
@@ -512,14 +458,12 @@ def objective(trial):
         args.prior_scale_max,
         log=True,
     )
-    num_latents = trial.suggest_int("num_latents", 2, num_quantiles)
-    val_loss = train_with_hyperparameters(
-        noise_prior_loc,
-        noise_prior_scale,
-        lengthscale_prior_loc,
-        lengthscale_prior_scale,
-        num_latents,
-        trial,
+    val_loss = train_with_priors(
+        noise_prior_loc=noise_prior_loc,
+        noise_prior_scale=noise_prior_scale,
+        lengthscale_prior_loc=lengthscale_prior_loc,
+        lengthscale_prior_scale=lengthscale_prior_scale,
+        trial=trial,
     )
     return val_loss
 
@@ -529,7 +473,6 @@ def train_on_all_data(
     noise_prior_scale,
     lengthscale_prior_loc,
     lengthscale_prior_scale,
-    num_latents,
     num_epochs,
     lr_reductions,
 ):
@@ -542,9 +485,7 @@ def train_on_all_data(
         Xall = Xtrain
         yall = ytrain
 
-    likelihood = likelihood_class(
-        quantile_levels=quantiles,
-        central_quantile_idx=central_quantile_idx,
+    likelihood = GaussianLikelihood(
         batch_shape=batch_shape,
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
@@ -563,9 +504,6 @@ def train_on_all_data(
     inducing_points = unique_inducing_points_per_fold(Xall_scaled)
     model = model_class(
         inducing_points=inducing_points,
-        num_quantiles=num_quantiles,
-        num_lower_quantiles=num_lower_quantiles,
-        num_latents=num_latents,
         batch_shape=batch_shape,
         lengthscale_prior_loc=lengthscale_prior_loc,
         lengthscale_prior_scale=lengthscale_prior_scale,
@@ -584,8 +522,7 @@ def train_on_all_data(
         model.train()
         optimizer.zero_grad()
 
-        with gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples):
-            loss = -mll(model(Xall_scaled), res_all_scaled).mean()
+        loss = -mll(model(Xall_scaled), res_all_scaled).mean()
         if not torch.isfinite(loss):
             raise RuntimeError("Non-finite training loss during final fit.")
         loss.backward()
@@ -664,7 +601,6 @@ if has_validation:
                     args.prior_scale_max,
                 )
             ),
-            "num_latents": int(np.clip(DEFAULT_NUM_LATENTS, 2, num_quantiles)),
         }
         study.enqueue_trial(baseline_params)
     study.optimize(objective, n_trials=args.n_trials)
@@ -678,16 +614,14 @@ best_noise_prior_loc = best_trial.params["noise_prior_loc"]
 best_noise_prior_scale = best_trial.params["noise_prior_scale"]
 best_lengthscale_prior_loc = best_trial.params["lengthscale_prior_loc"]
 best_lengthscale_prior_scale = best_trial.params["lengthscale_prior_scale"]
-best_num_latents = best_trial.params["num_latents"]
 logger.info(
     "Best priors: noise=LogNormal(loc=%.6g, scale=%.6g), "
-    "lengthscale=LogNormal(loc=%.6g, scale=%.6g); num_latents=%d "
+    "lengthscale=LogNormal(loc=%.6g, scale=%.6g) "
     "(validation loss: %.6f)",
     best_noise_prior_loc,
     best_noise_prior_scale,
     best_lengthscale_prior_loc,
     best_lengthscale_prior_scale,
-    best_num_latents,
     best_trial.value,
 )
 
@@ -719,13 +653,12 @@ logger.info(
     best_noise_prior_scale,
     best_lengthscale_prior_loc,
     best_lengthscale_prior_scale,
-    best_num_latents,
     best_epoch,
     best_lr_reductions,
 )
 
-save_gpqr(
-    quantiles,
+
+save_gpr(
     X_scaler,
     y_scaler,
     likelihood,
