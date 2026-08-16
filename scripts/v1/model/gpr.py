@@ -43,6 +43,12 @@ class BaseGP(ApproximateGP):
             batch_shape=batch_shape,
         )
 
+        self.batch_shape = batch_shape
+
+    @property
+    def inducing_points(self):
+        return self.variational_strategy.inducing_points
+
     @property
     def lengthscale_prior_loc(self):
         return self.covar_module.base_kernel.lengthscale_prior.loc

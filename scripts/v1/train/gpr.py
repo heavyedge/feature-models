@@ -15,6 +15,7 @@ import models.v1.feature_models.scale as scaler_module
 from models.v1.feature_models.likelihoods import GaussianLikelihood
 from scripts.v0.train.batch import load_batched_arrays
 from scripts.v0.train.inducing import unique_inducing_points_per_fold
+from scripts.v1.train.save import save_gpr
 
 logging.basicConfig(
     level=logging.INFO,
@@ -653,4 +654,12 @@ logger.info(
     best_lengthscale_prior_scale,
     best_epoch,
     best_lr_reductions,
+)
+
+
+save_gpr(
+    X_scaler,
+    y_scaler,
+    model,
+    args.out,
 )
