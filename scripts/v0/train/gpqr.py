@@ -4,21 +4,21 @@ import pathlib
 import sys
 
 import gpytorch
-import model.gpqr as model_module  # Needs PYTHONPATH
-import model.load as load_module  # Needs PYTHONPATH
-import model.scale as scaler_module  # Needs PYTHONPATH
 import numpy as np
 import optuna
 import torch
+import v0.model.gpqr as model_module  # Needs PYTHONPATH
+import v0.model.load as load_module  # Needs PYTHONPATH
+import v0.model.scale as scaler_module  # Needs PYTHONPATH
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
-from model.likelihoods import (  # Needs PYTHONPATH
+from v0.model.likelihoods import (  # Needs PYTHONPATH
     CenterGapQuantilesLikelihood,
     DirectQuantilesLikelihood,
 )
-from train.batch import load_batched_arrays  # Needs PYTHONPATH
-from train.inducing import unique_inducing_points_per_fold  # Needs PYTHONPATH
-from train.save import save_gpqr  # Needs PYTHONPATH
+from v0.train.batch import load_batched_arrays  # Needs PYTHONPATH
+from v0.train.inducing import unique_inducing_points_per_fold  # Needs PYTHONPATH
+from v0.train.save import save_gpqr  # Needs PYTHONPATH
 
 logging.basicConfig(
     level=logging.INFO,
