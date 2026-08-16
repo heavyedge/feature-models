@@ -56,24 +56,6 @@ class BaseGP(ApproximateGP):
         covar_x = self.covar_module(x)
         return MultivariateNormal(mean_x, covar_x)
 
-    def quantiles(self, x, quantiles):
-        """Estimate quantile levels of response variable.
-
-        Parameters
-        ----------
-        x: torch.Tensor in shape (*B, N, D)
-        quantiles: torch.Tensor in shape (Q,)
-
-        Returns
-        -------
-        quantiles_x: torch.Tensor in shape (*B, N, Q)
-        """
-        pred = self.likelihood(self(x))
-        mean = pred.mean  # (*B, N)
-        std = pred.variance.sqrt()  # (*B, N)
-        z = torch.distributions.Normal(0, 1).icdf(quantiles)  # (Q,)
-        return mean[..., None] + std[..., None] * z  # (*B, N, Q)
-
 
 class GPR_H(BaseGP):
     pass
