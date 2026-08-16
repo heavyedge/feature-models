@@ -94,6 +94,11 @@ models/v1/feature_models/%.py: scripts/v0/model/%.py
 	mkdir -p $(@D)
 	cp $< $@
 
+models/v1/feature_models/gpr.py: scripts/v1/model/gpr.py
+	mkdir -p $(@D)
+	cp $< $@
+
+
 ## Prior mean
 
 _temp/v1/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv
