@@ -132,7 +132,24 @@ _temp/v1/%.gpr.pt $(SCRIPTS_v0)
 _temp/v1/%.prior_mean.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/%.prior_mean.pt
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-prior_mean $< --index-col 0 1 2 --target $* -o $@
 
+_temp/v1/%.gpr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/%.prior_mean.pt models/v1/feature_models/%.gpr.pt
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 --target $* -o $@
+
+_temp/v1/%.gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/%.prior_mean.pt _temp/v1/%.gpr.pt $(SCRIPTS_v1)
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* -o $@
+
+# Model selection
+
+benchmarks/v1/pinball_loss.%.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v1/%.gpr.Xtest.csv _temp/v1/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --type GPR --quantile-levels $(QUANTILES) -o $@
+
 # Examples
 
-examples/v1/Models.ipynb: _temp/v1/X.csv _temp/v1/y.csv _temp/v1/Xpred_1D.csv _temp/v1/H.prior_mean.Xpred_1D.csv _temp/v1/phi.prior_mean.Xpred_1D.csv .FORCE
+examples/v1/CV.ipynb: \
+benchmarks/v1/pinball_loss.H.gpr.csv benchmarks/v1/pinball_loss.phi.gpr.csv \
+.FORCE
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
+
+examples/v1/Models.ipynb: _temp/v1/X.csv _temp/v1/y.csv _temp/v1/Xpred_1D.csv _temp/v1/H.prior_mean.Xpred_1D.csv _temp/v1/phi.prior_mean.Xpred_1D.csv _temp/v1/H.gpr.Xpred_1D.csv _temp/v1/phi.gpr.Xpred_1D.csv .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
