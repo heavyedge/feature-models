@@ -4,16 +4,16 @@ import pathlib
 import sys
 
 import gpytorch
+import model.gpr as model_module  # Needs PYTHONPATH
+import model.load as load_module  # Needs PYTHONPATH
+import model.scale as scaler_module  # Needs PYTHONPATH
 import numpy as np
 import optuna
 import torch
-import v0.model.gpr as model_module  # Needs PYTHONPATH=scripts
-import v0.model.load as load_module  # Needs PYTHONPATH=scripts
-import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
 from batch import load_batched_arrays
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from save import save_gpr  # Needs PYTHONPATH=scripts
-from v0.model.likelihoods import GaussianLikelihood  # Needs PYTHONPATH=scripts
+from model.likelihoods import GaussianLikelihood  # Needs PYTHONPATH
+from train.save import save_gpr  # Needs PYTHONPATH
 
 logging.basicConfig(
     level=logging.INFO,
