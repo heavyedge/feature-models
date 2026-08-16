@@ -267,7 +267,7 @@ _temp/v0/H.gpqr.Xpred_1D.csv _temp/v0/phi.gpqr.Xpred_1D.csv \
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v0/Window.ipynb: \
-_temp/v0/X.csv _temp/v0/y.csv _temp/v0/Xpred_2D.csv _temp/v0/delaunay.Xpred_2D.csv \
+_temp/v0/X.csv _temp/v0/Xpred_2D.csv _temp/v0/delaunay.Xpred_2D.csv \
 _temp/v0/H.marginal.Xpred_2D.csv _temp/v0/phi.marginal.Xpred_2D.csv \
 _temp/v0/joint_probability.Xpred_2D.csv \
 .FORCE

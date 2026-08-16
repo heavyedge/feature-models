@@ -210,17 +210,20 @@ benchmarks/v1/pinball_loss.%.cg_gpqr_cglmc.csv: scripts/v0/model_selection/pinba
 _temp/v1/%.pit.csv: scripts/v0/joint/write-pit.py _temp/v1/y.csv _temp/v1/%.gpqr.X.csv
 	python3 $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
-_temp/v1/H.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v1/H.gpqr.Xpred_2D.csv
+_temp/v1/H.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/H.gpqr.%.csv
 	python3 $^ --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
-_temp/v1/phi.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v1/phi.gpqr.Xpred_2D.csv
+_temp/v1/phi.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/phi.gpqr.%.csv
 	python3 $^ --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
 _temp/v1/H_phi.pit.csv: _temp/v1/H.pit.csv _temp/v1/phi.pit.csv
 	python3 -c "import pandas as pd; H, phi = map(lambda f: pd.read_csv(f), '$^'.split(' ')); pd.concat([H, phi], ignore_index=True).to_csv('$@', index=False)"
 
-_temp/v1/H_phi.marginal.Xpred_2D.csv: _temp/v1/H.marginal.Xpred_2D.csv _temp/v1/phi.marginal.Xpred_2D.csv
+_temp/v1/H_phi.marginal.%.csv: _temp/v1/H.marginal.%.csv _temp/v1/phi.marginal.%.csv
 	python3 -c "import pandas as pd; H, phi = map(lambda f: pd.read_csv(f), '$^'.split(' ')); pd.concat([H, phi], ignore_index=True).to_csv('$@', index=False)"
+
+_temp/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv _temp/v1/H_phi.pit.csv _temp/v1/H_phi.marginal.Xpred_1D.csv
+	python3 $^ --index-col 0 1 2 -o $@
 
 _temp/v1/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_2D.csv _temp/v1/H_phi.pit.csv _temp/v1/H_phi.marginal.Xpred_2D.csv
 	python3 $^ --index-col 0 1 2 -o $@
@@ -244,8 +247,9 @@ _temp/v1/H.gpqr.Xpred_1D.csv _temp/v1/phi.gpqr.Xpred_1D.csv \
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v1/Window.ipynb: \
-_temp/v1/X.csv _temp/v1/y.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
+_temp/v1/X.csv _temp/v1/Xpred_1D.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
 _temp/v1/H.marginal.Xpred_2D.csv _temp/v1/phi.marginal.Xpred_2D.csv \
 _temp/v1/joint_probability.Xpred_2D.csv \
+_temp/v1/joint_probability.Xpred_1D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
