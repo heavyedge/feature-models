@@ -227,7 +227,7 @@ benchmarks/v0/pinball_loss.%.cg_gpqr_cglmc.csv: scripts/v0/model_selection/pinba
 
 # Window prediction
 
-_temp/v0/%.pit.csv: scripts/v0/joint/write-pit.py _temp/v0/ytrain.csv _temp/v0/%.gpqr.X.csv
+_temp/v0/%.pit.csv: scripts/v0/joint/write-pit.py _temp/v0/y.csv _temp/v0/%.gpqr.X.csv
 	python3 $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
 _temp/v0/H.marginal.Xpred_2D.csv: scripts/v0/joint/write-marginal.py _temp/v0/H.gpqr.Xpred_2D.csv
@@ -266,5 +266,9 @@ _temp/v0/H.gpqr.Xpred_1D.csv _temp/v0/phi.gpqr.Xpred_1D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-examples/v0/Window.ipynb: _temp/v0/X.csv _temp/v0/y.csv _temp/v0/Xpred_2D.csv _temp/v0/delaunay.Xpred_2D.csv _temp/v0/H.marginal.Xpred_2D.csv _temp/v0/phi.marginal.Xpred_2D.csv _temp/v0/joint_probability.Xpred_2D.csv .FORCE
+examples/v0/Window.ipynb: \
+_temp/v0/X.csv _temp/v0/Xpred_2D.csv _temp/v0/delaunay.Xpred_2D.csv \
+_temp/v0/H.marginal.Xpred_2D.csv _temp/v0/phi.marginal.Xpred_2D.csv \
+_temp/v0/joint_probability.Xpred_2D.csv \
+.FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
