@@ -16,14 +16,8 @@ pip install -r requirements.txt
 
 Usage:
 
-Run `predict-prior_mean.py` script to evaluate prior mean function.
-Run `predict-mean.py` script to evaluate posterior distribution of mean function.
-Run `predict-quantiles.py` script to evaluate quantile funtions.
-
-Help:
-
 ```
-python -m feature_models.predict-prior_mean.py -h
-python -m feature_models.predict-mean.py -h
-python -m feature_models.predict-quantiles.py -h
+python -m feature_models.predict-prior_mean <args>
+python -m feature_models.predict-gpr <args>
+python -m feature_models.predict-gpqr <args>
 ```

@@ -218,7 +218,7 @@ benchmarks/v0/pinball_loss.%.cg_gpqr_cglmc.csv: scripts/v0/model_selection/pinba
 	mkdir -p $(@D)
 	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
 
-# # Window prediction
+# Window prediction
 
 _temp/v0/%.pit.csv: scripts/v0/joint/write-pit.py _temp/v0/ytrain.csv _temp/v0/%.gpqr.X.csv
 	python3 $^ --index-col 0 --quantiles $(QUANTILES) -o $@
