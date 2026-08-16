@@ -98,14 +98,25 @@ models/v1/feature_models/gpr.py: scripts/v1/model/gpr.py
 	mkdir -p $(@D)
 	cp $< $@
 
+models/v1/feature_models/load.py: scripts/v1/model/load.py
+	mkdir -p $(@D)
+	cp $< $@
+
 ## Prior mean
 
 _temp/v1/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 models/v1/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v1/X.csv _temp/v1/y.csv
 	mkdir -p $(@D)
-	PYTHONPATH=scripts/v0 $(GPU_PYTHON) $^ --index-col 0 1 2 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 1 2 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+
+## GPR
+
+_temp/v1/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/%.prior_mean.pt \
+$(SCRIPTS_v1)
+	mkdir -p benchmarks
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.gpr -o $@
 
 # Prediction
 
