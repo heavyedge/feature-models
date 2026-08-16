@@ -9,7 +9,7 @@ from . import load as load_module
 from .batch import load_batched_features
 
 parser = argparse.ArgumentParser(
-    description="Predict posterior distribution of shape features quantiles using GPR."
+    description="Predict posterior distribution of shape features quantiles using GPQR."
 )
 parser.add_argument(
     "X",
@@ -36,7 +36,7 @@ parser.add_argument(
     type=pathlib.Path,
     nargs="?",
     help=(
-        "Path to the gpr model file."
+        "Path to the gpqr model file."
         "If not passed, default model will be searched using --target option."
     ),
 )
