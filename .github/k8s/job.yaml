@@ -224,11 +224,11 @@ spec:
                     fi
           resources:
             requests:
-              memory: "${MEMORY_REQUEST}"
+              memory: ${MEMORY_REQUEST}
               cpu: "${CPU_REQUEST}"
               nvidia.com/gpu: "${GPU_REQUEST}"
             limits:
-              memory: "${MEMORY_REQUEST}"
+              memory: ${MEMORY_REQUEST}
               cpu: "${CPU_REQUEST}"
               nvidia.com/gpu: "${GPU_REQUEST}"
           command: ["bash", "-euc"]
