@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **v1**
 
+- GPQR models are added.
+
 - `examples/v1/CV.ipynb` is added.
 
 ### Changed
