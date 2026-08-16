@@ -12,11 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `heavyedge/profiles:v1.0.0rc4`
   - `heavyedge/shape-features:v1.0.0b1`
 
-### Added 
+### Added
 
 **v0**
 
 - `train/gpqr.py` now has `--num-likelihood-samples` argument.
+- Direct GPQR with independent multitask variational strategy is added.
+- Center-gap GPQR with independent multitask variational strategy is added.
+- Center-gap GPQR with standard LMC multitask variational strategy is added.
+
+### Changed
+
+**v0**
+
+- Direct GPQR is renamed to explicitly specify LMC variational strategy.
+- Center-gap GPQR is renamed to explicitly specify center-gap LMC variational strategy.
 
 ### Fixed
 
