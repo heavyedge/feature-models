@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Model: `gpytorch-qr==0.9.0rc0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0rc4`
+  - `heavyedge/shape-features:v1.0.0b1`
+
 ## [0.3.0rc0] - 2026-08-16
 
 - Model: `gpytorch-qr==0.9.0rc0`
