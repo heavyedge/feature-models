@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [1.0.0rc0] - 2026-08-17
 
 - Model: `gpytorch-qr==0.9.0rc0`
 - Dataset:
@@ -14,16 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-**v1**
-
 - GPQR models are added.
 
 - `examples/v1/CV.ipynb` is added.
 - `examples/v1/Window.ipynb` is added.
 
 ### Changed
-
-**v1**
 
 - GPR models are now `ApproximateGP` with inducing points.
 
