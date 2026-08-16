@@ -10,9 +10,9 @@ import torch
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
 
-import models.v0.feature_models.gpqr as model_module
-import models.v0.feature_models.load as load_module
-import models.v0.feature_models.scale as scaler_module
+from models.v0.feature_models import gpqr as model_module
+from models.v0.feature_models import load as load_module
+from models.v0.feature_models import scale as scaler_module
 from models.v0.feature_models.likelihoods import (
     CenterGapQuantilesLikelihood,
     DirectQuantilesLikelihood,

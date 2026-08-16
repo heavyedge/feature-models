@@ -9,9 +9,9 @@ import optuna
 import torch
 from gpytorch.mlls import ExactMarginalLogLikelihood
 
-import models.v0.feature_models.gpr as model_module
-import models.v0.feature_models.load as load_module
-import models.v0.feature_models.scale as scaler_module
+from models.v0.feature_models import gpr as model_module
+from models.v0.feature_models import load as load_module
+from models.v0.feature_models import scale as scaler_module
 from models.v0.feature_models.likelihoods import GaussianLikelihood
 from scripts.v0.train.batch import load_batched_arrays
 from scripts.v0.train.save import save_gpr

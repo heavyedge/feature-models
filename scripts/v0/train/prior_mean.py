@@ -4,7 +4,7 @@ import pathlib
 
 import torch
 
-import models.v0.feature_models.prior as model_module
+from models.v0.feature_models import prior as model_module
 from scripts.v0.train.batch import load_batched_arrays
 from scripts.v0.train.save import save_prior_mean
 
