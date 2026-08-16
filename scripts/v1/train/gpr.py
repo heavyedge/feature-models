@@ -542,7 +542,7 @@ def train_on_all_data(
                 loss.item(),
             )
 
-    return X_scaler, y_scaler, model
+    return X_scaler, y_scaler, likelihood, model
 
 
 optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
@@ -646,6 +646,7 @@ logger.info(
 (
     X_scaler,
     y_scaler,
+    likelihood,
     model,
 ) = train_on_all_data(
     best_noise_prior_loc,
@@ -660,6 +661,7 @@ logger.info(
 save_gpr(
     X_scaler,
     y_scaler,
+    likelihood,
     model,
     args.out,
 )
