@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **v0**
 
+- `train/gpqr.py` now has `--num-likelihood-samples` argument.
 - Direct GPQR with independent multitask variational strategy is added.
 - Center-gap GPQR with independent multitask variational strategy is added.
 - Center-gap GPQR with standard LMC multitask variational strategy is added.
@@ -26,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Direct GPQR is renamed to explicitly specify LMC variational strategy.
 - Center-gap GPQR is renamed to explicitly specify center-gap LMC variational strategy.
+
+### Fixed
+
+**v0**
+
+- `train/gpqr.py` now removes duplicate inducing points.
 
 ## [0.3.0.dev1] - 2026-08-15
 

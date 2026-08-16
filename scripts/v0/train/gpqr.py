@@ -13,6 +13,7 @@ import v0.model.scale as scaler_module  # Needs PYTHONPATH=scripts
 from batch import load_batched_arrays
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
+from inducing import unique_inducing_points_per_fold
 from save import save_gpqr
 from v0.model.likelihoods import CenterGapQuantilesLikelihood, DirectQuantilesLikelihood
 
@@ -73,6 +74,15 @@ model_group.add_argument("-o", "--out", type=pathlib.Path, help="Output model fi
 model_group.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
 
 training_group.add_argument("--num-epochs", type=int, help="Number of maximum epochs.")
+training_group.add_argument(
+    "--num-likelihood-samples",
+    type=int,
+    default=10,
+    help=(
+        "Number of latent GP samples used to estimate expected log likelihoods "
+        "during training and validation."
+    ),
+)
 training_group.add_argument(
     "--learning-rate",
     type=float,
@@ -201,6 +211,8 @@ if not has_validation and args.storage is None:
     parser.error("--storage is required when validation data is not provided.")
 if has_validation and args.num_epochs <= 0:
     parser.error("--num-epochs must be positive.")
+if args.num_likelihood_samples <= 0:
+    parser.error("--num-likelihood-samples must be positive.")
 if args.learning_rate <= 0:
     parser.error("--learning-rate must be positive.")
 if args.min_learning_rate < 0 or args.min_learning_rate > args.learning_rate:
@@ -328,6 +340,11 @@ else:
     raise ValueError(f"Unknown model class: {model_class}")
 
 
+# Keep the full training set for the ELBO; only the variational inducing set
+# is deduplicated.
+Xtrain_inducing_points = unique_inducing_points_per_fold(Xtrain_scaled)
+
+
 def train_with_hyperparameters(
     noise_prior_loc,
     noise_prior_scale,
@@ -348,7 +365,8 @@ def train_with_hyperparameters(
         noise_prior_scale=noise_prior_scale,
     ).to(device)
     model = model_class(
-        inducing_points=Xtrain_scaled.clone().detach(),
+        # Each HPO trial must start from the same immutable inducing set.
+        inducing_points=Xtrain_inducing_points.clone().detach(),
         num_quantiles=num_quantiles,
         num_lower_quantiles=num_lower_quantiles,
         num_latents=num_latents,
@@ -393,7 +411,8 @@ def train_with_hyperparameters(
 
         output = model(Xtrain_scaled)
         # VariationalELBO returns values over the model's batched folds.
-        train_loss = -mll(output, res_train_scaled).mean()
+        with gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples):
+            train_loss = -mll(output, res_train_scaled).mean()
         if not torch.isfinite(train_loss):
             save_trial_progress("non_finite_train_loss")
             if trial is not None:
@@ -402,7 +421,11 @@ def train_with_hyperparameters(
         train_loss.backward()
         optimizer.step()
 
-        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+        with (
+            torch.no_grad(),
+            gpytorch.settings.fast_pred_var(),
+            gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples),
+        ):
             likelihood.eval()
             model.eval()
             val_log_prob = likelihood.expected_log_prob(
@@ -533,7 +556,7 @@ def train_on_all_data(
         res_all_scaled = y_scaler((yall - mean(Xall)).unsqueeze(-1)).squeeze(-1)
     y_scaler.eval()
 
-    inducing_points = Xall_scaled.clone().detach()
+    inducing_points = unique_inducing_points_per_fold(Xall_scaled)
     model = model_class(
         inducing_points=inducing_points,
         num_quantiles=num_quantiles,
@@ -557,7 +580,8 @@ def train_on_all_data(
         model.train()
         optimizer.zero_grad()
 
-        loss = -mll(model(Xall_scaled), res_all_scaled).mean()
+        with gpytorch.settings.num_likelihood_samples(args.num_likelihood_samples):
+            loss = -mll(model(Xall_scaled), res_all_scaled).mean()
         if not torch.isfinite(loss):
             raise RuntimeError("Non-finite training loss during final fit.")
         loss.backward()

@@ -4,6 +4,7 @@ QUANTILES := 0.05 0.25 0.5 0.75 0.95
 NUM_LOWER_QUANTILES := 2
 NUM_LATENTS := 3
 
+N_LIKELIHOOD_SAMPLES := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),4,64)
 N_EPOCHS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_FOLDS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
@@ -132,28 +133,29 @@ _temp/v0/%.gpr.pt
 
 _temp/v0/%.direct_gpqr_independent.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model DirectMTGPQR_Independent_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.direct_gpqr_independent -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model DirectMTGPQR_Independent_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.direct_gpqr_independent -o $@
 
 _temp/v0/%.direct_gpqr_lmc.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model DirectMTGPQR_LMC_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.direct_gpqr_lmc -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model DirectMTGPQR_LMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.direct_gpqr_lmc -o $@
 
 _temp/v0/%.cg_gpqr_independent.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_Independent_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_independent -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_Independent_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_independent -o $@
 
 _temp/v0/%.cg_gpqr_lmc.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_LMC_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_lmc -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_LMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_lmc -o $@
 
 _temp/v0/%.cg_gpqr_cglmc.pt: scripts/v0/train/gpqr.py _temp/v0/Xtrain.csv _temp/v0/ytrain.csv _temp/v0/Xval.csv _temp/v0/yval.csv _temp/v0/%.prior_mean.pt
 	mkdir -p benchmarks
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_CenterGapLMC_$* --quantiles $(QUANTILES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_cglmc -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_CenterGapLMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_cglmc -o $@
 
 models/v0/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/X.csv _temp/v0/y.csv models/v0/feature_models/%.prior_mean.pt \
 _temp/v0/%.cg_gpqr_cglmc.pt
 	mkdir -p $(@D)
-	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --target $* --model CenterGapMTGPQR_CenterGapLMC_$* --quantiles $(QUANTILES) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_cglmc -o $@
+	PYTHONPATH=scripts $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --target $* --model CenterGapMTGPQR_CenterGapLMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_cglmc -o $@
+
 
 # Prediction
 
