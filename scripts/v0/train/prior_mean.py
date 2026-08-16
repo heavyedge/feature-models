@@ -3,9 +3,10 @@ import logging
 import pathlib
 
 import torch
-import v0.model.prior as model_module  # Needs PYTHONPATH
-from v0.train.batch import load_batched_arrays  # Needs PYTHONPATH
-from v0.train.save import save_prior_mean  # Needs PYTHONPATH
+
+import models.v0.feature_models.prior as model_module
+from scripts.v0.train.batch import load_batched_arrays
+from scripts.v0.train.save import save_prior_mean
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),

@@ -7,13 +7,14 @@ import gpytorch
 import numpy as np
 import optuna
 import torch
-import v0.model.gpr as model_module  # Needs PYTHONPATH
-import v0.model.load as load_module  # Needs PYTHONPATH
-import v0.model.scale as scaler_module  # Needs PYTHONPATH
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from v0.model.likelihoods import GaussianLikelihood  # Needs PYTHONPATH
-from v0.train.batch import load_batched_arrays  # Needs PYTHONPATH
-from v0.train.save import save_gpr  # Needs PYTHONPATH
+
+import models.v0.feature_models.gpr as model_module
+import models.v0.feature_models.load as load_module
+import models.v0.feature_models.scale as scaler_module
+from models.v0.feature_models.likelihoods import GaussianLikelihood
+from scripts.v0.train.batch import load_batched_arrays
+from scripts.v0.train.save import save_gpr
 
 logging.basicConfig(
     level=logging.INFO,

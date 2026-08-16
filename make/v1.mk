@@ -104,12 +104,14 @@ models/v1/feature_models/load.py: scripts/v1/model/load.py
 
 ## Prior mean
 
-_temp/v1/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 --batch-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+_temp/v1/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv \
+$(SCRIPTS_v0)
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
-models/v1/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v1/X.csv _temp/v1/y.csv
+models/v1/feature_models/%.prior_mean.pt: scripts/v0/train/prior_mean.py _temp/v1/X.csv _temp/v1/y.csv \
+$(SCRIPTS_v0)
 	mkdir -p $(@D)
-	PYTHONPATH=scripts $(GPU_PYTHON) $^ --index-col 0 1 2 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 1 2 --target $* --model PriorMean_$* --num-epochs $(N_EPOCHS) -o $@
 
 ## GPR
 
