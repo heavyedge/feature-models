@@ -3,7 +3,7 @@ scipy
 torch
 scikit-learn
 gpytorch
-gpytorch-qr==0.9.0rc0
+gpytorch-qr==0.9.0
 pandas
 optuna
 xarray
