@@ -16,20 +16,26 @@ This repository provides architectures for edge shape models, scripts to train a
 
 ### Cloning the repository
 
-You need:
-
-- `git`
-- Python runtime with `pip`
-
 Run the following commands to clone the repository and install the necessary requirements.
 
 ```sh
 git clone git@github.com:heavyedge/feature-models.git
 cd feature-models
+```
+
+### Installing Python dependencies
+
+Run:
+
+```sh
 pip install -r requirements.txt
 ```
 
 ### Downloading the dataset (Optional)
+
+You need:
+
+- `uv`
 
 Run the following commands to download the process variable and shape feature datasets in the `_data` directory.
 
@@ -91,10 +97,6 @@ To check their outputs, you must acquire the built example notebooks.
 You can either download the built notebooks from the [GitHub release](https://github.com/heavyedge/feature-models/releases) artifacts, or build the notebooks yourself if you have acquired the preprocessed data.
 
 #### Building the notebooks
-
-You need:
-
-- `make`
 
 ```sh
 pip install -r examples/requirements.txt
