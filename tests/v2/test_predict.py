@@ -1,8 +1,6 @@
 import subprocess
 import sys
 
-import pandas as pd
-
 
 def test_predict_priormean(models_path, Xtest_path, tmp_path):
     output_path = tmp_path / "predict.csv"
