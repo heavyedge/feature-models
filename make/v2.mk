@@ -133,6 +133,15 @@ _temp/v2/prior_mean.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/
 _temp/v2/gpr.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/feature_models/prior_mean.pt models/v2/feature_models/gpr.pt
 	$(GPU_PYTHON) -m models.v2.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
+_temp/v2/gpr_%.Xtest.csv: _temp/v2/Xtest.csv _temp/v2/prior_mean.pt _temp/v2/gpr_%.pt $(SCRIPTS_v2)
+	$(GPU_PYTHON) -m models.v2.feature_models.predict-gpr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 -o $@
+
+# Model selection
+
+benchmarks/v2/nlpd.gpr_%.csv: scripts/v2/model_selection/nlpd.py _temp/v2/gpr_%.Xtest.csv _temp/v2/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --index-col 0 -o $@
+
 # Examples
 
 examples/v2/Models.ipynb: \
