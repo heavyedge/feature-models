@@ -35,3 +35,23 @@ _temp/v2/shape_features.csv: $(wildcard _data/v1/shape_features/all_profiles/dat
 	)
 	df.to_csv("$@", index=False)
 	'
+
+_temp/v2/X.csv: scripts/v0/data/write-X.py _temp/v2/dimless.csv
+	python3 $^ -o $@
+
+_temp/v2/y.csv: scripts/v0/data/write-y.py _temp/v2/X.csv _temp/v2/shape_features.csv
+	python3 $^ --index-col 0 1 2 -o $@
+
+_temp/v2/Xsplit.csv: scripts/v0/data/split-X.py _temp/v2/X.csv
+	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds 1 --random-state=42 -o $@
+
+_temp/v2/ysplit.csv: scripts/v0/data/write-y.py _temp/v2/Xsplit.csv _temp/v2/shape_features.csv
+	python3 $^ --index-col 0 1 2 3 4 -o $@
+
+define SPLIT_v2
+_temp/v2/X$(1).csv: _temp/v2/Xsplit.csv
+	python3 -c "import pandas as pd; df = pd.read_csv('$$<'); mask = df['split'] == '$(1)'; df.loc[mask, ['fold', 'gap_to_thickness_ratio', 'capillary_number', 'cosine_of_contact_angle']].to_csv('$$@', index=False)"
+_temp/v2/y$(1).csv: _temp/v2/ysplit.csv
+	python3 -c "import pandas as pd; df = pd.read_csv('$$<'); mask = df['split'] == '$(1)'; df.loc[mask, ['fold', 'H', 'phi_1', 'phi_3']].to_csv('$$@', index=False)"
+endef
+$(foreach split,train val test,$(eval $(call SPLIT_v2,$(split))))
