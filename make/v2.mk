@@ -1,6 +1,9 @@
 .PHONY: models-v2 examples-v2 test-v2
 
-models-v1:
+SCRIPTS_v2 := \
+models/v2/feature_models/prior.py
+
+models-v2:
 
 examples-v2:
 
@@ -55,3 +58,15 @@ _temp/v2/y$(1).csv: _temp/v2/ysplit.csv
 	python3 -c "import pandas as pd; df = pd.read_csv('$$<'); mask = df['split'] == '$(1)'; df.loc[mask, ['fold', 'H', 'phi_1', 'phi_3']].to_csv('$$@', index=False)"
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v2,$(split))))
+
+# Models
+
+models/v2/feature_models/%.py: scripts/v2/model/%.py
+	mkdir -p $(@D)
+	cp $< $@
+
+## Prior mean
+
+_temp/v2/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv \
+$(SCRIPTS_v2)
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target H phi_1 phi_3 --model PriorMean --num-epochs $(N_EPOCHS) -o $@

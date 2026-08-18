@@ -4,12 +4,19 @@
 
 - Trained on mean profile shape features.
 - X : `Rgt`, `Ca`, `cos(theta)`.
-- y : `H`, `b`.
-- y are independent.
+- y : `H`, `phi`.
+- y are modeled using single-output models.
 
 # v1
 
 - Trained on all profile shape features.
 - X : `Rgt`, `Ca`, `cos(theta)`.
-- y : `H`, `b`.
-- y are independent.
+- y : `H`, `phi`.
+- y are modeled using single-output models.
+
+# v2
+
+- Trained on all profile shape features.
+- X : `Rgt`, `Ca`, `cos(theta)`.
+- y : `H`, `phi_1`, `phi_3`.
+- y are modeled using a multi-output model.
