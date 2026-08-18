@@ -340,7 +340,6 @@ num_lower_quantiles = central_quantile_idx
 # Keep the full training set for the ELBO; only the variational inducing set
 # is deduplicated.
 Xtrain_inducing_points = unique_inducing_points_per_fold(Xtrain_scaled)
-print(Xtrain_inducing_points.shape)
 
 
 def train_with_hyperparameters(

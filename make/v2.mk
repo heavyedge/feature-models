@@ -27,7 +27,8 @@ models/v2/feature_models/gpqr.py \
 models/v2/feature_models/likelihoods.py \
 models/v2/feature_models/load.py \
 models/v2/feature_models/predict-prior_mean.py \
-models/v2/feature_models/predict-gpr.py
+models/v2/feature_models/predict-gpr.py \
+models/v2/feature_models/predict-gpqr.py
 
 models-v2: $(MODELS_v2) $(SCRIPTS_v2)
 
@@ -150,6 +151,9 @@ _temp/v2/gpr.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/feature
 _temp/v2/gpr_%.Xtest.csv: _temp/v2/Xtest.csv _temp/v2/prior_mean.pt _temp/v2/gpr_%.pt $(SCRIPTS_v2)
 	$(GPU_PYTHON) -m models.v2.feature_models.predict-gpr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 -o $@
 
+_temp/v2/gpqr.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/feature_models/prior_mean.pt models/v2/feature_models/gpqr.pt
+	$(GPU_PYTHON) -m models.v2.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
+
 # Model selection
 
 benchmarks/v2/rmse.gpr_%.csv: scripts/v2/model_selection/rmse.py _temp/v2/gpr_%.Xtest.csv _temp/v2/ytest.csv
@@ -172,5 +176,6 @@ examples/v2/Models.ipynb: \
 _temp/v2/X.csv _temp/v2/y.csv _temp/v2/Xpred_1D.csv \
 _temp/v2/prior_mean.Xpred_1D.csv \
 _temp/v2/gpr.Xpred_1D.csv \
+_temp/v2/gpqr.Xpred_1D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@

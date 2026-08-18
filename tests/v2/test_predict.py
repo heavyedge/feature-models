@@ -36,3 +36,21 @@ def test_predict_gpr(models_path, Xtest_path, tmp_path):
         cwd=models_path,
     )
     assert output_path.exists()
+
+
+def test_predict_gpqr(models_path, Xtest_path, tmp_path):
+    output_path = tmp_path / "predicted-gpqr.csv"
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "feature_models.predict-gpqr",
+            str(Xtest_path),
+            "--out",
+            str(output_path),
+        ],
+        check=True,
+        cwd=models_path,
+    )
+    assert output_path.exists()
