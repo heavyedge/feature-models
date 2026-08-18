@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Optuna now catches `torch.LinAlgError`.
 
+## [0.3.0rc1] - Unreleased
+
+- Model: `gpytorch-qr==0.9.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0`
+  - `heavyedge/shape-features:v1.0.0b1`
+
+### Changed
+
+- Default GPQR model now uses independent multitask latent functions.
+
+### Fixed
+
+- Optuna now catches `torch.LinAlgError`.
+
 ## [1.0.0rc0] - 2026-08-17
 
 - Model: `gpytorch-qr==0.9.0rc0`
