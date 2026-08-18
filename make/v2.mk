@@ -138,5 +138,6 @@ _temp/v2/gpr.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/feature
 examples/v2/Models.ipynb: \
 _temp/v2/X.csv _temp/v2/y.csv _temp/v2/Xpred_1D.csv \
 _temp/v2/prior_mean.Xpred_1D.csv \
+_temp/v2/gpr.Xpred_1D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
