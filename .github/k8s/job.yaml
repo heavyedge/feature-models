@@ -349,6 +349,8 @@ spec:
               run_step "Container setup" install_dependencies
               run_step "Source checkout" checkout_source
 
+              pip install uv
+              uv pip install --system -r requirements.txt -r examples/requirements.txt
               run_step "Build environment setup" bash -euo pipefail ./setup.sh
               run_step "Setup PostgreSQL" bash -euo pipefail .github/k8s/setup-postgres.sh
 

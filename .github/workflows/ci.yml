@@ -20,12 +20,9 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: set up uv
-        uses: astral-sh/setup-uv@v5
-
       - name: install dependencies
         run: |
-          uv pip install --system flake8 "black[jupyter]" isort
+          pip install flake8 "black[jupyter]" isort
 
       - name: lint with flake8
         run: |
@@ -55,9 +52,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: set up uv
+        uses: astral-sh/setup-uv@v5
+
       - run: HEAVYEDGE_TEST_MODE=1 ./setup.sh
         env:
           HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+
+      - name: install dependencies
+        run: uv pip install --system -r requirements.txt
 
       - name: build models
         run: HEAVYEDGE_TEST_MODE=1 make models
@@ -114,9 +117,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: set up uv
+        uses: astral-sh/setup-uv@v5
+
       - run: HEAVYEDGE_TEST_MODE=1 ./setup.sh
         env:
           HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+
+      - name: install dependencies
+        run: uv pip install --system -r requirements.txt -r examples/requirements.txt
 
       - uses: actions/download-artifact@v4
         with:
@@ -141,9 +150,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: set up uv
-        uses: astral-sh/setup-uv@v5
-
       - uses: actions/download-artifact@v4
         with:
           name: models
@@ -155,8 +161,9 @@ jobs:
       - name: install package
         run: |
           for requirements in models/v*/requirements.txt; do
-            uv pip install --system -r "$requirements"
+            pip install -r "$requirements"
           done
+          pip install pytest
 
       - name: test models in inference environment
-        run: uv pip install --system pytest && HEAVYEDGE_TEST_MODE=1 make tests
+        run: HEAVYEDGE_TEST_MODE=1 make tests
