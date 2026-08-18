@@ -21,8 +21,9 @@ SCRIPTS_v2 := \
 models/v2/feature_models/batch.py \
 models/v2/feature_models/scale.py \
 models/v2/feature_models/prior.py \
-models/v2/feature_models/likelihoods.py \
 models/v2/feature_models/gpr.py \
+models/v2/feature_models/gpqr.py \
+models/v2/feature_models/likelihoods.py \
 models/v2/feature_models/load.py \
 models/v2/feature_models/predict-prior_mean.py \
 models/v2/feature_models/predict-gpr.py
@@ -124,6 +125,13 @@ models/v2/feature_models/gpr.pt: scripts/v2/train/gpr.py _temp/v2/X.csv _temp/v2
 _temp/v2/gpr_independent.pt $(SCRIPTS_v2)
 	mkdir -p $(@D)
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --model GPR_Independent --storage=$(OPTUNA_DB) --study-name=v2/gpr.independent -o $@
+
+## GPQR
+
+_temp/v2/gpqr_independent.pt: scripts/v2/train/gpqr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
+$(SCRIPTS_v2)
+	mkdir -p benchmarks
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_independent -o $@
 
 # Prediction
 
