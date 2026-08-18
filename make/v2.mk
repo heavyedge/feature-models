@@ -1,9 +1,12 @@
 .PHONY: models-v2 examples-v2 test-v2
 
+MODELS_v2 := \
+models/v2/feature_models/prior_mean.pt
+
 SCRIPTS_v2 := \
 models/v2/feature_models/prior.py
 
-models-v2:
+models-v2: $(MODELS_v2) $(SCRIPTS_v2)
 
 examples-v2:
 
@@ -69,4 +72,9 @@ models/v2/feature_models/%.py: scripts/v2/model/%.py
 
 _temp/v2/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv \
 $(SCRIPTS_v2)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --target H phi_1 phi_3 --model PriorMean --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --model PriorMean --num-epochs $(N_EPOCHS) -o $@
+
+models/v2/feature_models/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v2/X.csv _temp/v2/y.csv \
+$(SCRIPTS_v2)
+	mkdir -p $(@D)
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 1 2 --model PriorMean --num-epochs $(N_EPOCHS) -o $@

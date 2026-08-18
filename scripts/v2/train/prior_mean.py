@@ -4,6 +4,10 @@ import pathlib
 
 import torch
 
+from models.v2.feature_models import prior as model_module
+from scripts.v0.train.save import save_prior_mean
+from scripts.v2.train.batch import load_batched_arrays
+
 logging.basicConfig(
     level=getattr(logging, "INFO"),
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -25,7 +29,6 @@ parser.add_argument(
     nargs="*",
     help="X CSV column(s) defining batch dimensions.",
 )
-parser.add_argument("--target", type=str, nargs="+", help="Target variable name.")
 parser.add_argument("--model", type=str, help="Model name.")
 parser.add_argument("--num-epochs", type=int, help="Number of training epochs.")
 parser.add_argument(
@@ -39,3 +42,36 @@ if args.device is None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 else:
     device = torch.device(args.device)
+
+TARGET = ["H", "phi_1", "phi_3"]
+
+try:
+    X_arr, y_arr = load_batched_arrays(
+        args.X, args.y, TARGET, args.index_col, args.batch_col
+    )
+except ValueError as exc:
+    parser.error(str(exc))
+X = torch.tensor(X_arr).float().to(device)  # (*B, N, D)
+y = torch.tensor(y_arr).float().to(device)  # (*B, N, len(TARGET))
+
+dim = X.shape[-1]
+batch_shape = X.shape[:-2]
+
+PriorMean = getattr(model_module, args.model)
+model = PriorMean(batch_shape=batch_shape).to(device)
+
+# Train
+model.train()
+optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+loss_fn = torch.nn.MSELoss()
+for epoch in range(args.num_epochs):
+    optimizer.zero_grad()
+    output = model(X)
+    loss = loss_fn(output, y)
+    loss.backward()
+    optimizer.step()
+    if (epoch + 1) % 100 == 0:
+        logger.info(f"Epoch [{epoch + 1}/{args.num_epochs}] Loss: {loss.item():.6f}")
+
+
+save_prior_mean(model, args.out)
