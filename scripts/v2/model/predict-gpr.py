@@ -102,7 +102,8 @@ with torch.no_grad():
 
         prior_mean = prior_mean_model(X_chunk)
         X_scaled = X_scaler(X_chunk)
-        scaled_res_posterior = gpr_model(X_scaled)
+        scaled_f_posterior = gpr_model(X_scaled)
+        scaled_y_posterior = likelihood(scaled_f_posterior)
 
         chunk_size = X_chunk.shape[-2]
         expected_shape = X_chunk.shape[:-2] + (chunk_size, len(TARGET_COLUMNS))
@@ -111,26 +112,45 @@ with torch.no_grad():
                 "unexpected prior-mean output shape "
                 f"{tuple(prior_mean.shape)}; expected {tuple(expected_shape)}"
             )
-        if scaled_res_posterior.mean.shape != expected_shape:
+        if scaled_f_posterior.mean.shape != expected_shape:
             parser.error(
-                "unexpected GPR posterior mean shape "
-                f"{tuple(scaled_res_posterior.mean.shape)}; "
+                "unexpected latent posterior mean shape "
+                f"{tuple(scaled_f_posterior.mean.shape)}; "
                 f"expected {tuple(expected_shape)}"
             )
-        if scaled_res_posterior.variance.shape != expected_shape:
+        if scaled_f_posterior.variance.shape != expected_shape:
             parser.error(
-                "unexpected GPR posterior variance shape "
-                f"{tuple(scaled_res_posterior.variance.shape)}; "
+                "unexpected latent posterior variance shape "
+                f"{tuple(scaled_f_posterior.variance.shape)}; "
+                f"expected {tuple(expected_shape)}"
+            )
+        if scaled_y_posterior.mean.shape != expected_shape:
+            parser.error(
+                "unexpected predictive posterior mean shape "
+                f"{tuple(scaled_y_posterior.mean.shape)}; "
+                f"expected {tuple(expected_shape)}"
+            )
+        if scaled_y_posterior.variance.shape != expected_shape:
+            parser.error(
+                "unexpected predictive posterior variance shape "
+                f"{tuple(scaled_y_posterior.variance.shape)}; "
                 f"expected {tuple(expected_shape)}"
             )
 
-        residual_mean = y_scaler.inverse_transform(scaled_res_posterior.mean)
-        residual_std = (
-            scaled_res_posterior.variance.sqrt() * y_scaler.X_scale.abs().unsqueeze(-2)
+        y_scale = y_scaler.X_scale.abs().unsqueeze(-2)
+        latent_mean = prior_mean + y_scaler.inverse_transform(scaled_f_posterior.mean)
+        latent_std = scaled_f_posterior.variance.sqrt() * y_scale
+        predictive_mean = prior_mean + y_scaler.inverse_transform(
+            scaled_y_posterior.mean
         )
-
-        posterior_mean = prior_mean + residual_mean
-        chunk_result = torch.stack((posterior_mean, residual_std), dim=-1).cpu().numpy()
+        predictive_std = scaled_y_posterior.variance.sqrt() * y_scale
+        chunk_result = (
+            torch.stack(
+                (latent_mean, latent_std, predictive_mean, predictive_std), dim=-1
+            )
+            .cpu()
+            .numpy()
+        )
         result_shape = chunk_result.shape[:-1]  # (*B, N, T)
         batch_shape = chunk_result.shape[:-3]
         if batch_shape:
@@ -151,12 +171,14 @@ with torch.no_grad():
             "batch": batch,
             "target": np.broadcast_to(
                 np.asarray(TARGET_COLUMNS).reshape(
-                    (1,) * (posterior_mean.ndim - 1) + (-1,)
+                    (1,) * (latent_mean.ndim - 1) + (-1,)
                 ),
                 result_shape,
             ).ravel(),
-            "mean": chunk_result[..., 0].ravel(),
-            "std": chunk_result[..., 1].ravel(),
+            "latent_mean": chunk_result[..., 0].ravel(),
+            "latent_std": chunk_result[..., 1].ravel(),
+            "predictive_mean": chunk_result[..., 2].ravel(),
+            "predictive_std": chunk_result[..., 3].ravel(),
         }
 
         pd.DataFrame(data).to_csv(
@@ -168,6 +190,14 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    pd.DataFrame(columns=["index", "batch", "target", "mean", "std"]).to_csv(
-        args.out, index=False
-    )
+    pd.DataFrame(
+        columns=[
+            "index",
+            "batch",
+            "target",
+            "latent_mean",
+            "latent_std",
+            "predictive_mean",
+            "predictive_std",
+        ]
+    ).to_csv(args.out, index=False)
