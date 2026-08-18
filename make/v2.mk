@@ -15,7 +15,8 @@ PHI_THRESHOLD := 1.0
 
 MODELS_v2 := \
 models/v2/feature_models/prior_mean.pt \
-models/v2/feature_models/gpr.pt
+models/v2/feature_models/gpr.pt \
+models/v2/feature_models/gpqr.pt
 
 SCRIPTS_v2 := \
 models/v2/feature_models/batch.py \
@@ -132,6 +133,11 @@ _temp/v2/gpqr_independent.pt: scripts/v2/train/gpqr.py _temp/v2/Xtrain.csv _temp
 $(SCRIPTS_v2)
 	mkdir -p benchmarks
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_independent -o $@
+
+models/v2/feature_models/gpqr.pt: scripts/v2/train/gpqr.py _temp/v2/X.csv _temp/v2/y.csv models/v2/feature_models/prior_mean.pt \
+_temp/v2/gpqr_independent.pt $(SCRIPTS_v2)
+	mkdir -p $(@D)
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_independent -o $@
 
 # Prediction
 
