@@ -1,5 +1,18 @@
 .PHONY: models-v2 examples-v2 test-v2
 
+QUANTILES := 0.05 0.25 0.5 0.75 0.95
+NUM_LOWER_QUANTILES := 2
+NUM_LATENTS := 3
+
+N_LIKELIHOOD_SAMPLES := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),4,64)
+N_EPOCHS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
+N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
+N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
+N_TRIALS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
+
+H_THRESHOLD := 1.1
+PHI_THRESHOLD := 1.0
+
 MODELS_v2 := \
 models/v2/feature_models/prior_mean.pt
 
@@ -66,6 +79,9 @@ _temp/v2/y$(1).csv: _temp/v2/ysplit.csv
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v2,$(split))))
 
+_temp/v2/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v2/X.csv
+	python3 $^ --target gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
+
 # Models
 
 models/v2/feature_models/%.py: scripts/v2/model/%.py
@@ -86,3 +102,16 @@ models/v2/feature_models/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v2/
 $(SCRIPTS_v2)
 	mkdir -p $(@D)
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 1 2 --model PriorMean --num-epochs $(N_EPOCHS) -o $@
+
+# Prediction
+
+_temp/v2/prior_mean.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/feature_models/prior_mean.pt
+	$(GPU_PYTHON) -m models.v2.feature_models.predict-prior_mean $< --index-col 0 1 2 -o $@
+
+# Examples
+
+examples/v2/Models.ipynb: \
+_temp/v2/X.csv _temp/v2/y.csv _temp/v2/Xpred_1D.csv \
+_temp/v2/prior_mean.Xpred_1D.csv \
+.FORCE
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
