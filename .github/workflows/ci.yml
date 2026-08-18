@@ -36,131 +36,16 @@ jobs:
         run: |
           isort --check .
 
-  train-models:
+  models:
 
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
-
-      - name: set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.12"
-
-      - name: set up uv
-        uses: astral-sh/setup-uv@v5
-
-      - run: HEAVYEDGE_TEST_MODE=1 ./setup.sh
-        env:
-          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-
-      - name: install dependencies
-        run: uv pip install --system -r requirements.txt
-
-      - name: build models
-        run: HEAVYEDGE_TEST_MODE=1 make models
-
-      - name: test models in build environment
-        run: HEAVYEDGE_TEST_MODE=1 make tests
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: models
-          path: models/**
-          retention-days: 1
-
-  find-notebooks:
-
-    runs-on: ubuntu-latest
-
-    outputs:
-      notebooks: ${{ steps.list.outputs.notebooks }}
-
-    steps:
-
-      - name: get repo
-        uses: actions/checkout@v3
-
-      - name: list notebooks
-        id: list
-        run: |
-          notebooks=$(find examples -name "*.ipynb" | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "notebooks=$notebooks" >> $GITHUB_OUTPUT
-
-  build-notebooks:
-
-    needs:
-      - train-models
-      - find-notebooks
-
-    runs-on: ubuntu-latest
+    name: models (${{ matrix.version }})
 
     strategy:
       fail-fast: false
       matrix:
-        notebook: ${{ fromJson(needs.find-notebooks.outputs.notebooks) }}
+        version: [v0, v1, v2]
 
-    steps:
-
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
-
-      - name: set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.12"
-
-      - name: set up uv
-        uses: astral-sh/setup-uv@v5
-
-      - run: HEAVYEDGE_TEST_MODE=1 ./setup.sh
-        env:
-          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-
-      - name: install dependencies
-        run: uv pip install --system -r requirements.txt -r examples/requirements.txt
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: models
-          path: models
-
-      - run: HEAVYEDGE_TEST_MODE=1 make ${{ matrix.notebook }}
-
-  test-model:
-
-    needs: train-models
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: get repo
-        uses: actions/checkout@v3
-
-      - name: set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.12"
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: models
-          path: models
-
-      - name: install package
-        run: |
-          for requirements in models/v*/requirements.txt; do
-            pip install -r "$requirements"
-          done
-          pip install pytest
-
-      - name: test models in inference environment
-        run: HEAVYEDGE_TEST_MODE=1 PREBUILT_MODELS=1 make tests
+    uses: ./.github/workflows/ci-models.yml
+    with:
+      version: ${{ matrix.version }}
+    secrets: inherit
