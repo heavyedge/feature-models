@@ -15,6 +15,8 @@ class PriorMean(torch.nn.Module):
     phi_i follow a simple linear model.
     """
 
+    output_names = ("H", "phi_1", "phi_3")
+
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
         # Initial values are heuristically chosen.

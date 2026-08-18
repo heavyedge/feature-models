@@ -43,7 +43,8 @@ if args.device is None:
 else:
     device = torch.device(args.device)
 
-TARGET = ["H", "phi_1", "phi_3"]
+PriorMean = getattr(model_module, args.model)
+TARGET = list(PriorMean.output_names)
 
 try:
     X_arr, y_arr = load_batched_arrays(

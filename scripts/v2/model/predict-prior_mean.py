@@ -5,11 +5,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from models.v2.feature_models.batch import load_batched_features
-
 from . import load as load_module
-
-TARGET_COLUMNS = ("H", "phi_1", "phi_3")
+from .batch import load_batched_features
 
 parser = argparse.ArgumentParser(description="Predict prior mean of shape features.")
 parser.add_argument(
@@ -68,6 +65,8 @@ if args.chunk_size <= 0:
 loader = load_module.load_PriorMean
 model = loader(path=args.model, device=device)
 model.eval()
+
+TARGET_COLUMNS = model.output_names
 
 wrote_output = False
 with torch.no_grad():
