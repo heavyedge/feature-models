@@ -155,9 +155,6 @@ jobs:
           name: models
           path: models
 
-      - name: mark downloaded models as up to date
-        run: find models -type f -exec touch {} +
-
       - name: install package
         run: |
           for requirements in models/v*/requirements.txt; do
@@ -166,4 +163,4 @@ jobs:
           pip install pytest
 
       - name: test models in inference environment
-        run: HEAVYEDGE_TEST_MODE=1 make tests
+        run: HEAVYEDGE_TEST_MODE=1 PREBUILT_MODELS=1 make tests
