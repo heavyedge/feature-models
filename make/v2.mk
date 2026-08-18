@@ -14,11 +14,15 @@ H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
 
 MODELS_v2 := \
-models/v2/feature_models/prior_mean.pt
+models/v2/feature_models/prior_mean.pt \
+models/v2/feature_models/gpr.pt
 
 SCRIPTS_v2 := \
 models/v2/feature_models/batch.py \
+models/v2/feature_models/scale.py \
 models/v2/feature_models/prior.py \
+models/v2/feature_models/likelihoods.py \
+models/v2/feature_models/gpr.py \
 models/v2/feature_models/load.py \
 models/v2/feature_models/predict-prior_mean.py
 
@@ -102,6 +106,13 @@ models/v2/feature_models/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v2/
 $(SCRIPTS_v2)
 	mkdir -p $(@D)
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 1 2 --model PriorMean --num-epochs $(N_EPOCHS) -o $@
+
+## GPR
+
+_temp/v2/gpr_independent.pt: scripts/v2/train/gpr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
+$(SCRIPTS_v2)
+	mkdir -p benchmarks
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR_Independent --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/$*_independent.gpr -o $@
 
 # Prediction
 

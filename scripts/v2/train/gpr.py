@@ -9,13 +9,13 @@ import optuna
 import torch
 from gpytorch.mlls import VariationalELBO
 
-from models.v1.feature_models import gpr as model_module
-from models.v1.feature_models import load as load_module
-from models.v1.feature_models import scale as scaler_module
-from models.v1.feature_models.likelihoods import GaussianLikelihood
-from scripts.v0.train.batch import load_batched_arrays
+from models.v2.feature_models import gpr as model_module
+from models.v2.feature_models import load as load_module
+from models.v2.feature_models import scale as scaler_module
+from models.v2.feature_models.likelihoods import MultitaskGaussianLikelihood
 from scripts.v0.train.inducing import unique_inducing_points_per_fold
-from scripts.v1.train.save import save_gpr
+from scripts.v2.train.batch import load_batched_arrays
+from scripts.v2.train.save import save_gpr
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,7 +61,6 @@ parser.add_argument(
     nargs="*",
     help="X CSV column(s) defining batch dimensions.",
 )
-model_group.add_argument("--target", type=str, help="Target variable name.")
 model_group.add_argument("--model", type=str, help="Model name.")
 model_group.add_argument("-o", "--out", type=pathlib.Path, help="Output model file.")
 model_group.add_argument("--device", choices=["cpu", "cuda"], help="Device to train on")
@@ -249,16 +248,19 @@ if has_validation:
         pruning_patience,
     )
 
+model_class = getattr(model_module, args.model)
+TARGET = list(model_class.output_names)
+
 try:
     Xtrain_arr, ytrain_arr = load_batched_arrays(
-        args.Xtrain, args.ytrain, args.target, args.index_col, args.batch_col
+        args.Xtrain, args.ytrain, TARGET, args.index_col, args.batch_col
     )
 except ValueError as exc:
     parser.error(str(exc))
 Xtrain = torch.tensor(Xtrain_arr).float().to(device)  # (*B, N, D)
-ytrain = torch.tensor(ytrain_arr).float().to(device)  # (*B, N)
+ytrain = torch.tensor(ytrain_arr).float().to(device)  # (*B, N, len(TARGET))
 
-priormean_loader = getattr(load_module, "load_PriorMean_" + args.target)
+priormean_loader = getattr(load_module, "load_PriorMean")
 mean = priormean_loader(path=args.prior_mean, device=device)
 mean.eval()
 with torch.no_grad():
@@ -268,7 +270,7 @@ res_train = ytrain - train_mean
 if has_validation:
     try:
         Xval_arr, yval_arr = load_batched_arrays(
-            args.Xval, args.yval, args.target, args.index_col, args.batch_col
+            args.Xval, args.yval, TARGET, args.index_col, args.batch_col
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -291,40 +293,45 @@ with torch.no_grad():
     Xtrain_scaled = X_scaler(Xtrain)
 X_scaler.eval()
 
-y_scaler = scaler_module.StandardScaler(1, batch_shape=batch_shape).to(device)
+# Residuals are multitask observations with shape ``(*B, N, T)``.  Keep the
+# task dimension as the scaler's feature dimension: adding a trailing singleton
+# here makes the scaler interpret ``T`` as the observation dimension and leaves
+# it with statistics tied to the training-set size.
+y_scaler = scaler_module.StandardScaler(len(TARGET), batch_shape=batch_shape).to(device)
 y_scaler.train()
 with torch.no_grad():
-    res_train_scaled = y_scaler(res_train.unsqueeze(-1)).squeeze(-1)
+    res_train_scaled = y_scaler(res_train)
 y_scaler.eval()
 
 if has_validation:
     with torch.no_grad():
         Xval_scaled = X_scaler(Xval)
-        res_val_scaled = y_scaler(res_val.unsqueeze(-1)).squeeze(-1)
-
-model_class = getattr(model_module, args.model)
+        res_val_scaled = y_scaler(res_val)
 
 Xtrain_inducing_points = unique_inducing_points_per_fold(Xtrain_scaled)
 
 
-def train_with_priors(
+def train_with_hyperparameters(
     noise_prior_loc,
     noise_prior_scale,
     lengthscale_prior_loc,
     lengthscale_prior_scale,
+    num_latents,
     trial=None,
 ):
     """Train one GP trial and return its best batch-mean validation loss."""
     torch.manual_seed(42)
     trial_label = trial.number if trial is not None else "best"
 
-    likelihood = GaussianLikelihood(
+    likelihood = MultitaskGaussianLikelihood(
+        num_tasks=len(TARGET),
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
         batch_shape=batch_shape,
     ).to(device)
     model = model_class(
         inducing_points=Xtrain_inducing_points.clone().detach(),
+        num_latents=num_latents,
         batch_shape=batch_shape,
         lengthscale_prior_loc=lengthscale_prior_loc,
         lengthscale_prior_scale=lengthscale_prior_scale,
@@ -457,11 +464,13 @@ def objective(trial):
         args.prior_scale_max,
         log=True,
     )
-    val_loss = train_with_priors(
+    num_latents = trial.suggest_int("num_latents", 2, len(TARGET))
+    val_loss = train_with_hyperparameters(
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
         lengthscale_prior_loc=lengthscale_prior_loc,
         lengthscale_prior_scale=lengthscale_prior_scale,
+        num_latents=num_latents,
         trial=trial,
     )
     return val_loss
@@ -472,6 +481,7 @@ def train_on_all_data(
     noise_prior_scale,
     lengthscale_prior_loc,
     lengthscale_prior_scale,
+    num_latents,
     num_epochs,
     lr_reductions,
 ):
@@ -479,12 +489,13 @@ def train_on_all_data(
     torch.manual_seed(42)
     if has_validation:
         Xall = torch.cat((Xtrain, Xval), dim=-2)
-        yall = torch.cat((ytrain, yval), dim=-1)
+        yall = torch.cat((ytrain, yval), dim=-2)
     else:
         Xall = Xtrain
         yall = ytrain
 
-    likelihood = GaussianLikelihood(
+    likelihood = MultitaskGaussianLikelihood(
+        num_tasks=len(TARGET),
         batch_shape=batch_shape,
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
@@ -497,12 +508,13 @@ def train_on_all_data(
 
     y_scaler.train()
     with torch.no_grad():
-        res_all_scaled = y_scaler((yall - mean(Xall)).unsqueeze(-1)).squeeze(-1)
+        res_all_scaled = y_scaler(yall - mean(Xall))
     y_scaler.eval()
 
     inducing_points = unique_inducing_points_per_fold(Xall_scaled)
     model = model_class(
         inducing_points=inducing_points,
+        num_latents=num_latents,
         batch_shape=batch_shape,
         lengthscale_prior_loc=lengthscale_prior_loc,
         lengthscale_prior_scale=lengthscale_prior_scale,
@@ -617,6 +629,7 @@ best_noise_prior_loc = best_trial.params["noise_prior_loc"]
 best_noise_prior_scale = best_trial.params["noise_prior_scale"]
 best_lengthscale_prior_loc = best_trial.params["lengthscale_prior_loc"]
 best_lengthscale_prior_scale = best_trial.params["lengthscale_prior_scale"]
+best_num_latents = best_trial.params["num_latents"]
 logger.info(
     "Best priors: noise=LogNormal(loc=%.6g, scale=%.6g), "
     "lengthscale=LogNormal(loc=%.6g, scale=%.6g) "
@@ -656,6 +669,7 @@ logger.info(
     best_noise_prior_scale,
     best_lengthscale_prior_loc,
     best_lengthscale_prior_scale,
+    best_num_latents,
     best_epoch,
     best_lr_reductions,
 )
