@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Optuna now catches `torch.LinAlgError`.
 
-## [0.3.0rc1] - Unreleased
+## [0.3.0rc1] - 2026-08-18
 
 - Model: `gpytorch-qr==0.9.0`
 - Dataset:
