@@ -14,11 +14,11 @@ OPTUNA_DB ?= sqlite:///benchmarks/optuna.db
 
 all: models examples
 
-models: models-v0 models-v1
+models: models-v0 models-v1 models-v2
 
-examples: examples-v0 examples-v1
+examples: examples-v0 examples-v1 examples-v2
 
-tests: test-v0 test-v1
+tests: test-v0 test-v1 test-v2
 
 clean:
 	shopt -s globstar nullglob
