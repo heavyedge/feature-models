@@ -32,7 +32,7 @@ models/v2/feature_models/predict-gpqr.py
 
 models-v2: $(MODELS_v2) $(SCRIPTS_v2)
 
-examples-v2:
+examples-v2: $(wildcard examples/v2/*)
 
 test-v2: $(if $(filter 1,$(PREBUILT_MODELS)),,$(MODELS_v2) $(SCRIPTS_v2))
 	pytest tests/v2 --models-path $(CURDIR)/models/v2
