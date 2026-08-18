@@ -17,8 +17,6 @@ export HF_TOKEN="${HF_TOKEN:-$HUGGINGFACE_TOKEN}"
 
 mkdir -p ./_data/v1/
 
-uv pip install --python "$VENV_PYTHON" -r requirements.txt -r examples/requirements.txt
-
 hf download heavyedge/profiles --repo-type dataset --revision v1.0.0 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
 
 hf download heavyedge/shape-features --repo-type dataset --revision v1.0.0b1 --include "v1/shape_features/" --local-dir _data/

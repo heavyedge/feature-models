@@ -59,6 +59,9 @@ jobs:
         env:
           HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
 
+      - name: install dependencies
+        run: uv pip --system install -r requirements.txt
+
       - name: build models
         run: HEAVYEDGE_TEST_MODE=1 make models
 
@@ -120,6 +123,9 @@ jobs:
       - run: HEAVYEDGE_TEST_MODE=1 ./setup.sh
         env:
           HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+
+      - name: install dependencies
+        run: uv pip --system install -r requirements.txt -r examples/requirements.txt
 
       - uses: actions/download-artifact@v4
         with:
