@@ -10,24 +10,11 @@ export HF_TOKEN="${HF_TOKEN:-$HUGGINGFACE_TOKEN}"
 
 mkdir -p ./_data/v1/
 
-(
-    uv pip install --system -r requirements.txt -r examples/requirements.txt
-) &
-requirements_pid=$!
+uv pip install --system -r requirements.txt -r examples/requirements.txt
 
-(
-    hf download heavyedge/profiles --repo-type dataset --revision v1.0.0 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
-) &
-pv_pid=$!
+hf download heavyedge/profiles --repo-type dataset --revision v1.0.0 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
 
-(
-    hf download heavyedge/shape-features --repo-type dataset --revision v1.1.0.dev1 --include "v1/shape_features/" --local-dir _data/
-) &
-features_pid=$!
-
-wait "$requirements_pid"
-wait "$pv_pid"
-wait "$features_pid"
+hf download heavyedge/shape-features --repo-type dataset --revision v1.1.0dev1 --include "v1/shape_features/" --local-dir _data/
 
 # Postprocess data
 
