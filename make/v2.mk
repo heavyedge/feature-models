@@ -138,6 +138,10 @@ _temp/v2/gpr_%.Xtest.csv: _temp/v2/Xtest.csv _temp/v2/prior_mean.pt _temp/v2/gpr
 
 # Model selection
 
+benchmarks/v2/rmse.gpr_%.csv: scripts/v2/model_selection/rmse.py _temp/v2/gpr_%.Xtest.csv _temp/v2/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --index-col 0 -o $@
+
 benchmarks/v2/nlpd.gpr_%.csv: scripts/v2/model_selection/nlpd.py _temp/v2/gpr_%.Xtest.csv _temp/v2/ytest.csv
 	mkdir -p $(@D)
 	python3 $^ --index-col 0 -o $@
