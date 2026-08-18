@@ -4,13 +4,17 @@ MODELS_v2 := \
 models/v2/feature_models/prior_mean.pt
 
 SCRIPTS_v2 := \
-models/v2/feature_models/prior.py
+models/v2/feature_models/batch.py \
+models/v2/feature_models/prior.py \
+models/v2/feature_models/load.py \
+models/v2/feature_models/predict-prior_mean.py
 
 models-v2: $(MODELS_v2) $(SCRIPTS_v2)
 
 examples-v2:
 
-test-v2:
+test-v2: $(MODELS_v2) $(SCRIPTS_v2)
+	pytest tests/v2 --models-path $(CURDIR)/models/v2
 
 # Data
 
@@ -65,6 +69,10 @@ $(foreach split,train val test,$(eval $(call SPLIT_v2,$(split))))
 # Models
 
 models/v2/feature_models/%.py: scripts/v2/model/%.py
+	mkdir -p $(@D)
+	cp $< $@
+
+models/v2/feature_models/batch.py: scripts/v0/model/batch.py
 	mkdir -p $(@D)
 	cp $< $@
 
