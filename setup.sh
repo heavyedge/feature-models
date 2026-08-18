@@ -2,13 +2,22 @@
 
 set -e
 
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+    VENV_PYTHON="$VIRTUAL_ENV/bin/python"
+elif [ -n "${CONDA_PREFIX:-}" ]; then
+    VENV_PYTHON="$CONDA_PREFIX/bin/python"
+else
+    uv venv .venv
+    VENV_PYTHON="$PWD/.venv/bin/python"
+fi
+
 uv tool install --force 'huggingface_hub[cli]'
-export PATH="$(uv tool dir --bin):$PATH"
+export PATH="$(dirname "$VENV_PYTHON"):$(uv tool dir --bin):$PATH"
 export HF_TOKEN="${HF_TOKEN:-$HUGGINGFACE_TOKEN}"
 
 mkdir -p ./_data/v1/
 
-uv pip install -r requirements.txt -r examples/requirements.txt
+uv pip install --python "$VENV_PYTHON" -r requirements.txt -r examples/requirements.txt
 
 hf download heavyedge/profiles --repo-type dataset --revision v1.0.0 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
 
@@ -18,7 +27,7 @@ hf download heavyedge/shape-features --repo-type dataset --revision v1.0.0b1 --i
 
 ## Write dimensionless data
 
-uv pip install -r libs/profile-dataset/requirements.txt -r libs/profile-dataset/examples/requirements.txt
+uv pip install --python "$VENV_PYTHON" -r libs/profile-dataset/requirements.txt -r libs/profile-dataset/examples/requirements.txt
 
 mkdir -p _data/v1/dimless/mean_profiles
 for f in _data/v1/process_variables/mean_profiles/*.csv; do
