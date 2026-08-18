@@ -12,3 +12,9 @@ Setup:
 ```
 pip install -r requirements.txt
 ```
+
+Usage:
+
+```
+python -m feature_models.predict-prior_mean <args>
+```
