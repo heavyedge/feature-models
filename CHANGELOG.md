@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Model: `gpytorch-qr==0.9.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0`
+  - `heavyedge/shape-features:v1.0.0b1`
+
 ### Fixed
 
 - Optuna now catches `torch.LinAlgError`.

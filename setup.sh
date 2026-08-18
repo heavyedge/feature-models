@@ -16,7 +16,7 @@ mkdir -p ./_data/v1/
 requirements_pid=$!
 
 (
-    hf download heavyedge/profiles --repo-type dataset --revision v1.0.0rc4 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
+    hf download heavyedge/profiles --repo-type dataset --revision v1.0.0 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
 ) &
 pv_pid=$!
 
