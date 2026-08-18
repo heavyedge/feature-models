@@ -80,21 +80,29 @@ with torch.no_grad():
                 f"{pred_mean.shape}; expected {expected_shape}"
             )
 
+        result_shape = pred_mean.shape  # (*B, N, T)
         batch_shape = pred_mean.shape[:-2]
         if batch_shape:
             batch = np.broadcast_to(
-                np.arange(np.prod(batch_shape)).reshape(batch_shape + (1,)),
-                X_row_indices[..., i : i + chunk_size].shape,
+                np.arange(np.prod(batch_shape)).reshape(batch_shape + (1, 1)),
+                result_shape,
             ).ravel()
         else:
-            batch = np.full(chunk_size, "", dtype=object)
+            batch = np.full(np.prod(result_shape), "", dtype=object)
 
         data = {
-            "index": X_row_indices[..., i : i + chunk_size].ravel(),
+            "index": np.broadcast_to(
+                X_row_indices[..., i : i + chunk_size].reshape(
+                    X_row_indices.shape[:-1] + (chunk_size, 1)
+                ),
+                result_shape,
+            ).ravel(),
             "batch": batch,
-            "H": pred_mean[..., 0].ravel(),
-            "phi_1": pred_mean[..., 1].ravel(),
-            "phi_3": pred_mean[..., 2].ravel(),
+            "target": np.broadcast_to(
+                np.asarray(TARGET_COLUMNS).reshape((1,) * (pred_mean.ndim - 1) + (-1,)),
+                result_shape,
+            ).ravel(),
+            "value": pred_mean.ravel(),
         }
 
         pd.DataFrame(data).to_csv(
@@ -106,6 +114,6 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    pd.DataFrame(columns=["index", "batch", *TARGET_COLUMNS]).to_csv(
+    pd.DataFrame(columns=["index", "batch", "target", "value"]).to_csv(
         args.out, index=False
     )
