@@ -667,7 +667,11 @@ if has_validation:
             "num_latents": int(np.clip(DEFAULT_NUM_LATENTS, 2, num_quantiles)),
         }
         study.enqueue_trial(baseline_params)
-    study.optimize(objective, n_trials=args.n_trials)
+    study.optimize(
+        objective,
+        n_trials=args.n_trials,
+        catch=(torch.linalg.LinAlgError,),
+    )
 else:
     # The final-data path must be read-only with respect to HPO: load the
     # completed study and train once using its selected configuration.

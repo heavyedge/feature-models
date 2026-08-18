@@ -21,7 +21,7 @@ requirements_pid=$!
 pv_pid=$!
 
 (
-    hf download heavyedge/shape-features --repo-type dataset --revision v1.1.0.dev0 --include "v1/shape_features/" --local-dir _data/
+    hf download heavyedge/shape-features --repo-type dataset --revision v1.1.0.dev1 --include "v1/shape_features/" --local-dir _data/
 ) &
 features_pid=$!
 
