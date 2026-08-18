@@ -160,7 +160,7 @@ $(SCRIPTS_v0)
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_CenterGapLMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_cglmc -o $@
 
 models/v0/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v0/X.csv _temp/v0/y.csv models/v0/feature_models/%.prior_mean.pt \
-_temp/v0/%.cg_gpqr_cglmc.pt $(SCRIPTS_v0)
+_temp/v0/%.cg_gpqr_independent.pt $(SCRIPTS_v0)
 	mkdir -p $(@D)
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --target $* --model CenterGapMTGPQR_Independent_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --storage=$(OPTUNA_DB) --study-name=v0/$*.cg_gpqr_independent -o $@
 
