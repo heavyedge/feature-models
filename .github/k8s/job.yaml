@@ -350,13 +350,13 @@ spec:
               run_step "Source checkout" checkout_source
 
               pip install uv
+              uv pip install -r requirements.txt -r examples/requirements.txt
               run_step "Build environment setup" bash -euo pipefail ./setup.sh
               run_step "Setup PostgreSQL" bash -euo pipefail .github/k8s/setup-postgres.sh
 
               if [ "$GITHUB_EVENT_NAME" = "release" ]; then
                 run_step "Parse version" set_major_version
               fi
-              pip install -r requirements.txt -r examples/requirements.txt
               run_step "Build" bash -euo pipefail .github/k8s/build.sh
 
               post_build_exit_code=0
