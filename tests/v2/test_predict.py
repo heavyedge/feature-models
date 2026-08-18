@@ -1,6 +1,8 @@
 import subprocess
 import sys
 
+import pandas as pd
+
 
 def test_predict_priormean(models_path, Xtest_path, tmp_path):
     output_path = tmp_path / "predict.csv"
@@ -18,3 +20,24 @@ def test_predict_priormean(models_path, Xtest_path, tmp_path):
         cwd=models_path,
     )
     assert output_path.exists()
+
+
+def test_predict_gpr(models_path, Xtest_path, tmp_path):
+    output_path = tmp_path / "predict-gpr.csv"
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "feature_models.predict-gpr",
+            str(Xtest_path),
+            "--out",
+            str(output_path),
+        ],
+        check=True,
+        cwd=models_path,
+    )
+
+    prediction = pd.read_csv(output_path)
+    assert list(prediction.columns) == ["index", "batch", "target", "mean", "std"]
+    assert prediction["target"].tolist() == ["H", "phi_1", "phi_3"]

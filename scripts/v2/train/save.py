@@ -37,7 +37,6 @@ def save_gpr(
             type=model.__class__.__name__,
             args=dict(
                 inducing_points=model.inducing_points,
-                num_tasks=model.num_tasks,
                 num_latents=model.num_latents,
                 lengthscale_prior_loc=model.lengthscale_prior_loc,
                 lengthscale_prior_scale=model.lengthscale_prior_scale,

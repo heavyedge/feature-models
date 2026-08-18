@@ -24,7 +24,8 @@ models/v2/feature_models/prior.py \
 models/v2/feature_models/likelihoods.py \
 models/v2/feature_models/gpr.py \
 models/v2/feature_models/load.py \
-models/v2/feature_models/predict-prior_mean.py
+models/v2/feature_models/predict-prior_mean.py \
+models/v2/feature_models/predict-gpr.py
 
 models-v2: $(MODELS_v2) $(SCRIPTS_v2)
 
@@ -112,12 +113,25 @@ $(SCRIPTS_v2)
 _temp/v2/gpr_independent.pt: scripts/v2/train/gpr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
 $(SCRIPTS_v2)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR_Independent --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/$*_independent.gpr -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR_Independent --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpr.independent -o $@
+
+_temp/v2/gpr_lmc.pt: scripts/v2/train/gpr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
+$(SCRIPTS_v2)
+	mkdir -p benchmarks
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR_LMC --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpr.lmc -o $@
+
+models/v2/feature_models/gpr.pt: scripts/v2/train/gpr.py _temp/v2/X.csv _temp/v2/y.csv models/v2/feature_models/prior_mean.pt \
+_temp/v2/gpr_independent.pt $(SCRIPTS_v2)
+	mkdir -p $(@D)
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --model GPR_Independent --storage=$(OPTUNA_DB) --study-name=v2/gpr.independent -o $@
 
 # Prediction
 
 _temp/v2/prior_mean.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/feature_models/prior_mean.pt
 	$(GPU_PYTHON) -m models.v2.feature_models.predict-prior_mean $< --index-col 0 1 2 -o $@
+
+_temp/v2/gpr.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/feature_models/prior_mean.pt models/v2/feature_models/gpr.pt
+	$(GPU_PYTHON) -m models.v2.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
 # Examples
 
