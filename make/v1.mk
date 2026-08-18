@@ -37,7 +37,7 @@ models-v1: $(MODELS_v1) $(SCRIPTS_v1)
 
 examples-v1: $(wildcard examples/v1/*)
 
-test-v1: $(MODELS_v1) $(SCRIPTS_v1)
+test-v1: $(if $(filter 1,$(PREBUILT_MODELS)),,$(MODELS_v1) $(SCRIPTS_v1))
 	pytest tests/v1 --models-path $(CURDIR)/models/v1
 
 # Data

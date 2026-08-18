@@ -1,0 +1,5 @@
+numpy
+pandas
+torch
+gpytorch
+gpytorch-qr==0.9.0rc0

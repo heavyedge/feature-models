@@ -5,12 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [2.0.0.dev2] - 2026-08-18
 
 - Model: `gpytorch-qr==0.9.0`
 - Dataset:
   - `heavyedge/profiles:v1.0.0`
-  - `heavyedge/shape-features:v1.0.0`
+  - `heavyedge/shape-features:v1.1.0`
+
+### Added
+
+- Multi-output GPQR models.
+
+## [2.0.0.dev1] - 2026-08-18
+
+- Model: `gpytorch-qr==0.9.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0`
+  - `heavyedge/shape-features:v1.1.0.dev1`
+
+### Added
+
+- Multi-output GPR models.
+
+## [2.0.0.dev0] - 2026-08-18
+
+- Model: `gpytorch-qr==0.9.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0`
+  - `heavyedge/shape-features:v1.1.0.dev1`
+
+### Added
+
+- Multi-output prior mean model.
 
 ## [1.0.0rc1] - 2026-08-18
 
