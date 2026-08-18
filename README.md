@@ -31,6 +31,10 @@ pip install -r requirements.txt
 
 ### Downloading the dataset (Optional)
 
+You need:
+
+- `uv`
+
 Run the following commands to download the process variable and shape feature datasets in the `_data` directory.
 
 ```sh
