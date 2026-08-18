@@ -135,6 +135,16 @@ $(SCRIPTS_v2)
 	mkdir -p benchmarks
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_independent -o $@
 
+_temp/v2/gpqr_lmc.pt: scripts/v2/train/gpqr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
+$(SCRIPTS_v2)
+	mkdir -p benchmarks
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_lmc -o $@
+
+_temp/v2/gpqr_cglmc.pt: scripts/v2/train/gpqr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
+$(SCRIPTS_v2)
+	mkdir -p benchmarks
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_cglmc -o $@
+
 models/v2/feature_models/gpqr.pt: scripts/v2/train/gpqr.py _temp/v2/X.csv _temp/v2/y.csv models/v2/feature_models/prior_mean.pt \
 _temp/v2/gpqr_independent.pt $(SCRIPTS_v2)
 	mkdir -p $(@D)
@@ -154,6 +164,9 @@ _temp/v2/gpr_%.Xtest.csv: _temp/v2/Xtest.csv _temp/v2/prior_mean.pt _temp/v2/gpr
 _temp/v2/gpqr.Xpred_1D.csv: _temp/v2/Xpred_1D.csv $(SCRIPTS_v2) models/v2/feature_models/prior_mean.pt models/v2/feature_models/gpqr.pt
 	$(GPU_PYTHON) -m models.v2.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
 
+_temp/v2/gpqr_%.Xtest.csv: _temp/v2/Xtest.csv _temp/v2/prior_mean.pt _temp/v2/gpqr_%.pt $(SCRIPTS_v2)
+	$(GPU_PYTHON) -m models.v2.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 -o $@
+
 # Model selection
 
 benchmarks/v2/rmse.gpr_%.csv: scripts/v2/model_selection/rmse.py _temp/v2/gpr_%.Xtest.csv _temp/v2/ytest.csv
@@ -164,11 +177,21 @@ benchmarks/v2/nlpd.gpr_%.csv: scripts/v2/model_selection/nlpd.py _temp/v2/gpr_%.
 	mkdir -p $(@D)
 	python3 $^ --index-col 0 -o $@
 
+benchmarks/v2/pinball_loss.gpr_%.csv: scripts/v2/model_selection/pinball_loss.py _temp/v2/gpr_%.Xtest.csv _temp/v2/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --type GPR --quantile-levels $(QUANTILES) -o $@
+
+benchmarks/v2/pinball_loss.gpqr_%.csv: scripts/v2/model_selection/pinball_loss.py _temp/v2/gpqr_%.Xtest.csv _temp/v2/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
+
 # Examples
 
 examples/v2/Evaluation.ipynb: \
 benchmarks/v2/rmse.gpr_independent.csv benchmarks/v2/rmse.gpr_lmc.csv \
 benchmarks/v2/nlpd.gpr_independent.csv benchmarks/v2/nlpd.gpr_lmc.csv \
+benchmarks/v2/pinball_loss.gpr_independent.csv benchmarks/v2/pinball_loss.gpr_lmc.csv \
+benchmarks/v2/pinball_loss.gpqr_independent.csv benchmarks/v2/pinball_loss.gpqr_lmc.csv benchmarks/v2/pinball_loss.gpqr_cglmc.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 

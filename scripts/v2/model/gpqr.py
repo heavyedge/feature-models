@@ -5,12 +5,16 @@ from gpytorch.priors import LogNormalPrior
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
     IndependentMultitaskVariationalStrategy,
+    LMCVariationalStrategy,
     UnwhitenedVariationalStrategy,
 )
 from gpytorch_qr.models import CenterGapQuantileGP
+from gpytorch_qr.variational import CenterGapLMCVariationalStrategy
 
 __all__ = [
     "GPQR_Independent",
+    "GPQR_LMC",
+    "GPQR_CenterGapLMC",
 ]
 
 
@@ -118,4 +122,30 @@ class GPQR_Independent(BaseGP):
         return IndependentMultitaskVariationalStrategy(
             base_strategy,
             num_tasks=num_tasks,
+        )
+
+
+class GPQR_LMC(BaseGP):
+    @staticmethod
+    def construct_variational_strategy(
+        base_strategy, num_tasks, num_latents, num_central_latents, num_quantiles
+    ):
+        return LMCVariationalStrategy(
+            base_strategy,
+            num_tasks=num_tasks,
+            num_latents=num_latents,
+        )
+
+
+class GPQR_CenterGapLMC(BaseGP):
+    @staticmethod
+    def construct_variational_strategy(
+        base_strategy, num_tasks, num_latents, num_central_latents, num_quantiles
+    ):
+        return CenterGapLMCVariationalStrategy(
+            base_strategy,
+            num_tasks=num_tasks,
+            num_latents=num_latents,
+            num_central_latents=num_central_latents,
+            num_quantiles=num_quantiles,
         )
