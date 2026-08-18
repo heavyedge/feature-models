@@ -148,6 +148,12 @@ benchmarks/v2/nlpd.gpr_%.csv: scripts/v2/model_selection/nlpd.py _temp/v2/gpr_%.
 
 # Examples
 
+examples/v2/Evaluation.ipynb: \
+benchmarks/v2/rmse.gpr_independent.csv benchmarks/v2/rmse.gpr_lmc.csv \
+benchmarks/v2/nlpd.gpr_independent.csv benchmarks/v2/nlpd.gpr_lmc.csv \
+.FORCE
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
+
 examples/v2/Models.ipynb: \
 _temp/v2/X.csv _temp/v2/y.csv _temp/v2/Xpred_1D.csv \
 _temp/v2/prior_mean.Xpred_1D.csv \
