@@ -74,6 +74,9 @@ except ValueError as exc:
     parser.error(str(exc))
 X = torch.tensor(X_values, dtype=torch.float32, device=device)
 
+if args.chunk_size <= 0:
+    parser.error("--chunk-size must be positive")
+
 prior_mean_loader = getattr(load_module, f"load_PriorMean_{args.target[0]}")
 prior_mean_model = prior_mean_loader(path=args.prior_mean_model, device=device)
 prior_mean_model.eval()
@@ -94,25 +97,38 @@ with torch.no_grad():
 
         prior_mean = prior_mean_model(X_chunk)
         X_scaled = X_scaler(X_chunk)
-        scaled_res_posterior = gpr_model(X_scaled)
+        scaled_f_posterior = gpr_model(X_scaled)
+        scaled_y_posterior = likelihood(scaled_f_posterior)
 
-        scaled_res_mean = scaled_res_posterior.mean.unsqueeze(-1)
-        residual_mean = y_scaler.inverse_transform(scaled_res_mean).squeeze(-1)
-        residual_std = (
-            scaled_res_posterior.variance.sqrt().unsqueeze(-1)
+        latent_mean = prior_mean + y_scaler.inverse_transform(
+            scaled_f_posterior.mean.unsqueeze(-1)
+        ).squeeze(-1)
+        latent_std = (
+            scaled_f_posterior.variance.sqrt().unsqueeze(-1)
             * y_scaler.X_scale.abs().unsqueeze(-2)
         ).squeeze(-1)
-
-        posterior_mean = prior_mean + residual_mean
-        chunk_result = torch.stack((posterior_mean, residual_std), dim=-1).cpu().numpy()
+        predictive_mean = prior_mean + y_scaler.inverse_transform(
+            scaled_y_posterior.mean.unsqueeze(-1)
+        ).squeeze(-1)
+        predictive_std = (
+            scaled_y_posterior.variance.sqrt().unsqueeze(-1)
+            * y_scaler.X_scale.abs().unsqueeze(-2)
+        ).squeeze(-1)
+        chunk_result = (
+            torch.stack(
+                (latent_mean, latent_std, predictive_mean, predictive_std), dim=-1
+            )
+            .cpu()
+            .numpy()
+        )
         chunk_size = X_chunk.shape[-2]
-        if posterior_mean.shape[-1] == chunk_size:
+        if latent_mean.shape[-1] == chunk_size:
             multitask = False
-        elif posterior_mean.ndim >= 2 and posterior_mean.shape[-2] == chunk_size:
+        elif latent_mean.ndim >= 2 and latent_mean.shape[-2] == chunk_size:
             multitask = True
         else:
-            parser.error(f"unexpected model output shape {tuple(posterior_mean.shape)}")
-        num_tasks = posterior_mean.shape[-1] if multitask else 1
+            parser.error(f"unexpected model output shape {tuple(latent_mean.shape)}")
+        num_tasks = latent_mean.shape[-1] if multitask else 1
         if len(args.target) != num_tasks:
             parser.error(
                 f"--target requires {num_tasks} value(s) for this model; "
@@ -143,13 +159,15 @@ with torch.no_grad():
             "batch": batch,
             "target": np.broadcast_to(
                 np.asarray(args.target).reshape(
-                    (1,) * (posterior_mean.ndim - (1 if multitask else 0))
+                    (1,) * (latent_mean.ndim - (1 if multitask else 0))
                     + ((num_tasks,) if multitask else ())
                 ),
                 result_shape,
             ).ravel(),
-            "mean": chunk_result[..., 0].ravel(),
-            "std": chunk_result[..., 1].ravel(),
+            "latent_mean": chunk_result[..., 0].ravel(),
+            "latent_std": chunk_result[..., 1].ravel(),
+            "predictive_mean": chunk_result[..., 2].ravel(),
+            "predictive_std": chunk_result[..., 3].ravel(),
         }
 
         pd.DataFrame(data).to_csv(
@@ -161,6 +179,14 @@ with torch.no_grad():
         wrote_output = True
 
 if not wrote_output:
-    pd.DataFrame(columns=["index", "batch", "target", "mean", "std"]).to_csv(
-        args.out, index=False
-    )
+    pd.DataFrame(
+        columns=[
+            "index",
+            "batch",
+            "target",
+            "latent_mean",
+            "latent_std",
+            "predictive_mean",
+            "predictive_std",
+        ]
+    ).to_csv(args.out, index=False)
