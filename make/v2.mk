@@ -1,17 +1,6 @@
 .PHONY: models-v2 examples-v2 test-v2
 
-QUANTILES := 0.05 0.25 0.5 0.75 0.95
-NUM_LOWER_QUANTILES := 2
-NUM_LATENTS := 3
-
-N_LIKELIHOOD_SAMPLES := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),4,64)
-N_EPOCHS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
-N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
-N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
-N_TRIALS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
-
-H_THRESHOLD := 1.1
-PHI_THRESHOLD := 1.0
+N_EPOCHS_v2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,15000)
 
 MODELS_v2 := \
 models/v2/feature_models/prior_mean.pt \
@@ -104,24 +93,24 @@ models/v2/feature_models/batch.py: scripts/v0/model/batch.py
 
 _temp/v2/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv \
 $(SCRIPTS_v2)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --model PriorMean --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --model PriorMean --num-epochs $(N_EPOCHS_v2) -o $@
 
 models/v2/feature_models/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v2/X.csv _temp/v2/y.csv \
 $(SCRIPTS_v2)
 	mkdir -p $(@D)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 1 2 --model PriorMean --num-epochs $(N_EPOCHS) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 1 2 --model PriorMean --num-epochs $(N_EPOCHS_v2) -o $@
 
 ## GPR
 
 _temp/v2/gpr_independent.pt: scripts/v2/train/gpr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
 $(SCRIPTS_v2)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR_Independent --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpr.independent -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR_Independent --num-epochs $(N_EPOCHS_v2) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpr.independent -o $@
 
 _temp/v2/gpr_lmc.pt: scripts/v2/train/gpr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
 $(SCRIPTS_v2)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR_LMC --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpr.lmc -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR_LMC --num-epochs $(N_EPOCHS_v2) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpr.lmc -o $@
 
 models/v2/feature_models/gpr.pt: scripts/v2/train/gpr.py _temp/v2/X.csv _temp/v2/y.csv models/v2/feature_models/prior_mean.pt \
 _temp/v2/gpr_independent.pt $(SCRIPTS_v2)
@@ -133,17 +122,17 @@ _temp/v2/gpr_independent.pt $(SCRIPTS_v2)
 _temp/v2/gpqr_independent.pt: scripts/v2/train/gpqr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
 $(SCRIPTS_v2)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_independent -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v2) --early-stopping-patience-ratio 0.05 --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_independent -o $@
 
 _temp/v2/gpqr_lmc.pt: scripts/v2/train/gpqr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
 $(SCRIPTS_v2)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_lmc -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v2) --early-stopping-patience-ratio 0.05 --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_lmc -o $@
 
 _temp/v2/gpqr_cglmc.pt: scripts/v2/train/gpqr.py _temp/v2/Xtrain.csv _temp/v2/ytrain.csv _temp/v2/Xval.csv _temp/v2/yval.csv _temp/v2/prior_mean.pt \
 $(SCRIPTS_v2)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_cglmc -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v2) --early-stopping-patience-ratio 0.05 --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v2/gpqr_cglmc -o $@
 
 models/v2/feature_models/gpqr.pt: scripts/v2/train/gpqr.py _temp/v2/X.csv _temp/v2/y.csv models/v2/feature_models/prior_mean.pt \
 _temp/v2/gpqr_independent.pt $(SCRIPTS_v2)

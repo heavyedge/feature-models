@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `heavyedge/profiles:v1.0.0`
   - `heavyedge/shape-features:v1.1.0`
 
+### Changed
+
+- GPQR training maximum epoch is increased to `15,000`, from `10,000`.
+- GPQR early stopping patience ratio is decreased to `0.05` from `0.1`.
+
 ### Fixed
 
 - `linear_operator.utils.errors.NotPSDError` is now catched during training.

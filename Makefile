@@ -12,6 +12,19 @@ GPU_JUPYTER ?= $(GPU_RUN) jupyter
 
 OPTUNA_DB ?= sqlite:///benchmarks/optuna.db
 
+QUANTILES := 0.05 0.25 0.5 0.75 0.95
+NUM_LOWER_QUANTILES := 2
+NUM_LATENTS := 3
+
+N_LIKELIHOOD_SAMPLES := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),4,64)
+N_FOLDS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
+N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
+N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
+N_TRIALS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
+
+H_THRESHOLD := 1.1
+PHI_THRESHOLD := 1.0
+
 all: models examples
 
 models: models-v0 models-v1 models-v2
