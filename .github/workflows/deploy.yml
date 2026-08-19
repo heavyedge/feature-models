@@ -98,6 +98,9 @@ jobs:
           MEMORY_REQUEST: ${{ vars.MEMORY_REQUEST }}
         run: |
           event_name="${{ github.event_name }}"
+          if [ "$event_name" != "release" ]; then
+            export GPU_REQUEST=1
+          fi
           job_name="feature-models.${GIT_SHA::7}-${event_name//_/}.${{ github.run_id }}-${{ github.run_attempt }}"
           github_config_map_name="${job_name}-github-config"
           export JOB_NAME="$job_name"
