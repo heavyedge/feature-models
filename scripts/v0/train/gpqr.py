@@ -9,6 +9,7 @@ import optuna
 import torch
 from gpytorch.mlls import VariationalELBO
 from gpytorch_qr.models import CenterGapQuantileGP, DirectQuantileGP
+from linear_operator.utils.errors import NotPSDError
 
 from models.v0.feature_models import gpqr as model_module
 from models.v0.feature_models import load as load_module
@@ -670,7 +671,10 @@ if has_validation:
     study.optimize(
         objective,
         n_trials=args.n_trials,
-        catch=(torch.linalg.LinAlgError,),
+        catch=(
+            torch.linalg.LinAlgError,
+            NotPSDError,
+        ),
     )
 else:
     # The final-data path must be read-only with respect to HPO: load the
