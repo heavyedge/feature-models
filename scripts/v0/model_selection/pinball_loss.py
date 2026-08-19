@@ -35,8 +35,7 @@ def gpr_quantile_predictions(pred_df, quantile_levels, n_targets):
         .numpy()
     )
     predictions = (
-        predictive_means[:, None]
-        + predictive_stds[:, None] * standard_quantiles
+        predictive_means[:, None] + predictive_stds[:, None] * standard_quantiles
     )
     return indices, predictions
 
