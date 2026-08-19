@@ -7,8 +7,7 @@ import torch
 
 
 def gpr_quantile_predictions(pred_df, quantile_levels, n_targets):
-    location_column = "loc" if "loc" in pred_df.columns else "mean"
-    required = {"index", location_column, "std"}
+    required = {"index", "predictive_mean", "predictive_std"}
     missing = required.difference(pred_df.columns)
     if missing:
         raise ValueError(f"GPR prediction is missing columns: {sorted(missing)}")
@@ -21,19 +20,23 @@ def gpr_quantile_predictions(pred_df, quantile_levels, n_targets):
         raise ValueError(
             f"Prediction indices must be between 0 and {n_targets - 1}, inclusive."
         )
-    locations = pred_df[location_column].to_numpy(dtype=float)
-    stds = pred_df["std"].to_numpy(dtype=float)
-    if not np.isfinite(locations).all():
-        raise ValueError("GPR locations must be finite.")
-    if not np.isfinite(stds).all() or (stds < 0).any():
-        raise ValueError("GPR standard deviations must be finite and non-negative.")
+    predictive_means = pred_df["predictive_mean"].to_numpy(dtype=float)
+    predictive_stds = pred_df["predictive_std"].to_numpy(dtype=float)
+    if not np.isfinite(predictive_means).all():
+        raise ValueError("GPR predictive means must be finite.")
+    if not np.isfinite(predictive_stds).all() or (predictive_stds < 0).any():
+        raise ValueError(
+            "GPR predictive standard deviations must be finite and non-negative."
+        )
 
     standard_quantiles = (
         torch.distributions.Normal(0.0, 1.0)
         .icdf(torch.as_tensor(quantile_levels, dtype=torch.float64))
         .numpy()
     )
-    predictions = locations[:, None] + stds[:, None] * standard_quantiles
+    predictions = (
+        predictive_means[:, None] + predictive_stds[:, None] * standard_quantiles
+    )
     return indices, predictions
 
 
