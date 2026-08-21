@@ -34,8 +34,8 @@ class _CGMTGPQR_Base(CenterGapQuantileGP):
         num_quantiles,
         num_lower_quantiles,
         num_latents,
-        lengthscale_prior_loc=0.0,
-        lengthscale_prior_scale=1.0,
+        lengthscale_prior_loc=None,
+        lengthscale_prior_scale=None,
         batch_shape=torch.Size(),
     ):
         N, D = inducing_points.shape[-2:]
@@ -56,7 +56,9 @@ class _CGMTGPQR_Base(CenterGapQuantileGP):
         )
 
         mean = ConstantMean(batch_shape=full_batch_shape)
-        ls_prior = LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale)
+        ls_prior = None
+        if lengthscale_prior_loc is not None and lengthscale_prior_scale is not None:
+            ls_prior = LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale)
         covar = ScaleKernel(
             RBFKernel(
                 ard_num_dims=D,
@@ -87,11 +89,13 @@ class _CGMTGPQR_Base(CenterGapQuantileGP):
 
     @property
     def lengthscale_prior_loc(self):
-        return self.covar_module.base_kernel.lengthscale_prior.loc
+        prior = getattr(self.covar_module.base_kernel, "lengthscale_prior", None)
+        return None if prior is None else prior.loc
 
     @property
     def lengthscale_prior_scale(self):
-        return self.covar_module.base_kernel.lengthscale_prior.scale
+        prior = getattr(self.covar_module.base_kernel, "lengthscale_prior", None)
+        return None if prior is None else prior.scale
 
 
 class CenterGapMTGPQR_Independent_H(_CGMTGPQR_Base):
@@ -101,8 +105,8 @@ class CenterGapMTGPQR_Independent_H(_CGMTGPQR_Base):
         num_quantiles,
         num_lower_quantiles,
         num_latents,
-        lengthscale_prior_loc=0.0,
-        lengthscale_prior_scale=1.0,
+        lengthscale_prior_loc=None,
+        lengthscale_prior_scale=None,
         batch_shape=torch.Size(),
     ):
         num_latents = num_quantiles
@@ -131,8 +135,8 @@ class CenterGapMTGPQR_Independent_phi(_CGMTGPQR_Base):
         num_quantiles,
         num_lower_quantiles,
         num_latents,
-        lengthscale_prior_loc=0.0,
-        lengthscale_prior_scale=1.0,
+        lengthscale_prior_loc=None,
+        lengthscale_prior_scale=None,
         batch_shape=torch.Size(),
     ):
         num_latents = num_quantiles
@@ -206,8 +210,8 @@ class _DirectMTGPQR_Base(DirectQuantileGP):
         inducing_points,
         num_quantiles,
         num_latents,
-        lengthscale_prior_loc=0.0,
-        lengthscale_prior_scale=1.0,
+        lengthscale_prior_loc=None,
+        lengthscale_prior_scale=None,
         batch_shape=torch.Size(),
         num_lower_quantiles=0,  # dummy argument
     ):
@@ -229,7 +233,9 @@ class _DirectMTGPQR_Base(DirectQuantileGP):
         )
 
         mean = ConstantMean(batch_shape=full_batch_shape)
-        ls_prior = LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale)
+        ls_prior = None
+        if lengthscale_prior_loc is not None and lengthscale_prior_scale is not None:
+            ls_prior = LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale)
         covar = ScaleKernel(
             RBFKernel(
                 ard_num_dims=D,
@@ -256,11 +262,13 @@ class _DirectMTGPQR_Base(DirectQuantileGP):
 
     @property
     def lengthscale_prior_loc(self):
-        return self.covar_module.base_kernel.lengthscale_prior.loc
+        prior = getattr(self.covar_module.base_kernel, "lengthscale_prior", None)
+        return None if prior is None else prior.loc
 
     @property
     def lengthscale_prior_scale(self):
-        return self.covar_module.base_kernel.lengthscale_prior.scale
+        prior = getattr(self.covar_module.base_kernel, "lengthscale_prior", None)
+        return None if prior is None else prior.scale
 
 
 class DirectMTGPQR_Independent_H(_DirectMTGPQR_Base):
@@ -269,8 +277,8 @@ class DirectMTGPQR_Independent_H(_DirectMTGPQR_Base):
         inducing_points,
         num_quantiles,
         num_latents,
-        lengthscale_prior_loc=0.0,
-        lengthscale_prior_scale=1.0,
+        lengthscale_prior_loc=None,
+        lengthscale_prior_scale=None,
         batch_shape=torch.Size(),
         num_lower_quantiles=0,  # dummy argument
     ):
@@ -299,8 +307,8 @@ class DirectMTGPQR_Independent_phi(_DirectMTGPQR_Base):
         inducing_points,
         num_quantiles,
         num_latents,
-        lengthscale_prior_loc=0.0,
-        lengthscale_prior_scale=1.0,
+        lengthscale_prior_loc=None,
+        lengthscale_prior_scale=None,
         batch_shape=torch.Size(),
         num_lower_quantiles=0,  # dummy argument
     ):

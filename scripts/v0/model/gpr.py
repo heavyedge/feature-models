@@ -16,15 +16,17 @@ class BaseGP(ExactGP):
         train_x,
         train_y,
         likelihood,
-        lengthscale_prior_loc=0.0,
-        lengthscale_prior_scale=1.0,
+        lengthscale_prior_loc=None,
+        lengthscale_prior_scale=None,
         batch_shape=torch.Size(),
     ):
         D = train_x.shape[-1]
         super().__init__(train_x, train_y, likelihood)
 
         self.mean_module = ConstantMean(batch_shape=batch_shape)
-        ls_prior = LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale)
+        ls_prior = None
+        if lengthscale_prior_loc is not None and lengthscale_prior_scale is not None:
+            ls_prior = LogNormalPrior(lengthscale_prior_loc, lengthscale_prior_scale)
         kernel = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(
                 ard_num_dims=D,
@@ -39,11 +41,13 @@ class BaseGP(ExactGP):
 
     @property
     def lengthscale_prior_loc(self):
-        return self.covar_module.base_kernel.lengthscale_prior.loc
+        prior = getattr(self.covar_module.base_kernel, "lengthscale_prior", None)
+        return None if prior is None else prior.loc
 
     @property
     def lengthscale_prior_scale(self):
-        return self.covar_module.base_kernel.lengthscale_prior.scale
+        prior = getattr(self.covar_module.base_kernel, "lengthscale_prior", None)
+        return None if prior is None else prior.scale
 
     def forward(self, x):
         mean_x = self.mean_module(x)
