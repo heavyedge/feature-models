@@ -152,7 +152,7 @@ After downloading the dataset and training the models, build the image with one 
 This repository follows semantic versioning with [Python version specifiers](https://packaging.python.org/en/latest/specifications/version-specifiers/):
 
 ```
-N.N.N[{a|b|rc}N][.postN][.devN]
+N.N.N[{a|b|rc}N][.postN][.devN][+<local version label>]
 ```
 
 The following rules apply to the final release versions:
@@ -165,3 +165,6 @@ This repository stores source code for all major versions.
 When a new release is made, trained models are deployed to a repository dedicated to each major release.
 For example, when `v1.0.0` is released, `models/v1` is uploaded to `feature-model-v1` repository.
 This applies to other build outputs, e.g., `examples/v1`.
+
+Models from releases with local versions are not uploaded to the model repository.
+However, release artifacts are built and uploaded as usual.

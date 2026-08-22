@@ -341,9 +341,11 @@ spec:
                 git submodule update --init --recursive --depth 1 || return $?
               }
 
-              set_major_version() {
-                MAJOR_VERSION="$(python3 .github/k8s/major-version.py)" || return $?
+              set_release_version() {
+                MAJOR_VERSION="$(python3 .github/k8s/parse-version.py --target major)" || return $?
+                LOCAL_VERSION="$(python3 .github/k8s/parse-version.py --target local)" || return $?
                 export MAJOR_VERSION
+                export LOCAL_VERSION
               }
 
               run_step "Container setup" install_dependencies
@@ -355,7 +357,7 @@ spec:
               run_step "Setup PostgreSQL" bash -euo pipefail .github/k8s/setup-postgres.sh
 
               if [ "$GITHUB_EVENT_NAME" = "release" ]; then
-                run_step "Parse version" set_major_version
+                run_step "Parse version" set_release_version
               fi
               run_step "Build" bash -euo pipefail .github/k8s/build.sh
 
@@ -369,14 +371,18 @@ spec:
               fi
 
               if [ "$GITHUB_EVENT_NAME" = "release" ]; then
-                if run_nonfatal_step "Hugging Face deployment" \
-                  bash -euo pipefail .github/k8s/retry.sh --attempts 3 --sleep 60 "Hugging Face deployment" \
-                    bash -euo pipefail .github/k8s/upload-huggingface.sh; then
-                  :
+                if [ -n "$LOCAL_VERSION" ]; then
+                  echo "Skipping Hugging Face deployment for local version ${GITHUB_REF_NAME}."
                 else
-                  step_exit_code=$?
-                  if [ "$post_build_exit_code" -eq 0 ]; then
-                    post_build_exit_code="$step_exit_code"
+                  if run_nonfatal_step "Hugging Face deployment" \
+                    bash -euo pipefail .github/k8s/retry.sh --attempts 3 --sleep 60 "Hugging Face deployment" \
+                      bash -euo pipefail .github/k8s/upload-huggingface.sh; then
+                    :
+                  else
+                    step_exit_code=$?
+                    if [ "$post_build_exit_code" -eq 0 ]; then
+                      post_build_exit_code="$step_exit_code"
+                    fi
                   fi
                 fi
                 if run_nonfatal_step "Examples artifact upload" \
