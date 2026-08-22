@@ -7,6 +7,17 @@ __all__ = [
 ]
 
 
+def _prior_args(module, name):
+    loc = getattr(module, f"{name}_prior_loc", None)
+    scale = getattr(module, f"{name}_prior_scale", None)
+    if loc is None or scale is None:
+        loc = scale = None
+    return {
+        f"{name}_prior_loc": loc,
+        f"{name}_prior_scale": scale,
+    }
+
+
 def save_prior_mean(model, path):
     data = dict(
         model=dict(
@@ -41,8 +52,7 @@ def save_gpr(
         likelihood=dict(
             type=model.likelihood.__class__.__name__,
             args=dict(
-                noise_prior_loc=model.likelihood.noise_prior_loc,
-                noise_prior_scale=model.likelihood.noise_prior_scale,
+                **_prior_args(model.likelihood, "noise"),
                 batch_shape=model.likelihood.batch_shape,
             ),
             state_dict=model.likelihood.state_dict(),
@@ -52,8 +62,7 @@ def save_gpr(
             args=dict(
                 train_x=model.train_inputs[0],
                 train_y=model.train_targets,
-                lengthscale_prior_loc=model.lengthscale_prior_loc,
-                lengthscale_prior_scale=model.lengthscale_prior_scale,
+                **_prior_args(model, "lengthscale"),
                 batch_shape=model.batch_shape,
             ),
             state_dict=model.state_dict(),
@@ -90,8 +99,7 @@ def save_gpqr(
             args=dict(
                 quantile_levels=likelihood.quantile_levels,
                 central_quantile_idx=likelihood.central_quantile_idx,
-                noise_prior_loc=likelihood.noise_prior_loc,
-                noise_prior_scale=likelihood.noise_prior_scale,
+                **_prior_args(likelihood, "noise"),
                 batch_shape=likelihood.batch_shape,
             ),
             state_dict=likelihood.state_dict(),
@@ -103,8 +111,7 @@ def save_gpqr(
                 num_quantiles=model.num_quantiles[0],
                 num_lower_quantiles=model.num_lower_quantiles[0],
                 num_latents=model.num_latents,
-                lengthscale_prior_loc=model.lengthscale_prior_loc,
-                lengthscale_prior_scale=model.lengthscale_prior_scale,
+                **_prior_args(model, "lengthscale"),
                 batch_shape=model.batch_shape,
             ),
             state_dict=model.state_dict(),

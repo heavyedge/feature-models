@@ -28,7 +28,13 @@ logger = logging.getLogger(__name__)
 torch.manual_seed(42)
 
 MAX_DEFAULT_LR_SCHEDULER_PATIENCE = 50
-BASELINE_PRIOR_PARAMS = {
+HYPERPARAMETER_DEFAULTS = {
+    "noise_prior_loc": None,
+    "noise_prior_scale": None,
+    "lengthscale_prior_loc": None,
+    "lengthscale_prior_scale": None,
+}
+HYPERPARAMETER_BASELINES = {
     "noise_prior_loc": -4.0,
     "noise_prior_scale": 0.5,
     "lengthscale_prior_loc": -1.0,
@@ -111,6 +117,16 @@ training_group.add_argument(
     help="Minimum learning rate for the scheduler.",
 )
 hpo_group.add_argument(
+    "--optimize-hyperparameters",
+    nargs="+",
+    choices=tuple(HYPERPARAMETER_DEFAULTS),
+    default=(),
+    help=(
+        "Hyperparameters to optimize with Optuna when validation data is provided; "
+        "all others use their defaults."
+    ),
+)
+hpo_group.add_argument(
     "--n-trials",
     type=int,
     default=100,
@@ -186,6 +202,7 @@ hpo_group.add_argument(
     help="Optuna study name.",
 )
 args = parser.parse_args()
+optimized_hyperparameters = set(args.optimize_hyperparameters)
 
 
 has_validation = args.Xval is not None or args.yval is not None
@@ -436,33 +453,35 @@ def train_with_priors(
 
 
 def objective(trial):
-    noise_prior_loc = trial.suggest_float(
-        "noise_prior_loc",
-        args.noise_prior_loc_min,
-        args.noise_prior_loc_max,
-    )
-    noise_prior_scale = trial.suggest_float(
-        "noise_prior_scale",
-        args.prior_scale_min,
-        args.prior_scale_max,
-        log=True,
-    )
-    lengthscale_prior_loc = trial.suggest_float(
-        "lengthscale_prior_loc",
-        args.lengthscale_prior_loc_min,
-        args.lengthscale_prior_loc_max,
-    )
-    lengthscale_prior_scale = trial.suggest_float(
-        "lengthscale_prior_scale",
-        args.prior_scale_min,
-        args.prior_scale_max,
-        log=True,
-    )
+    hyperparameters = HYPERPARAMETER_DEFAULTS.copy()
+    if "noise_prior_loc" in optimized_hyperparameters:
+        hyperparameters["noise_prior_loc"] = trial.suggest_float(
+            "noise_prior_loc",
+            args.noise_prior_loc_min,
+            args.noise_prior_loc_max,
+        )
+    if "noise_prior_scale" in optimized_hyperparameters:
+        hyperparameters["noise_prior_scale"] = trial.suggest_float(
+            "noise_prior_scale",
+            args.prior_scale_min,
+            args.prior_scale_max,
+            log=True,
+        )
+    if "lengthscale_prior_loc" in optimized_hyperparameters:
+        hyperparameters["lengthscale_prior_loc"] = trial.suggest_float(
+            "lengthscale_prior_loc",
+            args.lengthscale_prior_loc_min,
+            args.lengthscale_prior_loc_max,
+        )
+    if "lengthscale_prior_scale" in optimized_hyperparameters:
+        hyperparameters["lengthscale_prior_scale"] = trial.suggest_float(
+            "lengthscale_prior_scale",
+            args.prior_scale_min,
+            args.prior_scale_max,
+            log=True,
+        )
     val_loss = train_with_priors(
-        noise_prior_loc=noise_prior_loc,
-        noise_prior_scale=noise_prior_scale,
-        lengthscale_prior_loc=lengthscale_prior_loc,
-        lengthscale_prior_scale=lengthscale_prior_scale,
+        **hyperparameters,
         trial=trial,
     )
     return val_loss
@@ -575,37 +594,43 @@ if has_validation:
         baseline_params = {
             "noise_prior_loc": float(
                 np.clip(
-                    BASELINE_PRIOR_PARAMS["noise_prior_loc"],
+                    HYPERPARAMETER_BASELINES["noise_prior_loc"],
                     args.noise_prior_loc_min,
                     args.noise_prior_loc_max,
                 )
             ),
             "noise_prior_scale": float(
                 np.clip(
-                    BASELINE_PRIOR_PARAMS["noise_prior_scale"],
+                    HYPERPARAMETER_BASELINES["noise_prior_scale"],
                     args.prior_scale_min,
                     args.prior_scale_max,
                 )
             ),
             "lengthscale_prior_loc": float(
                 np.clip(
-                    BASELINE_PRIOR_PARAMS["lengthscale_prior_loc"],
+                    HYPERPARAMETER_BASELINES["lengthscale_prior_loc"],
                     args.lengthscale_prior_loc_min,
                     args.lengthscale_prior_loc_max,
                 )
             ),
             "lengthscale_prior_scale": float(
                 np.clip(
-                    BASELINE_PRIOR_PARAMS["lengthscale_prior_scale"],
+                    HYPERPARAMETER_BASELINES["lengthscale_prior_scale"],
                     args.prior_scale_min,
                     args.prior_scale_max,
                 )
             ),
         }
-        study.enqueue_trial(baseline_params)
+        study.enqueue_trial(
+            {
+                name: value
+                for name, value in baseline_params.items()
+                if name in optimized_hyperparameters
+            }
+        )
     study.optimize(
         objective,
-        n_trials=args.n_trials,
+        n_trials=args.n_trials if optimized_hyperparameters else 1,
         catch=(
             torch.linalg.LinAlgError,
             NotPSDError,
@@ -617,13 +642,24 @@ else:
     study = optuna.load_study(study_name=study_name, storage=args.storage)
 
 best_trial = study.best_trial
-best_noise_prior_loc = best_trial.params["noise_prior_loc"]
-best_noise_prior_scale = best_trial.params["noise_prior_scale"]
-best_lengthscale_prior_loc = best_trial.params["lengthscale_prior_loc"]
-best_lengthscale_prior_scale = best_trial.params["lengthscale_prior_scale"]
+selected_hyperparameters = (
+    optimized_hyperparameters if has_validation else set(best_trial.params)
+)
+best_hyperparameters = {
+    name: (
+        best_trial.params.get(name, default)
+        if name in selected_hyperparameters
+        else default
+    )
+    for name, default in HYPERPARAMETER_DEFAULTS.items()
+}
+best_noise_prior_loc = best_hyperparameters["noise_prior_loc"]
+best_noise_prior_scale = best_hyperparameters["noise_prior_scale"]
+best_lengthscale_prior_loc = best_hyperparameters["lengthscale_prior_loc"]
+best_lengthscale_prior_scale = best_hyperparameters["lengthscale_prior_scale"]
 logger.info(
-    "Best priors: noise=LogNormal(loc=%.6g, scale=%.6g), "
-    "lengthscale=LogNormal(loc=%.6g, scale=%.6g) "
+    "Best hyperparameters: noise_prior_loc=%s, noise_prior_scale=%s, "
+    "lengthscale_prior_loc=%s, lengthscale_prior_scale=%s "
     "(validation loss: %.6f)",
     best_noise_prior_loc,
     best_noise_prior_scale,

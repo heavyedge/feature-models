@@ -118,7 +118,7 @@ $(SCRIPTS_v0)
 _temp/v1/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/%.prior_mean.pt \
 $(SCRIPTS_v1)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS_v1) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.gpr -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model GPR_$* --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters noise_prior_loc noise_prior_scale lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.gpr -o $@
 
 models/v1/feature_models/%.gpr.pt: scripts/v1/train/gpr.py _temp/v1/X.csv _temp/v1/y.csv models/v1/feature_models/%.prior_mean.pt \
 _temp/v1/%.gpr.pt $(SCRIPTS_v0)
@@ -130,17 +130,17 @@ _temp/v1/%.gpr.pt $(SCRIPTS_v0)
 _temp/v1/%.cg_gpqr_independent.pt: scripts/v0/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/%.prior_mean.pt \
 $(SCRIPTS_v0)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_Independent_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.cg_gpqr_independent -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_Independent_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters noise_prior_loc noise_prior_scale lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.cg_gpqr_independent -o $@
 
 _temp/v1/%.cg_gpqr_lmc.pt: scripts/v0/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/%.prior_mean.pt \
 $(SCRIPTS_v0)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_LMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.cg_gpqr_lmc -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_LMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters noise_prior_loc noise_prior_scale lengthscale_prior_loc lengthscale_prior_scale num_latents --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.cg_gpqr_lmc -o $@
 
 _temp/v1/%.cg_gpqr_cglmc.pt: scripts/v0/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/%.prior_mean.pt \
 $(SCRIPTS_v0)
 	mkdir -p benchmarks
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_CenterGapLMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.cg_gpqr_cglmc -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --target $* --model CenterGapMTGPQR_CenterGapLMC_$* --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters noise_prior_loc noise_prior_scale lengthscale_prior_loc lengthscale_prior_scale num_latents --n-trials=$(N_TRIALS) --storage=$(OPTUNA_DB) --study-name=v1/$*.cg_gpqr_cglmc -o $@
 
 models/v1/feature_models/%.gpqr.pt: scripts/v0/train/gpqr.py _temp/v1/X.csv _temp/v1/y.csv models/v1/feature_models/%.prior_mean.pt \
 _temp/v1/%.cg_gpqr_cglmc.pt $(SCRIPTS_v0)

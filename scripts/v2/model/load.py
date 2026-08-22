@@ -15,6 +15,26 @@ __all__ = [
 ]
 
 
+def _prior_args(component, prior_name, loc_name, scale_name):
+    args = dict(component["args"])
+    state_dict = component["state_dict"]
+    loc_key = next(
+        (key for key in state_dict if key.endswith(f"{prior_name}._buffered_loc")),
+        None,
+    )
+    scale_key = next(
+        (key for key in state_dict if key.endswith(f"{prior_name}._buffered_scale")),
+        None,
+    )
+    if loc_key is None or scale_key is None:
+        args[loc_name] = None
+        args[scale_name] = None
+    else:
+        args[loc_name] = state_dict[loc_key]
+        args[scale_name] = state_dict[scale_key]
+    return args
+
+
 def load_PriorMean(path=None, device=None):
     """Return prior mean model.
 
@@ -79,11 +99,23 @@ def load_GPR(path=None, device=None):
     y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
 
     likelihood_class = getattr(likelihood_module, checkpoint["likelihood"]["type"])
-    likelihood = likelihood_class(**checkpoint["likelihood"]["args"])
+    likelihood_args = _prior_args(
+        checkpoint["likelihood"],
+        "noise_prior",
+        "noise_prior_loc",
+        "noise_prior_scale",
+    )
+    likelihood = likelihood_class(**likelihood_args)
     likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
 
     model_class = getattr(gpr_module, checkpoint["model"]["type"])
-    model = model_class(**checkpoint["model"]["args"])
+    model_args = _prior_args(
+        checkpoint["model"],
+        "lengthscale_prior",
+        "lengthscale_prior_loc",
+        "lengthscale_prior_scale",
+    )
+    model = model_class(**model_args)
     model.load_state_dict(checkpoint["model"]["state_dict"])
 
     if device is not None:
@@ -131,11 +163,23 @@ def load_GPQR(path=None, device=None):
     y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
 
     likelihood_class = getattr(likelihood_module, checkpoint["likelihood"]["type"])
-    likelihood = likelihood_class(**checkpoint["likelihood"]["args"])
+    likelihood_args = _prior_args(
+        checkpoint["likelihood"],
+        "noise_prior",
+        "noise_prior_loc",
+        "noise_prior_scale",
+    )
+    likelihood = likelihood_class(**likelihood_args)
     likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
 
     model_class = getattr(gpqr_module, checkpoint["model"]["type"])
-    model = model_class(**checkpoint["model"]["args"])
+    model_args = _prior_args(
+        checkpoint["model"],
+        "lengthscale_prior",
+        "lengthscale_prior_loc",
+        "lengthscale_prior_scale",
+    )
+    model = model_class(**model_args)
     model.load_state_dict(checkpoint["model"]["state_dict"])
 
     if device is not None:
