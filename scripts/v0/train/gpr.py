@@ -40,6 +40,32 @@ HYPERPARAMETER_BASELINES = {
     "lengthscale_prior_scale": 0.5,
 }
 
+
+def reuse_duplicate_trial(trial):
+    completed_trials = trial.study.get_trials(
+        deepcopy=False,
+        states=(optuna.trial.TrialState.COMPLETE,),
+    )
+    for completed_trial in reversed(completed_trials):
+        if completed_trial.params != trial.params:
+            continue
+        for name, value in completed_trial.user_attrs.items():
+            if name != "duplicate_of":
+                trial.set_user_attr(name, value)
+        source_trial_number = completed_trial.user_attrs.get(
+            "duplicate_of", completed_trial.number
+        )
+        trial.set_user_attr("duplicate_of", source_trial_number)
+        logger.info(
+            "Trial %d reuses trial %d for duplicate parameters %s.",
+            trial.number,
+            source_trial_number,
+            trial.params,
+        )
+        return completed_trial.value
+    return None
+
+
 parser = argparse.ArgumentParser()
 model_group = parser.add_argument_group("input data and model")
 training_group = parser.add_argument_group("per-trial training")
@@ -479,6 +505,9 @@ def objective(trial):
             args.prior_scale_max,
             log=True,
         )
+    duplicate_value = reuse_duplicate_trial(trial)
+    if duplicate_value is not None:
+        return duplicate_value
     val_loss = train_with_priors(
         **hyperparameters,
         trial=trial,
