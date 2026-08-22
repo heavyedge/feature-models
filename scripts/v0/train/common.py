@@ -14,6 +14,8 @@ from linear_operator.utils.errors import NotPSDError
 from sqlalchemy.engine import make_url
 
 MAX_DEFAULT_LR_SCHEDULER_PATIENCE = 50
+DEFAULT_CHOLESKY_JITTER = 1e-4
+DEFAULT_MAX_GRAD_NORM = 10.0
 PRIOR_HYPERPARAMETER_DEFAULTS = {
     "noise_prior_loc": None,
     "noise_prior_scale": None,
@@ -152,6 +154,21 @@ def create_train_parser(hyperparameter_names, *, target=False, quantiles=False):
         default=1e-6,
         help="Minimum learning rate for the scheduler.",
     )
+    training_group.add_argument(
+        "--cholesky-jitter",
+        type=float,
+        default=DEFAULT_CHOLESKY_JITTER,
+        help=(
+            "Initial diagonal jitter used by Cholesky factorizations. GPyTorch "
+            "retries with successively larger values when needed."
+        ),
+    )
+    training_group.add_argument(
+        "--max-grad-norm",
+        type=float,
+        default=DEFAULT_MAX_GRAD_NORM,
+        help="Maximum total gradient norm before each optimizer step.",
+    )
 
     hpo_group.add_argument(
         "--optimize-hyperparameters",
@@ -251,6 +268,10 @@ def validate_train_args(parser, args, logger):
         parser.error("--learning-rate must be positive.")
     if args.min_learning_rate < 0 or args.min_learning_rate > args.learning_rate:
         parser.error("--min-learning-rate must be between 0 and --learning-rate.")
+    if not np.isfinite(args.cholesky_jitter) or args.cholesky_jitter <= 0:
+        parser.error("--cholesky-jitter must be finite and positive.")
+    if not np.isfinite(args.max_grad_norm) or args.max_grad_norm <= 0:
+        parser.error("--max-grad-norm must be finite and positive.")
     if not 0 < args.lr_scheduler_factor < 1:
         parser.error("--lr-scheduler-factor must be between 0 and 1.")
     if not 0 < args.lr_scheduler_patience_ratio <= 1:
@@ -414,6 +435,33 @@ def _likelihood_samples(num_likelihood_samples):
     return gpytorch.settings.num_likelihood_samples(num_likelihood_samples)
 
 
+def _cholesky_jitter(value):
+    """Apply one explicit jitter policy to all GPyTorch Cholesky paths.
+
+    Variational strategies may promote float32 covariance matrices to float64
+    before factorization. Setting both dtype-specific values avoids silently
+    falling back to the much smaller float64 default in that path.
+    """
+    values = {"float_value": value, "double_value": value, "half_value": value}
+    return (
+        gpytorch.settings.cholesky_jitter(**values),
+        gpytorch.settings.variational_cholesky_jitter(**values),
+    )
+
+
+def _backward_and_step(loss, parameters, optimizer, max_grad_norm):
+    loss.backward()
+    grad_norm = torch.nn.utils.clip_grad_norm_(
+        parameters,
+        max_norm=max_grad_norm,
+        error_if_nonfinite=False,
+    )
+    if not torch.isfinite(grad_norm):
+        return False
+    optimizer.step()
+    return True
+
+
 def fit_trial(
     *,
     likelihood,
@@ -431,6 +479,7 @@ def fit_trial(
     trial=None,
     num_likelihood_samples=None,
 ):
+    parameters = list(parameters)
     optimizer = torch.optim.Adam(parameters, lr=args.learning_rate)
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -460,19 +509,36 @@ def fit_trial(
         likelihood.train()
         model.train()
         optimizer.zero_grad()
-        with _likelihood_samples(num_likelihood_samples):
+        cholesky_context, variational_cholesky_context = _cholesky_jitter(
+            args.cholesky_jitter
+        )
+        with (
+            cholesky_context,
+            variational_cholesky_context,
+            _likelihood_samples(num_likelihood_samples),
+        ):
             train_loss = -mll(model(Xtrain), ytrain).mean()
         if not torch.isfinite(train_loss):
             save_trial_progress("non_finite_train_loss")
             if trial is not None:
                 raise optuna.TrialPruned("Non-finite training loss.")
             raise RuntimeError("Non-finite training loss during final fit.")
-        train_loss.backward()
-        optimizer.step()
+        if not _backward_and_step(
+            train_loss, parameters, optimizer, args.max_grad_norm
+        ):
+            save_trial_progress("non_finite_gradient")
+            if trial is not None:
+                raise optuna.TrialPruned("Non-finite gradient.")
+            raise RuntimeError("Non-finite gradient during final fit.")
 
+        cholesky_context, variational_cholesky_context = _cholesky_jitter(
+            args.cholesky_jitter
+        )
         with (
             torch.no_grad(),
             gpytorch.settings.fast_pred_var(),
+            cholesky_context,
+            variational_cholesky_context,
             _likelihood_samples(num_likelihood_samples),
         ):
             likelihood.eval()
@@ -537,11 +603,14 @@ def fit_all_data(
     X,
     y,
     learning_rate,
+    cholesky_jitter,
+    max_grad_norm,
     num_epochs,
     lr_reductions,
     logger,
     num_likelihood_samples=None,
 ):
+    parameters = list(parameters)
     optimizer = torch.optim.Adam(parameters, lr=learning_rate)
     lr_reductions_by_epoch = {
         int(completed_epoch): float(new_lr) for completed_epoch, new_lr in lr_reductions
@@ -550,12 +619,19 @@ def fit_all_data(
         likelihood.train()
         model.train()
         optimizer.zero_grad()
-        with _likelihood_samples(num_likelihood_samples):
+        cholesky_context, variational_cholesky_context = _cholesky_jitter(
+            cholesky_jitter
+        )
+        with (
+            cholesky_context,
+            variational_cholesky_context,
+            _likelihood_samples(num_likelihood_samples),
+        ):
             loss = -mll(model(X), y).mean()
         if not torch.isfinite(loss):
             raise RuntimeError("Non-finite training loss during final fit.")
-        loss.backward()
-        optimizer.step()
+        if not _backward_and_step(loss, parameters, optimizer, max_grad_norm):
+            raise RuntimeError("Non-finite gradient during final fit.")
 
         completed_epoch = epoch + 1
         if completed_epoch in lr_reductions_by_epoch:

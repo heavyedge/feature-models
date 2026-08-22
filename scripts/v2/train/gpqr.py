@@ -254,6 +254,8 @@ def train_on_all_data(
         X=Xall_scaled,
         y=res_all_scaled,
         learning_rate=args.learning_rate,
+        cholesky_jitter=args.cholesky_jitter,
+        max_grad_norm=args.max_grad_norm,
         num_epochs=num_epochs,
         lr_reductions=lr_reductions,
         logger=logger,

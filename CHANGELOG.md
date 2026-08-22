@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GPQR training maximum epoch is increased to `15,000`, from `10,000`.
 - GPQR early stopping patience ratio is decreased to `0.05` from `0.1`.
 
+### Fixed
+
+- v0, v1, and v2 GP training now use an explicit Cholesky jitter for both
+  float32 and promoted float64 factorizations, and clip gradients before
+  optimizer steps to prevent numerical failures during full-data refits.
+
 ## [1.0.0rc4] - 2026-08-22
 
 - Model: `gpytorch-qr==0.9.0`
