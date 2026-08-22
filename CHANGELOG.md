@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0rc4] - UNRELEASED
+
+- Model: `gpytorch-qr==0.9.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0`
+  - `heavyedge/shape-features:v1.1.0`
+
+### Changed
+
+- Noise prior hyperparameter is no longer optimized.
+- Latent function number hyperparameter is no longer optimized.
+- Number of HPO trial is reduced to 10 from the previous value of 100.
+
 ## [2.0.0b0] - UNRELEASED
 
 - Model: `gpytorch-qr==0.9.0`
