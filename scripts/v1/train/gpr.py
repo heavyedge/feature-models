@@ -121,7 +121,10 @@ hpo_group.add_argument(
     nargs="+",
     choices=tuple(HYPERPARAMETER_DEFAULTS),
     default=(),
-    help="Hyperparameters to optimize with Optuna; all others use their defaults.",
+    help=(
+        "Hyperparameters to optimize with Optuna when validation data is provided; "
+        "all others use their defaults."
+    ),
 )
 hpo_group.add_argument(
     "--n-trials",
@@ -639,10 +642,13 @@ else:
     study = optuna.load_study(study_name=study_name, storage=args.storage)
 
 best_trial = study.best_trial
+selected_hyperparameters = (
+    optimized_hyperparameters if has_validation else set(best_trial.params)
+)
 best_hyperparameters = {
     name: (
         best_trial.params.get(name, default)
-        if name in optimized_hyperparameters
+        if name in selected_hyperparameters
         else default
     )
     for name, default in HYPERPARAMETER_DEFAULTS.items()
