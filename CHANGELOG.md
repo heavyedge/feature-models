@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [UNRELEASED]
+
+- Model: `gpytorch-qr==0.9.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0`
+  - `heavyedge/shape-features:v1.1.0`
+
+### Changed
+
+**v2**
+
+- GPQR training maximum epoch is increased to `15,000`, from `10,000`.
+- GPQR early stopping patience ratio is decreased to `0.05` from `0.1`.
+
 ## [1.0.0rc4] - 2026-08-22
 
 - Model: `gpytorch-qr==0.9.0`
@@ -29,18 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Parallel model builds now serialize SQLite Optuna storage initialization to
   avoid concurrent schema creation failures.
-
-## [2.0.0b0] - UNRELEASED
-
-- Model: `gpytorch-qr==0.9.0`
-- Dataset:
-  - `heavyedge/profiles:v1.0.0`
-  - `heavyedge/shape-features:v1.1.0`
-
-### Changed
-
-- GPQR training maximum epoch is increased to `15,000`, from `10,000`.
-- GPQR early stopping patience ratio is decreased to `0.05` from `0.1`.
 
 ### Fixed
 
