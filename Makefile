@@ -20,7 +20,6 @@ N_LIKELIHOOD_SAMPLES := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),4,64)
 N_FOLDS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
 N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
-N_TRIALS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
 
 H_THRESHOLD := 1.1
 PHI_THRESHOLD := 1.0
