@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0rc4] - UNRELEASED
+
+- Model: `gpytorch-qr==0.9.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0`
+  - `heavyedge/shape-features:v1.1.0`
+
+### Changed
+
+- v1 now models `H`, `phi_1`, and `phi_3` as three independent GP batches in
+  consolidated `prior_mean.pt`, `gpr.pt`, and `gpqr.pt` artifacts.
+- v1 GPQR tensors now have shape `(*K, 3, N, Q)`, with one shared set of
+  quantile levels for every output batch.
+- Hyperparameter optimization uses one shared configuration across output
+  batches, while learned GP parameters such as ARD lengthscales remain
+  batch-specific under the shared prior.
+- Noise prior and latent function count hyperparameters are no longer optimized.
+- The number of v1 HPO trials is reduced to 10 from 100.
+
 ## [2.0.0b0] - UNRELEASED
 
 - Model: `gpytorch-qr==0.9.0`

@@ -7,12 +7,13 @@ from gpytorch.priors import LogNormalPrior
 from gpytorch.variational import CholeskyVariationalDistribution, VariationalStrategy
 
 __all__ = [
-    "GPR_H",
-    "GPR_phi",
+    "GPR",
 ]
 
 
 class BaseGP(ApproximateGP):
+    output_names = ("H", "phi_1", "phi_3")
+
     def __init__(
         self,
         inducing_points,
@@ -45,7 +46,7 @@ class BaseGP(ApproximateGP):
             batch_shape=batch_shape,
         )
 
-        self.batch_shape = batch_shape
+        self.batch_shape = torch.Size(batch_shape)
 
     @property
     def inducing_points(self):
@@ -67,9 +68,5 @@ class BaseGP(ApproximateGP):
         return MultivariateNormal(mean_x, covar_x)
 
 
-class GPR_H(BaseGP):
-    pass
-
-
-class GPR_phi(BaseGP):
+class GPR(BaseGP):
     pass

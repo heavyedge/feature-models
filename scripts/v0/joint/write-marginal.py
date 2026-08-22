@@ -25,6 +25,10 @@ parser.add_argument(
     help="Threshold for marginal CDF computation",
 )
 parser.add_argument(
+    "--target",
+    help="Only compute the marginal probability for this prediction target.",
+)
+parser.add_argument(
     "-o", "--out", type=pathlib.Path, required=True, help="Output csv file."
 )
 args = parser.parse_args()
@@ -32,6 +36,11 @@ args = parser.parse_args()
 pred = pd.read_csv(
     args.pred, index_col=["index", "batch", "target", "quantile", "sample"]
 )
+if args.target is not None:
+    available_targets = pred.index.get_level_values("target")
+    if args.target not in available_targets:
+        raise ValueError(f"Target {args.target!r} is missing from the predictions.")
+    pred = pred[available_targets == args.target]
 
 quantile_levels = np.asarray(args.quantiles)
 out_frames = []
