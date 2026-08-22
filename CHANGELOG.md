@@ -36,11 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1 now models `H`, `phi_1`, and `phi_3` as three independent GP batches in
   consolidated `prior_mean.pt`, `gpr.pt`, and `gpqr.pt` artifacts.
-- v1 GPQR tensors now have shape `(*K, 3, N, Q)`, with one shared set of
-  quantile levels for every output batch.
-- Hyperparameter optimization uses one shared configuration across output
-  batches, while learned GP parameters such as ARD lengthscales remain
-  batch-specific under the shared prior.
 - Noise prior hyperparameter is no longer optimized.
 - Latent function number hyperparameter is no longer optimized.
 - Number of HPO trial is reduced to 10 from the previous value of 100.
@@ -49,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Parallel model builds now serialize SQLite Optuna storage initialization to
   avoid concurrent schema creation failures.
+- Jitter value is increased to avoid PSD error.
 
 ### Fixed
 
