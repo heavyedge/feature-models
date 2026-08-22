@@ -21,8 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hyperparameter optimization uses one shared configuration across output
   batches, while learned GP parameters such as ARD lengthscales remain
   batch-specific under the shared prior.
-- Noise prior and latent function count hyperparameters are no longer optimized.
-- The number of v1 HPO trials is reduced to 10 from 100.
+- Noise prior hyperparameter is no longer optimized.
+- Latent function number hyperparameter is no longer optimized.
+- Number of HPO trial is reduced to 10 from the previous value of 100.
 
 ## [2.0.0b0] - UNRELEASED
 
