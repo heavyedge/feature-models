@@ -19,7 +19,7 @@ class PriorMean(torch.nn.Module):
         batch_shape = torch.Size(batch_shape)
 
         H_params = torch.tensor([0.22, -0.43, 0.77]).repeat(*batch_shape, 1)
-        phi_params = torch.tensor([[2.0, -3.0], [2.0, -3.0]]).repeat(*batch_shape, 1, 1)
+        phi_params = torch.zeros(*batch_shape, 2, 2)
         self.params = torch.nn.ParameterDict(
             dict(H_params=H_params, phi_params=phi_params)
         )

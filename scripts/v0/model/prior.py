@@ -41,22 +41,20 @@ class PriorMean_H(torch.nn.Module):
 
 
 class PriorMean_phi(torch.nn.Module):
-    """Modified version of model by Schmitt.
+    """Heuristical linear model.
 
     Input X must be [Rgt, Ca, cos_theta, ...].
     """
 
     def __init__(self, batch_shape=torch.Size()):
         super().__init__()
-        # Initial values are heuristically chosen.
-        a = torch.tensor(2.0).repeat(*batch_shape, 1)  # (*B, 1)
-        b = torch.tensor(-3.0).repeat(*batch_shape, 1)  # (*B, 1)
-        self.params = torch.nn.ParameterDict(dict(a=a, b=b))
+        phi_params = torch.zeros(*batch_shape, 2)  # (*B, 2)
+        self.params = torch.nn.ParameterDict(dict(phi_params=phi_params))
         self.batch_shape = batch_shape
 
     def forward(self, x):
         Rgt = x[..., 0]  # (*B, N)
 
-        a = self.params["a"]  # (*B, 1)
-        b = self.params["b"]  # (*B, 1)
-        return a * Rgt + b
+        design_matrix = torch.stack((Rgt, torch.ones_like(Rgt)), dim=-1)  # (*B, N, 2)
+        phi_params = self.params["phi_params"].unsqueeze(-1)  # (*B, 2, 1)
+        return torch.matmul(design_matrix, phi_params).squeeze(-1)  # (*B, N)
