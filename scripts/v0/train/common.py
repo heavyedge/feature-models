@@ -1,4 +1,5 @@
 import argparse
+import fcntl
 import logging
 import pathlib
 import sys
@@ -10,6 +11,7 @@ import numpy as np
 import optuna
 import torch
 from linear_operator.utils.errors import NotPSDError
+from sqlalchemy.engine import make_url
 
 MAX_DEFAULT_LR_SCHEDULER_PATIENCE = 50
 PRIOR_HYPERPARAMETER_DEFAULTS = {
@@ -570,6 +572,23 @@ def fit_all_data(
             )
 
 
+def initialize_optuna_storage(storage):
+    """Initialize file-backed SQLite storage without a cross-process DDL race."""
+    if not isinstance(storage, str):
+        return storage
+
+    url = make_url(storage)
+    if url.get_backend_name() != "sqlite" or url.database in (None, ":memory:"):
+        return storage
+
+    database_path = pathlib.Path(url.database).resolve()
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = database_path.with_name(f".{database_path.name}.init.lock")
+    with lock_path.open("a") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        return optuna.storages.RDBStorage(storage)
+
+
 def optimize_or_load_study(
     *,
     args,
@@ -580,8 +599,9 @@ def optimize_or_load_study(
 ):
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     study_name = args.study_name if args.study_name is not None else args.out.stem
+    storage = initialize_optuna_storage(args.storage)
     if not controls.has_validation:
-        return optuna.load_study(study_name=study_name, storage=args.storage)
+        return optuna.load_study(study_name=study_name, storage=storage)
 
     median_pruner = optuna.pruners.MedianPruner(
         n_startup_trials=args.n_startup_trials,
@@ -603,7 +623,7 @@ def optimize_or_load_study(
             min_delta=args.early_stopping_min_delta,
         ),
         study_name=study_name,
-        storage=args.storage,
+        storage=storage,
         load_if_exists=True,
     )
     if not study.trials:

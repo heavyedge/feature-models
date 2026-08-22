@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Latent function number hyperparameter is no longer optimized.
 - Number of HPO trial is reduced to 10 from the previous value of 100.
 
+### Fixed
+
+- Parallel model builds now serialize SQLite Optuna storage initialization to
+  avoid concurrent schema creation failures.
+
 ## [2.0.0b0] - UNRELEASED
 
 - Model: `gpytorch-qr==0.9.0`
