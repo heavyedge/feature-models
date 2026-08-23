@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Joint probability estimation now uses CUDA.
-- Threshold for `phi` is set to `0.5`.
+- Threshold for `phi` is set to `0.25` from `0.5`.
 
 **v2**
 
