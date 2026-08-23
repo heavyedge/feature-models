@@ -140,10 +140,10 @@ _temp/v1/gpqr_cglmc.pt $(SCRIPTS_v1)
 
 # Prediction
 
-_temp/v1/prior_mean.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt
+benchmarks/v1/prior_mean.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-prior_mean $< --index-col 0 1 2 -o $@
 
-_temp/v1/gpr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt
+benchmarks/v1/gpr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
 _temp/v1/gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpr.pt $(SCRIPTS_v1)
@@ -152,7 +152,7 @@ _temp/v1/gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpr.p
 _temp/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
 
-_temp/v1/gpqr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
+benchmarks/v1/gpqr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
 
 _temp/v1/gpqr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
@@ -185,10 +185,10 @@ _temp/v1/phi_1.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.
 _temp/v1/marginal.%.csv: _temp/v1/H.marginal.%.csv _temp/v1/phi_1.marginal.%.csv
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
-_temp/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_1D.csv
+benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_1D.csv
 	python3 $^ --index-col 0 1 2 -o $@
 
-_temp/v1/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_2D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_2D.csv
+benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_2D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_2D.csv
 	python3 $^ --index-col 0 1 2 -o $@
 
 # Examples
@@ -203,16 +203,16 @@ benchmarks/v1/pinball_loss.gpqr_cglmc.csv \
 
 examples/v1/Models.ipynb: \
 _temp/v1/X.csv _temp/v1/y.csv _temp/v1/Xpred_1D.csv \
-_temp/v1/prior_mean.Xpred_1D.csv \
-_temp/v1/gpr.Xpred_1D.csv \
-_temp/v1/gpqr.Xpred_1D.csv \
+benchmarks/v1/prior_mean.Xpred_1D.csv \
+benchmarks/v1/gpr.Xpred_1D.csv \
+benchmarks/v1/gpqr.Xpred_1D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v1/Window.ipynb: \
 _temp/v1/X.csv _temp/v1/Xpred_1D.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
-_temp/v1/H.marginal.Xpred_2D.csv _temp/v1/phi_1.marginal.Xpred_2D.csv _temp/v1/phi_3.marginal.Xpred_2D.csv \
-_temp/v1/joint_probability.Xpred_2D.csv \
-_temp/v1/joint_probability.Xpred_1D.csv \
+benchmarks/v1/H.marginal.Xpred_2D.csv benchmarks/v1/phi_1.marginal.Xpred_2D.csv \
+benchmarks/v1/joint_probability.Xpred_2D.csv \
+benchmarks/v1/joint_probability.Xpred_1D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
