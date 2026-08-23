@@ -1,9 +1,11 @@
 import argparse
+import logging
 import pathlib
 
 import numpy as np
 import pandas as pd
 from pit import quantile_pit
+from progress import ProgressLogger, configure_logging
 
 parser = argparse.ArgumentParser()
 parser.add_argument("Y", type=pathlib.Path, help="Training data csv file")
@@ -30,8 +32,11 @@ parser.add_argument(
     "--chunk-size", type=int, default=262144, help="Rows per compute chunk."
 )
 args = parser.parse_args()
+configure_logging()
 
+logging.info("Reading target data from %s", args.Y)
 Y_train = pd.read_csv(args.Y, index_col=args.index_col)
+logging.info("Reading quantile predictions from %s", args.pred)
 pred = pd.read_csv(
     args.pred, index_col=["index", "batch", "target", "quantile", "sample"]
 )
@@ -58,6 +63,8 @@ for target in pred.index.get_level_values("target").unique():
     ):
         raise ValueError("Prediction indices must refer to rows in the target data.")
 
+    logging.info("Computing PIT for %r (%s rows)", target, f"{len(pred_values):,}")
+    progress = ProgressLogger(f"{args.out.stem} | PIT {target}", len(pred_values))
     out = pred_values.index.to_frame(index=False)
     out.insert(2, "target", target)
     out["pit"] = quantile_pit(
@@ -66,9 +73,12 @@ for target in pred.index.get_level_values("target").unique():
         Y_train[target].to_numpy()[prediction_indices],
         device=args.device,
         chunk_size=args.chunk_size,
+        progress=progress.update,
     )
     out_frames.append(out)
 
 if not out_frames:
     raise ValueError("Prediction input contains no targets.")
+logging.info("Writing PIT results to %s", args.out)
 pd.concat(out_frames, ignore_index=True).to_csv(args.out, index=False)
+logging.info("Done")

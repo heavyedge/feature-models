@@ -12,6 +12,7 @@ def empirical_copula(
     chunk_size=1024,
     train_chunk_size=32768,
     device="auto",
+    progress=None,
 ):
     """Estimate joint CDF using empirical copula.
 
@@ -53,6 +54,7 @@ def empirical_copula(
             u_pred,
             chunk_size,
             train_chunk_size,
+            progress,
         )
 
     M = u_pred.shape[0]
@@ -66,11 +68,19 @@ def empirical_copula(
             indicator = u_train[np.newaxis, train_start:train_end, :] <= pred_chunk
             counts += indicator.all(axis=2).sum(axis=1)
         result[start:end] = counts / u_train.shape[0]
+        if progress is not None:
+            progress(end)
     return result
 
 
 def _empirical_copula_cuda(
-    torch, device, u_train, u_pred, chunk_size, train_chunk_size
+    torch,
+    device,
+    u_train,
+    u_pred,
+    chunk_size,
+    train_chunk_size,
+    progress=None,
 ):
     # Preserve the float64 values read by pandas: casting PIT values to float32
     # can change an empirical-CDF comparison at equality boundaries.
@@ -94,4 +104,6 @@ def _empirical_copula_cuda(
             result[start:end] = (
                 (counts.to(torch.float64) / train.shape[0]).cpu().numpy()
             )
+            if progress is not None:
+                progress(end)
     return result

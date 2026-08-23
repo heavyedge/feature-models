@@ -1,9 +1,11 @@
 import argparse
+import logging
 import pathlib
 
 import numpy as np
 import pandas as pd
 from pit import quantile_interpolation
+from progress import ProgressLogger, configure_logging
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -38,7 +40,9 @@ parser.add_argument(
     "--chunk-size", type=int, default=262144, help="Rows per compute chunk."
 )
 args = parser.parse_args()
+configure_logging()
 
+logging.info("Reading quantile predictions from %s", args.pred)
 pred = pd.read_csv(
     args.pred, index_col=["index", "batch", "target", "quantile", "sample"]
 )
@@ -61,6 +65,12 @@ for target in pred.index.get_level_values("target").unique():
             f"expected {quantile_levels.tolist()}."
         )
 
+    logging.info(
+        "Computing marginal probability for %r (%s rows)",
+        target,
+        f"{len(pred_values):,}",
+    )
+    progress = ProgressLogger(f"{args.out.stem} | Marginal {target}", len(pred_values))
     out = pred_values.index.to_frame(index=False)
     out.insert(2, "target", target)
     out["marginal_prob"] = quantile_interpolation(
@@ -69,9 +79,12 @@ for target in pred.index.get_level_values("target").unique():
         threshold=args.threshold,
         device=args.device,
         chunk_size=args.chunk_size,
+        progress=progress.update,
     )
     out_frames.append(out)
 
 if not out_frames:
     raise ValueError("Prediction input contains no targets.")
+logging.info("Writing marginal probabilities to %s", args.out)
 pd.concat(out_frames, ignore_index=True).to_csv(args.out, index=False)
+logging.info("Done")

@@ -1,9 +1,11 @@
 import argparse
+import logging
 import pathlib
 
 import numpy as np
 import pandas as pd
 from copula import empirical_copula
+from progress import ProgressLogger, configure_logging
 
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="Prediction grid csv file.")
@@ -30,12 +32,15 @@ parser.add_argument(
     "--train-chunk-size", type=int, default=32768, help="Training rows per chunk."
 )
 args = parser.parse_args()
+configure_logging()
 
+logging.info("Reading prediction grid from %s", args.X)
 Xpred = pd.read_csv(args.X, index_col=args.index_col)
 keys = ["index", "batch", "sample"]
 
 
 def values_by_target(path, value_column):
+    logging.info("Reading %s values from %s", value_column, path)
     frame = pd.read_csv(path)
     required_columns = set(keys + ["target", value_column])
     missing_columns = required_columns.difference(frame.columns)
@@ -69,14 +74,25 @@ if not np.issubdtype(prediction_indices.dtype, np.integer) or (
 if "cosine_of_contact_angle" not in Xpred:
     raise ValueError("X must contain a 'cosine_of_contact_angle' column.")
 
+logging.info(
+    "Computing joint probability for %s (%s predictions, %s PIT rows)",
+    marginal_values.columns.tolist(),
+    f"{len(marginal_values):,}",
+    f"{len(pit_values):,}",
+)
+output_stem = args.out.stem if args.out is not None else "<stdout>"
+progress = ProgressLogger(f"{output_stem} | Joint probability", len(marginal_values))
 joint_prob = empirical_copula(
     pit_values.to_numpy(),
     marginal_values.to_numpy(),
     chunk_size=args.chunk_size,
     train_chunk_size=args.train_chunk_size,
     device=args.device,
+    progress=progress.update,
 )
 
 out = marginal_values.index.to_frame(index=False)
 out["joint_prob"] = joint_prob
+logging.info("Writing joint probabilities to %s", args.out)
 out.to_csv(args.out, index=False)
+logging.info("Done")

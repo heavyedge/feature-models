@@ -8,7 +8,12 @@ __all__ = [
 
 
 def quantile_interpolation(
-    q_values, q_levels, threshold, device="auto", chunk_size=262144
+    q_values,
+    q_levels,
+    threshold,
+    device="auto",
+    chunk_size=262144,
+    progress=None,
 ):
     """Estimate P(Y <= threshold) from predicted quantiles.
 
@@ -25,10 +30,12 @@ def quantile_interpolation(
     chunk_size : int
         Maximum rows transferred to CUDA at once.
     """
-    return _interpolate_linear(q_values, q_levels, threshold, device, chunk_size)
+    return _interpolate_linear(
+        q_values, q_levels, threshold, device, chunk_size, progress
+    )
 
 
-def _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size):
+def _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size, progress):
     q_values = np.asarray(q_values)
     q_levels = np.asarray(q_levels)
     thresholds = np.asarray(thresholds)
@@ -60,6 +67,7 @@ def _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size):
             q_levels,
             thresholds,
             chunk_size,
+            progress,
         )
 
     # NumPy has no row-wise searchsorted. Counting is fully vectorized and Q is
@@ -83,10 +91,14 @@ def _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size):
 
     probs = np.where(idx == 0, q_levels[0], probs)
     probs = np.where(idx == Q, q_levels[-1], probs)
+    if progress is not None:
+        progress(N)
     return np.clip(probs, q_levels[0], q_levels[-1])
 
 
-def _interpolate_cuda(torch, device, q_values, q_levels, thresholds, chunk_size):
+def _interpolate_cuda(
+    torch, device, q_values, q_levels, thresholds, chunk_size, progress=None
+):
     # CSV input is normally float64. Preserving it avoids moving interpolation
     # boundaries and changing searchsorted results near a predicted quantile.
     dtype = torch.float64
@@ -115,10 +127,19 @@ def _interpolate_cuda(torch, device, q_values, q_levels, thresholds, chunk_size)
             probs = torch.where(idx == 0, levels[0], probs)
             probs = torch.where(idx == values.shape[1], levels[-1], probs)
             result[start:end] = probs.clamp(levels[0], levels[-1]).cpu().numpy()
+            if progress is not None:
+                progress(end)
     return result
 
 
-def quantile_pit(q_values, q_levels, thresholds, device="auto", chunk_size=262144):
+def quantile_pit(
+    q_values,
+    q_levels,
+    thresholds,
+    device="auto",
+    chunk_size=262144,
+    progress=None,
+):
     """Compute PIT values P(Y <= y_i | x_i) with per-sample thresholds.
 
     Parameters
@@ -139,4 +160,6 @@ def quantile_pit(q_values, q_levels, thresholds, device="auto", chunk_size=26214
     (N,) array
         Estimated CDF value for each sample.
     """
-    return _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size)
+    return _interpolate_linear(
+        q_values, q_levels, thresholds, device, chunk_size, progress
+    )
