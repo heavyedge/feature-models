@@ -89,12 +89,19 @@ Once models are trained, you can perform inference using the scripts in `models/
 
 ### Acquiring the built examples
 
-The benchmark results are visualized as notebooks in the `examples` directory.
+The benchmark results are built in `benchmark` directory, and are visualized as notebooks in the `examples` directory.
 
 The notebook outputs are stripped before being stored in this repository.
 To check their outputs, you must acquire the built example notebooks.
 
-You can either download the built notebooks from the [GitHub release](https://github.com/heavyedge/feature-models/releases) artifacts, or build the notebooks yourself if you have acquired the preprocessed data.
+You can either download the built results from the [GitHub release](https://github.com/heavyedge/feature-models/releases) artifacts, or build them yourself if you have acquired the preprocessed data.
+
+#### Download from GitHub release
+
+```sh
+curl -L -O <artifact url>
+tar -xf <artifact path> -C <build directory>
+```
 
 #### Building the notebooks
 

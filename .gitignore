@@ -1,6 +1,8 @@
 _data
 _temp
 benchmarks
+benchmarks-*.tar.gz
+examples-*.tar.gz
 models/**/*.pt
 models/**/*.py
 models/**/.gitattributes
