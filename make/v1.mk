@@ -182,15 +182,15 @@ benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v0/model_selection/pinball_loss.p
 
 benchmarks/v1/pit.csv: scripts/v0/joint/write-pit.py _temp/v1/y.csv benchmarks/v1/gpqr.X.csv
 	mkdir -p $(@D)
-	python3 $^ --index-col 0 --quantiles $(QUANTILES) -o $@
+	$(GPU_PYTHON) $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
 benchmarks/v1/H.marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
-	python3 $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
+	$(GPU_PYTHON) $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
 benchmarks/v1/phi_1.marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
-	python3 $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
+	$(GPU_PYTHON) $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
 benchmarks/v1/marginal.%.csv: benchmarks/v1/H.marginal.%.csv benchmarks/v1/phi_1.marginal.%.csv
 	mkdir -p $(@D)
@@ -198,21 +198,21 @@ benchmarks/v1/marginal.%.csv: benchmarks/v1/H.marginal.%.csv benchmarks/v1/phi_1
 
 benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_1D.csv
 	mkdir -p $(@D)
-	python3 $^ --index-col 0 1 2 -o $@
+	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
 benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_2D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_2D.csv
 	mkdir -p $(@D)
-	python3 $^ --index-col 0 1 2 -o $@
+	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
 # Class probability prediction
 
 benchmarks/v1/phi_1.class_marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
-	python3 $^ --target phi_1 --quantiles $(QUANTILES) --threshold 0 -o $@
+	$(GPU_PYTHON) $^ --target phi_1 --quantiles $(QUANTILES) --threshold 0 -o $@
 
 benchmarks/v1/phi_3.class_marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
-	python3 $^ --target phi_3 --quantiles $(QUANTILES) --threshold 0 -o $@
+	$(GPU_PYTHON) $^ --target phi_3 --quantiles $(QUANTILES) --threshold 0 -o $@
 
 # Examples
 
