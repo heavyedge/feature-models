@@ -22,9 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GPQR training maximum epoch is increased to `15,000`, from `10,000`.
 - GPQR early stopping patience ratio is decreased to `0.05` from `0.1`.
 
-### Fixed
+## [1.0.0rc5] - 2026-08-23
 
-**v1**
+- Model: `gpytorch-qr==0.9.0`
+- Dataset:
+  - `heavyedge/profiles:v1.0.0`
+  - `heavyedge/shape-features:v1.1.0`
+
+### Changed
+
+- Joint probability estimation now uses CUDA.
+- Threshold for `phi` is set to `0.5`.
+
+### Fixed
 
 - Joint probability now again depends on marginal probabilities of `H` and `phi_1`.
 
