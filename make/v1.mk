@@ -176,13 +176,13 @@ benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v0/model_selection/pinball_loss.p
 _temp/v1/pit.csv: scripts/v0/joint/write-pit.py _temp/v1/y.csv _temp/v1/gpqr.X.csv
 	python3 $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
-_temp/v1/H.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
+benchmarks/v1/H.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
 	python3 $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
-_temp/v1/phi_1.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
+benchmarks/v1/phi_1.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
 	python3 $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
-_temp/v1/marginal.%.csv: _temp/v1/H.marginal.%.csv _temp/v1/phi_1.marginal.%.csv
+_temp/v1/marginal.%.csv: benchmarks/v1/H.marginal.%.csv benchmarks/v1/phi_1.marginal.%.csv
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
 benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_1D.csv
@@ -190,6 +190,14 @@ benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _t
 
 benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_2D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_2D.csv
 	python3 $^ --index-col 0 1 2 -o $@
+
+# Class probability prediction
+
+benchmarks/v1/phi_1.class_marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
+	python3 $^ --target phi_1 --quantiles $(QUANTILES) --threshold 0 -o $@
+
+benchmarks/v1/phi_3.class_marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
+	python3 $^ --target phi_3 --quantiles $(QUANTILES) --threshold 0 -o $@
 
 # Examples
 
@@ -214,5 +222,11 @@ _temp/v1/X.csv _temp/v1/Xpred_1D.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpr
 benchmarks/v1/H.marginal.Xpred_2D.csv benchmarks/v1/phi_1.marginal.Xpred_2D.csv \
 benchmarks/v1/joint_probability.Xpred_2D.csv \
 benchmarks/v1/joint_probability.Xpred_1D.csv \
+.FORCE
+	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
+
+examples/v1/Class_Probability.ipynb: \
+_temp/v1/X.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
+benchmarks/v1/phi_1.class_marginal.Xpred_2D.csv benchmarks/v1/phi_3.class_marginal.Xpred_2D.csv
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
