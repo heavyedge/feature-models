@@ -1,4 +1,5 @@
 import argparse
+import logging
 import pathlib
 
 import numpy as np
@@ -7,6 +8,11 @@ import torch
 
 from . import load as load_module
 from .batch import load_batched_features
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description="Predict all v1 prior means.")
 parser.add_argument("X", type=pathlib.Path, help="Input feature CSV.")
@@ -74,6 +80,7 @@ with torch.no_grad():
             mode="a" if wrote_output else "w",
             header=not wrote_output,
         )
+        logger.info("Wrote chunk %s:%s to %s", start, start + chunk_size, args.out)
         wrote_output = True
 
 if not wrote_output:

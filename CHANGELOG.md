@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `heavyedge/profiles:v1.0.0`
   - `heavyedge/shape-features:v1.1.0`
 
+### Added
+
+- Prediction scripts now print logs.
+
 ### Changed
 
 - Joint probability estimation now uses CUDA.
