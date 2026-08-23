@@ -129,7 +129,7 @@ with torch.no_grad():
             mode="a" if wrote_output else "w",
             header=not wrote_output,
         )
-        logger.info("Wrote chunk %s:%s to %s", start, start + chunk_size, args.out)
+        logger.info("Wrote chunk %s:%s to %s", i, i + chunk_size, args.out)
         wrote_output = True
 
 if not wrote_output:
