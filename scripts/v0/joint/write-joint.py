@@ -20,6 +20,15 @@ parser.add_argument(
     type=pathlib.Path,
     help="Output csv file of joint probability.",
 )
+parser.add_argument(
+    "--device", default="auto", help="Compute device: auto, cpu, or e.g. cuda:0."
+)
+parser.add_argument(
+    "--chunk-size", type=int, default=1024, help="Prediction rows per chunk."
+)
+parser.add_argument(
+    "--train-chunk-size", type=int, default=32768, help="Training rows per chunk."
+)
 args = parser.parse_args()
 
 Xpred = pd.read_csv(args.X, index_col=args.index_col)
@@ -56,15 +65,15 @@ if not np.issubdtype(prediction_indices.dtype, np.integer) or (
 if "cosine_of_contact_angle" not in Xpred:
     raise ValueError("X must contain a 'cosine_of_contact_angle' column.")
 
-# Compute a separate empirical copula for each contact angle, as in the
-# original implementation, while retaining every batch/sample prediction row.
-cosine = Xpred["cosine_of_contact_angle"].to_numpy()[prediction_indices]
-joint_prob = np.empty(len(marginal_values), dtype=float)
-for contact_angle in pd.unique(cosine):
-    mask = cosine == contact_angle
-    joint_prob[mask] = empirical_copula(
-        pit_values.to_numpy(), marginal_values.to_numpy()[mask]
-    )
+# The previous contact-angle loop used the same training copula for every group,
+# so a single call is mathematically identical and avoids repeated GPU transfers.
+joint_prob = empirical_copula(
+    pit_values.to_numpy(),
+    marginal_values.to_numpy(),
+    chunk_size=args.chunk_size,
+    train_chunk_size=args.train_chunk_size,
+    device=args.device,
+)
 
 out = marginal_values.index.to_frame(index=False)
 out["joint_prob"] = joint_prob

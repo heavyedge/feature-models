@@ -23,6 +23,12 @@ parser.add_argument(
 parser.add_argument(
     "-o", "--out", type=pathlib.Path, required=True, help="Output csv file."
 )
+parser.add_argument(
+    "--device", default="auto", help="Compute device: auto, cpu, or e.g. cuda:0."
+)
+parser.add_argument(
+    "--chunk-size", type=int, default=262144, help="Rows per compute chunk."
+)
 args = parser.parse_args()
 
 Y_train = pd.read_csv(args.Y, index_col=args.index_col)
@@ -58,6 +64,8 @@ for target in pred.index.get_level_values("target").unique():
         pred_values.to_numpy(),
         quantile_levels,
         Y_train[target].to_numpy()[prediction_indices],
+        device=args.device,
+        chunk_size=args.chunk_size,
     )
     out_frames.append(out)
 
