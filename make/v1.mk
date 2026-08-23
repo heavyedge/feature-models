@@ -148,20 +148,20 @@ benchmarks/v1/gpr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/fe
 	mkdir -p $(@D)
 	mkdir -p $(@D)$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
-_temp/v1/gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpr.pt $(SCRIPTS_v1)
+benchmarks/v1/gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpr.pt $(SCRIPTS_v1)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 -o $@
 
-_temp/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
+benchmarks/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
 
 benchmarks/v1/gpqr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
 
-_temp/v1/gpqr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
+benchmarks/v1/gpqr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
 
-_temp/v1/gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpqr_%.pt $(SCRIPTS_v1)
+benchmarks/v1/gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpqr_%.pt $(SCRIPTS_v1)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 -o $@
 
 # Model selection
@@ -176,35 +176,35 @@ benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v0/model_selection/pinball_loss.p
 
 # Window prediction
 
-_temp/v1/pit.csv: scripts/v0/joint/write-pit.py _temp/v1/y.csv _temp/v1/gpqr.X.csv
+benchmarks/v1/pit.csv: scripts/v0/joint/write-pit.py _temp/v1/y.csv benchmarks/v1/gpqr.X.csv
 	python3 $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
-benchmarks/v1/H.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
+benchmarks/v1/H.marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	python3 $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
-benchmarks/v1/phi_1.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
+benchmarks/v1/phi_1.marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	python3 $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
-_temp/v1/marginal.%.csv: benchmarks/v1/H.marginal.%.csv benchmarks/v1/phi_1.marginal.%.csv
+benchmarks/v1/marginal.%.csv: benchmarks/v1/H.marginal.%.csv benchmarks/v1/phi_1.marginal.%.csv
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
-benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_1D.csv
+benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_1D.csv
 	mkdir -p $(@D)
 	python3 $^ --index-col 0 1 2 -o $@
 
-benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_2D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_2D.csv
+benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_2D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_2D.csv
 	mkdir -p $(@D)
 	python3 $^ --index-col 0 1 2 -o $@
 
 # Class probability prediction
 
-benchmarks/v1/phi_1.class_marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
+benchmarks/v1/phi_1.class_marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	python3 $^ --target phi_1 --quantiles $(QUANTILES) --threshold 0 -o $@
 
-benchmarks/v1/phi_3.class_marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
+benchmarks/v1/phi_3.class_marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	python3 $^ --target phi_3 --quantiles $(QUANTILES) --threshold 0 -o $@
 
