@@ -21,8 +21,7 @@ models/v0/feature_models/load.py \
 models/v0/feature_models/batch.py \
 models/v0/feature_models/predict-prior_mean.py \
 models/v0/feature_models/predict-gpr.py \
-models/v0/feature_models/predict-gpqr.py \
-scripts/v0/train/common.py
+models/v0/feature_models/predict-gpqr.py
 
 models-v0: $(MODELS_v0) $(SCRIPTS_v0)
 
