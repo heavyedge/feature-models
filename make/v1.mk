@@ -166,11 +166,11 @@ benchmarks/v1/gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/
 
 # Model selection
 
-benchmarks/v1/pinball_loss.gpr.csv: scripts/v0/model_selection/pinball_loss.py _temp/v1/gpr.Xtest.csv _temp/v1/ytest.csv
+benchmarks/v1/pinball_loss.gpr.csv: scripts/v0/model_selection/pinball_loss.py benchmarks/v1/gpr.Xtest.csv _temp/v1/ytest.csv
 	mkdir -p $(@D)
 	python3 $^ --type GPR --quantile-levels $(QUANTILES) -o $@
 
-benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v0/model_selection/pinball_loss.py _temp/v1/gpqr_%.Xtest.csv _temp/v1/ytest.csv
+benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v0/model_selection/pinball_loss.py benchmarks/v1/gpqr_%.Xtest.csv _temp/v1/ytest.csv
 	mkdir -p $(@D)
 	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
 
