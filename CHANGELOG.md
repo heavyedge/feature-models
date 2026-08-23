@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Joint probability estimation now uses CUDA.
+- Threshold for `phi` is set to `0.5`.
+
 **v2**
 
 - GPQR training maximum epoch is increased to `15,000`, from `10,000`.
@@ -21,9 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- v0, v1, and v2 GP training now use an explicit Cholesky jitter for both
-  float32 and promoted float64 factorizations, and clip gradients before
-  optimizer steps to prevent numerical failures during full-data refits.
+**v1**
+
+- Joint probability now again depends on marginal probabilities of `H` and `phi_1`.
 
 ## [1.0.0rc4] - 2026-08-22
 

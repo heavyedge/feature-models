@@ -182,10 +182,7 @@ _temp/v1/H.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.cs
 _temp/v1/phi_1.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
 	python3 $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
-_temp/v1/phi_3.marginal.%.csv: scripts/v0/joint/write-marginal.py _temp/v1/gpqr.%.csv
-	python3 $^ --target phi_3 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
-
-_temp/v1/marginal.%.csv: _temp/v1/H.marginal.%.csv _temp/v1/phi_1.marginal.%.csv _temp/v1/phi_3.marginal.%.csv
+_temp/v1/marginal.%.csv: _temp/v1/H.marginal.%.csv _temp/v1/phi_1.marginal.%.csv
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
 _temp/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv _temp/v1/pit.csv _temp/v1/marginal.Xpred_1D.csv

@@ -52,8 +52,12 @@ def values_by_target(path, value_column):
 
 pit_values = values_by_target(args.pit, "pit")
 marginal_values = values_by_target(args.marginal, "marginal_prob")
-if not pit_values.columns.equals(marginal_values.columns):
-    raise ValueError("PIT and marginal inputs must contain the same targets.")
+missing_pit_targets = marginal_values.columns.difference(pit_values.columns)
+if not missing_pit_targets.empty:
+    raise ValueError(
+        "PIT input is missing marginal targets: " f"{missing_pit_targets.tolist()}."
+    )
+pit_values = pit_values.reindex(columns=marginal_values.columns)
 if pit_values.isna().any().any() or marginal_values.isna().any().any():
     raise ValueError("Each index, batch, and sample must have values for every target.")
 
@@ -65,8 +69,6 @@ if not np.issubdtype(prediction_indices.dtype, np.integer) or (
 if "cosine_of_contact_angle" not in Xpred:
     raise ValueError("X must contain a 'cosine_of_contact_angle' column.")
 
-# The previous contact-angle loop used the same training copula for every group,
-# so a single call is mathematically identical and avoids repeated GPU transfers.
 joint_prob = empirical_copula(
     pit_values.to_numpy(),
     marginal_values.to_numpy(),

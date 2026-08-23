@@ -22,7 +22,7 @@ N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
 N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 
 H_THRESHOLD := 1.1
-PHI_THRESHOLD := 1.0
+PHI_THRESHOLD := 0.5
 
 all: models examples
 
