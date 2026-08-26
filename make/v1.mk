@@ -1,8 +1,9 @@
 .PHONY: models-v1 examples-v1 test-v1
 
-N_FOLDS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,5)
+N_FOLDS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,5)
 N_EPOCHS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_TRIALS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10)
+N_SAMPLES_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,20)
 WRITE_X_ARGS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),--draw 3 --seed 42)
 
 MODELS_v1 := \
@@ -66,7 +67,7 @@ _temp/v1/y.csv: scripts/v0/data/write-y.py _temp/v1/X.csv _temp/v1/shape_feature
 	python3 $^ --index-col 0 1 2 -o $@
 
 _temp/v1/Xsplit.csv: scripts/v0/data/split-X.py _temp/v1/X.csv
-	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS_v1) --samples-per-x=20 --random-state=42 -o $@
+	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS_v1) --samples-per-x $(N_SAMPLES_v1) --random-state=42 -o $@
 
 _temp/v1/ysplit.csv: scripts/v0/data/write-y.py _temp/v1/Xsplit.csv _temp/v1/shape_features.csv
 	python3 $^ --index-col 0 1 2 3 4 -o $@
@@ -162,23 +163,23 @@ benchmarks/v1/gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/
 
 benchmarks/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
 
 benchmarks/v1/gpqr.Xunique.csv: _temp/v1/Xunique.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 -o $@
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 --num-samples $(N_SAMPLES_v1) -o $@
 
 benchmarks/v1/gpqr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
 
 benchmarks/v1/gpqr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 -o $@
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
 
 benchmarks/v1/gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpqr_%.pt $(SCRIPTS_v1)
 	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 -o $@
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --num-samples $(N_SAMPLES_v1) -o $@
 
 # Model selection
 

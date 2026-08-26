@@ -73,14 +73,11 @@ if args.draw is not None:
         "cosine_of_contact_angle",
     ]
     rng = np.random.default_rng(args.seed)
-    out_df = (
-        out_df.groupby(x_columns, group_keys=False, sort=False)
-        .apply(
-            lambda group: group.sample(
-                n=min(args.draw, len(group)), replace=False, random_state=rng
-            )
+    sampled_indices = []
+    for _, group in out_df.groupby(x_columns, sort=False):
+        sampled_indices.extend(
+            rng.choice(group.index, size=min(args.draw, len(group)), replace=False)
         )
-        .sort_index()
-    )
+    out_df = out_df.loc[np.sort(sampled_indices)]
 
 out_df.to_csv(args.out)
