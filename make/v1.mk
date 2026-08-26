@@ -64,7 +64,7 @@ _temp/v1/y.csv: scripts/v0/data/write-y.py _temp/v1/X.csv _temp/v1/shape_feature
 	python3 $^ --index-col 0 1 2 -o $@
 
 _temp/v1/Xsplit.csv: scripts/v0/data/split-X.py _temp/v1/X.csv
-	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds 1 --random-state=42 -o $@
+	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds 5 --samples-per-x=20 --random-state=42 -o $@
 
 _temp/v1/ysplit.csv: scripts/v0/data/write-y.py _temp/v1/Xsplit.csv _temp/v1/shape_features.csv
 	python3 $^ --index-col 0 1 2 3 4 -o $@
@@ -77,13 +77,16 @@ _temp/v1/y$(1).csv: _temp/v1/ysplit.csv
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v1,$(split))))
 
-_temp/v1/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v1/X.csv
+_temp/v1/Xunique.csv: scripts/v0/data/write-Xunique.py _temp/v1/X.csv
+	python3 $^ --index-col 0 1 -o $@
+
+_temp/v1/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v1/Xunique.csv
 	python3 $^ --target gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
-_temp/v1/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v1/X.csv
+_temp/v1/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v1/Xunique.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number --ngrid $(N_GRID_1) -o $@
 
-_temp/v1/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v1/X.csv _temp/v1/Xpred_2D.csv
+_temp/v1/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v1/Xunique.csv _temp/v1/Xpred_2D.csv
 	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
 
 # Models

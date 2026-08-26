@@ -12,7 +12,7 @@ TARGET_COLUMNS = [
 ]
 
 parser = argparse.ArgumentParser(description="Construct Xpred grid")
-parser.add_argument("X", type=pathlib.Path, help="Observed X csv file.")
+parser.add_argument("X", type=pathlib.Path, help="Unique X csv file.")
 parser.add_argument("--target", nargs="*", choices=TARGET_COLUMNS)
 parser.add_argument(
     "--start",
@@ -55,7 +55,7 @@ if not isinstance(args.ngrid, Iterable) or len(args.ngrid) == 1:
         args.target
     )
 
-X = pd.read_csv(args.X, index_col=[0, 1, 2])
+X = pd.read_csv(args.X, index_col=[0])
 ranges = [
     (
         X[col].min() + s * (X[col].max() - X[col].min()),
