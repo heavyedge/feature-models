@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Joint probability estimation now uses CUDA.
 - Threshold for `phi` is set to `0.25` from `0.5`.
 
+**v1**
+
+- Quantile interpolation now uses spline with exponential tail model.
+
 **v2**
 
 - GPQR training maximum epoch is increased to `15,000`, from `10,000`.
