@@ -32,6 +32,40 @@ test-v1: $(if $(filter 1,$(PREBUILT_MODELS)),,$(MODELS_v1) $(SCRIPTS_v1))
 
 # Data
 
+_temp/v1/X_index.csv: $(wildcard _data/v1/dimless/mean_profiles/dataset*.csv)
+	mkdir -p $(@D)
+	python3 -c '
+	import csv
+	from pathlib import Path
+
+	pvs = sorted([Path(f) for f in "$^".split(" ")])
+	x_columns = [
+	    "slurry",
+	    "gap_to_thickness_ratio",
+	    "capillary_number",
+	    "cosine_of_contact_angle",
+	    "feed_slot_height_ratio",
+	    "downstream_lip_length_ratio",
+	    "upstream_lip_length_ratio",
+	]
+	rows = [
+		(pv.stem, row)
+		for pv in pvs
+		for row in csv.DictReader(pv.open(newline=""))
+	]
+	index_by_x = {}
+	out = open("$@", "w", newline="")
+	writer = csv.writer(out)
+	writer.writerow(["name", "index"])
+	[
+		writer.writerow(
+			["{}/{}".format(stem, row["name"]), index_by_x.setdefault(tuple(row[column] for column in x_columns), len(index_by_x))]
+		)
+		for stem, row in rows
+	]
+	out.close()
+	'
+
 _temp/v1/dimless.csv: $(wildcard _data/v1/dimless/all_profiles/dataset*.csv)
 	mkdir -p $(@D)
 	python3 -c '
