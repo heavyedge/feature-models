@@ -31,11 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Quantile interpolation now uses spline with exponential tail model.
 
-**v2**
-
-- GPQR training maximum epoch is increased to `15,000`, from `10,000`.
-- GPQR early stopping patience ratio is decreased to `0.05` from `0.1`.
-
 ### Removed
 
 **v1**
@@ -143,19 +138,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `predict-gpr.py` now returns mean and std for both latent posterior and predictive posterior.
-
-## [2.0.0a0] - 2026-08-18
-
-- Model: `gpytorch-qr==0.9.0`
-- Dataset:
-  - `heavyedge/profiles:v1.0.0`
-  - `heavyedge/shape-features:v1.1.0`
-
-### Added
-
-- Multi-output prior mean model.
-- Multi-output GPR models.
-- Multi-output GPQR models.
 
 ## [1.0.0rc1] - 2026-08-18
 
