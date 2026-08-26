@@ -1,6 +1,7 @@
 import torch
 
 __all__ = [
+    "save_prior_mean",
     "save_gpr",
     "save_gpqr",
 ]
@@ -15,6 +16,20 @@ def _prior_args(module, name):
         f"{name}_prior_loc": loc,
         f"{name}_prior_scale": scale,
     }
+
+
+def save_prior_mean(model, path):
+    data = dict(
+        model=dict(
+            type=model.__class__.__name__,
+            args=dict(batch_shape=model.batch_shape),
+            state_dict=model.state_dict(),
+        )
+    )
+    torch.save(
+        data,
+        path,
+    )
 
 
 def save_gpr(
