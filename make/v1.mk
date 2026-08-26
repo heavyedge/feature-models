@@ -224,6 +224,7 @@ benchmarks/v1/pinball_loss.gpqr_cglmc.csv \
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v1/Models.prior_mean.ipynb: \
+models/v1/feature_models/prior_mean.pt \
 _temp/v1/X.csv _temp/v1/y.csv _temp/v1/Xpred_1D.csv \
 benchmarks/v1/prior_mean.Xpred_1D.csv \
 .FORCE
