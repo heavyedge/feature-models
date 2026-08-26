@@ -1,10 +1,10 @@
 .PHONY: models-v1 examples-v1 test-v1
 
+N_DATA_DRAW_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,20)
 N_FOLDS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,5)
 N_EPOCHS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_TRIALS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10)
 N_SAMPLES_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,20)
-WRITE_X_ARGS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),--draw 3 --seed 42)
 
 MODELS_v1 := \
 models/v1/feature_models/prior_mean.pt \
@@ -60,16 +60,16 @@ _temp/v1/shape_features.csv: $(wildcard _data/v1/shape_features/all_profiles/dat
 	df.to_csv("$@", index=False)
 	'
 
-_temp/v1/X.csv: scripts/v0/data/write-X.py _temp/v1/dimless.csv
-	python3 $^ $(WRITE_X_ARGS_v1) -o $@
+_temp/v1/X.csv: scripts/v1/data/write-X.py _temp/v1/dimless.csv
+	python3 $^ --draw $(N_DATA_DRAW_v1) --seed 0 -o $@
 
-_temp/v1/y.csv: scripts/v0/data/write-y.py _temp/v1/X.csv _temp/v1/shape_features.csv
+_temp/v1/y.csv: scripts/v1/data/write-y.py _temp/v1/X.csv _temp/v1/shape_features.csv
 	python3 $^ --index-col 0 1 2 -o $@
 
-_temp/v1/Xsplit.csv: scripts/v0/data/split-X.py _temp/v1/X.csv
-	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS_v1) --samples-per-x $(N_SAMPLES_v1) --random-state=42 -o $@
+_temp/v1/Xsplit.csv: scripts/v1/data/split-X.py _temp/v1/X.csv
+	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS_v1) --random-state=42 -o $@
 
-_temp/v1/ysplit.csv: scripts/v0/data/write-y.py _temp/v1/Xsplit.csv _temp/v1/shape_features.csv
+_temp/v1/ysplit.csv: scripts/v1/data/write-y.py _temp/v1/Xsplit.csv _temp/v1/shape_features.csv
 	python3 $^ --index-col 0 1 2 3 4 -o $@
 
 define SPLIT_v1
@@ -80,16 +80,16 @@ _temp/v1/y$(1).csv: _temp/v1/ysplit.csv
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v1,$(split))))
 
-_temp/v1/Xunique.csv: scripts/v0/data/write-Xunique.py _temp/v1/X.csv
+_temp/v1/Xunique.csv: scripts/v1/data/write-Xunique.py _temp/v1/X.csv
 	python3 $^ --index-col 0 1 -o $@
 
-_temp/v1/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v1/Xunique.csv
+_temp/v1/Xpred_1D.csv: scripts/v1/data/write-Xpred.py _temp/v1/Xunique.csv
 	python3 $^ --target gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
-_temp/v1/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v1/Xunique.csv
+_temp/v1/Xpred_2D.csv: scripts/v1/data/write-Xpred.py _temp/v1/Xunique.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number --ngrid $(N_GRID_1) -o $@
 
-_temp/v1/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v1/Xunique.csv _temp/v1/Xpred_2D.csv
+_temp/v1/delaunay.Xpred_2D.csv: scripts/v1/data/compute-Delaunay.py _temp/v1/Xunique.csv _temp/v1/Xpred_2D.csv
 	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
 
 # Models
@@ -153,9 +153,9 @@ benchmarks/v1/gpr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/fe
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
-benchmarks/v1/gpr.Xpred_2D.csv:
+benchmarks/v1/gpr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt
 	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr _temp/v1/Xpred_2D.csv --index-col 0 1 2 -o $@
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
 benchmarks/v1/gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpr.pt $(SCRIPTS_v1)
 	mkdir -p $(@D)
@@ -183,25 +183,25 @@ benchmarks/v1/gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/
 
 # Model selection
 
-benchmarks/v1/pinball_loss.gpr.csv: scripts/v0/model_selection/pinball_loss.py benchmarks/v1/gpr.Xtest.csv _temp/v1/ytest.csv
+benchmarks/v1/pinball_loss.gpr.csv: scripts/v1/model_selection/pinball_loss.py benchmarks/v1/gpr.Xtest.csv _temp/v1/ytest.csv
 	mkdir -p $(@D)
 	python3 $^ --type GPR --quantile-levels $(QUANTILES) -o $@
 
-benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v0/model_selection/pinball_loss.py benchmarks/v1/gpqr_%.Xtest.csv _temp/v1/ytest.csv
+benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v1/model_selection/pinball_loss.py benchmarks/v1/gpqr_%.Xtest.csv _temp/v1/ytest.csv
 	mkdir -p $(@D)
 	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
 
 # Window prediction
 
-benchmarks/v1/pit.csv: scripts/v0/joint/write-pit.py _temp/v1/y.csv benchmarks/v1/gpqr.X.csv
+benchmarks/v1/pit.csv: scripts/v1/joint/write-pit.py _temp/v1/y.csv benchmarks/v1/gpqr.X.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
-benchmarks/v1/H.marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+benchmarks/v1/H.marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
-benchmarks/v1/phi_1.marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+benchmarks/v1/phi_1.marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
@@ -209,21 +209,21 @@ benchmarks/v1/marginal.%.csv: benchmarks/v1/H.marginal.%.csv benchmarks/v1/phi_1
 	mkdir -p $(@D)
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
-benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_1D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_1D.csv
+benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v1/joint/write-joint.py _temp/v1/Xpred_1D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_1D.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
-benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v0/joint/write-joint.py _temp/v1/Xpred_2D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_2D.csv
+benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v1/joint/write-joint.py _temp/v1/Xpred_2D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_2D.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
 # Class probability prediction
 
-benchmarks/v1/phi_1.class_marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+benchmarks/v1/phi_1.class_marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --target phi_1 --quantiles $(QUANTILES) --threshold 0 -o $@
 
-benchmarks/v1/phi_3.class_marginal.%.csv: scripts/v0/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+benchmarks/v1/phi_3.class_marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --target phi_3 --quantiles $(QUANTILES) --threshold 0 -o $@
 

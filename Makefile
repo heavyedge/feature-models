@@ -25,16 +25,15 @@ PHI_THRESHOLD := 0.25
 
 all: models examples
 
-models: models-v0 models-v1
+models: models-v1
 
-examples: examples-v0 examples-v1
+examples: examples-v1
 
 # Set PREBUILT_MODELS=1 to test existing model artifacts without rebuilding them.
-tests: test-v0 test-v1
+tests: test-v1
 
 clean:
 	shopt -s globstar nullglob
 	rm -rf _temp benchmarks models/**/*.pt models/**/*.py
 
-include make/v0.mk
 include make/v1.mk

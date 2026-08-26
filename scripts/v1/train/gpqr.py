@@ -6,7 +6,8 @@ from models.v1.feature_models import gpqr as model_module
 from models.v1.feature_models import load as load_module
 from models.v1.feature_models import scale as scaler_module
 from models.v1.feature_models.likelihoods import CenterGapQuantilesLikelihood
-from scripts.v0.train.common import (
+from scripts.v1.train.batch import load_batched_arrays
+from scripts.v1.train.common import (
     PRIOR_HYPERPARAMETER_DEFAULTS,
     configure_logging,
     create_train_parser,
@@ -19,8 +20,7 @@ from scripts.v0.train.common import (
     suggest_prior_hyperparameters,
     validate_train_args,
 )
-from scripts.v0.train.inducing import unique_inducing_points_per_fold
-from scripts.v1.train.batch import load_batched_arrays
+from scripts.v1.train.inducing import unique_inducing_points_per_fold
 from scripts.v1.train.save import save_gpqr
 
 logger = configure_logging(__name__)
