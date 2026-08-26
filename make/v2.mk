@@ -72,6 +72,7 @@ models/v2/feature_models/batch.py: scripts/v0/model/batch.py
 
 _temp/v2/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv \
 $(SCRIPTS_v2)
+	mkdir -p $(@D)
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --model PriorMean --num-epochs $(N_EPOCHS_v2) -o $@
 
 models/v2/feature_models/prior_mean.pt: scripts/v2/train/prior_mean.py _temp/v1/X.csv _temp/v1/y.csv \
