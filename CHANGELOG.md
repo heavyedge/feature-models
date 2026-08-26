@@ -26,10 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Joint probability estimation now uses CUDA.
 - Threshold for `phi` is set to `0.25` from `0.5`.
+- Data are splitted and redrawn for unique X.
 
 **v1**
 
 - Quantile interpolation now uses spline with exponential tail model.
+- Hyperparameters are optimized by 5-fold cross validation.
 
 ### Removed
 
