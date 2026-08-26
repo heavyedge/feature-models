@@ -1,10 +1,7 @@
 import numpy as np
 from backend import cuda_device
 
-__all__ = [
-    "quantile_interpolation",
-    "quantile_pit",
-]
+__all__ = ["quantile_interpolation", "quantile_pit"]
 
 
 def quantile_interpolation(
@@ -17,25 +14,29 @@ def quantile_interpolation(
 ):
     """Estimate P(Y <= threshold) from predicted quantiles.
 
+    A monotone PCHIP interpolates the CDF between predicted quantiles. Beyond
+    the outer quantiles, exponential tails are joined with matching value and
+    first derivative, making the resulting CDF continuously differentiable.
+
     Parameters
     ----------
     q_values : (N, Q) array
-        Predicted quantile values, sorted along axis=1 (no crossing).
+        Predicted quantile values, strictly increasing along axis=1.
     q_levels : (Q,) array
-        Quantile levels (taus), sorted in ascending order.
-    threshold : float
-        The threshold value.
+        Quantile levels, strictly increasing and in (0, 1).
+    threshold : float or (N,) array
+        Threshold value(s).
     device : str
         ``"auto"`` selects CUDA when available; ``"cpu"`` forces NumPy.
     chunk_size : int
         Maximum rows transferred to CUDA at once.
     """
-    return _interpolate_linear(
+    return _interpolate_pchip(
         q_values, q_levels, threshold, device, chunk_size, progress
     )
 
 
-def _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size, progress):
+def _validate_inputs(q_values, q_levels, thresholds, chunk_size):
     q_values = np.asarray(q_values)
     q_levels = np.asarray(q_levels)
     thresholds = np.asarray(thresholds)
@@ -47,6 +48,10 @@ def _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size, prog
         raise ValueError("q_values must contain at least two quantiles")
     if q_levels.shape != (Q,):
         raise ValueError(f"q_levels must have shape ({Q},); got {q_levels.shape}")
+    if not np.all(np.isfinite(q_levels)) or not np.all((q_levels > 0) & (q_levels < 1)):
+        raise ValueError("q_levels must be finite and in (0, 1)")
+    if np.any(np.diff(q_levels) <= 0):
+        raise ValueError("q_levels must be strictly increasing")
     if chunk_size <= 0:
         raise ValueError("chunk_size must be positive")
     if thresholds.ndim == 0:
@@ -57,7 +62,13 @@ def _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size, prog
         raise ValueError(
             f"thresholds must be scalar or have length {N}; got {thresholds.shape[0]}"
         )
+    return q_values, q_levels, thresholds
 
+
+def _interpolate_pchip(q_values, q_levels, thresholds, device, chunk_size, progress):
+    q_values, q_levels, thresholds = _validate_inputs(
+        q_values, q_levels, thresholds, chunk_size
+    )
     torch, selected_device = cuda_device(device)
     if torch is not None:
         return _interpolate_cuda(
@@ -69,40 +80,141 @@ def _interpolate_linear(q_values, q_levels, thresholds, device, chunk_size, prog
             chunk_size,
             progress,
         )
+    return _interpolate_numpy(q_values, q_levels, thresholds, progress)
 
-    # NumPy has no row-wise searchsorted. Counting is fully vectorized and Q is
-    # small for quantile models, making this much faster than a Python row loop.
-    idx = np.count_nonzero(q_values <= thresholds[:, np.newaxis], axis=1)
-    idx_clamped = np.clip(idx, 1, Q - 1)
 
+def _endpoint_derivatives_numpy(values, level_diffs):
+    """PCHIP endpoint derivatives, with positive secant fallbacks."""
+    first_delta = level_diffs[0] / (values[:, 1] - values[:, 0])
+    last_delta = level_diffs[-1] / (values[:, -1] - values[:, -2])
+    if values.shape[1] == 2:
+        return first_delta, last_delta
+
+    h0 = values[:, 1] - values[:, 0]
+    h1 = values[:, 2] - values[:, 1]
+    delta1 = level_diffs[1] / h1
+    first = ((2 * h0 + h1) * first_delta - h0 * delta1) / (h0 + h1)
+    first = np.where(first > 0, first, first_delta)
+
+    hn = values[:, -1] - values[:, -2]
+    hp = values[:, -2] - values[:, -3]
+    delta_prev = level_diffs[-2] / hp
+    last = ((2 * hn + hp) * last_delta - hn * delta_prev) / (hn + hp)
+    last = np.where(last > 0, last, last_delta)
+    return first, last
+
+
+def _knot_derivative_numpy(values, level_diffs, knot, first, last):
+    """Evaluate PCHIP derivatives only at the requested knot in each row."""
+    if values.shape[1] == 2:
+        return first
+
+    rows = np.arange(values.shape[0])
+    interior = np.clip(knot, 1, values.shape[1] - 2)
+    h_prev = values[rows, interior] - values[rows, interior - 1]
+    h_next = values[rows, interior + 1] - values[rows, interior]
+    delta_prev = level_diffs[interior - 1] / h_prev
+    delta_next = level_diffs[interior] / h_next
+    w1 = 2 * h_next + h_prev
+    w2 = h_next + 2 * h_prev
+    derivative = (w1 + w2) / (w1 / delta_prev + w2 / delta_next)
+    derivative = np.where(knot == 0, first, derivative)
+    return np.where(knot == values.shape[1] - 1, last, derivative)
+
+
+def _interpolate_numpy(values, levels, thresholds, progress):
+    N, Q = values.shape
+    level_diffs = np.diff(levels)
+
+    # Counting avoids constructing one scipy interpolator per sample.
+    idx = np.count_nonzero(values <= thresholds[:, np.newaxis], axis=1)
+    interval = np.clip(idx - 1, 0, Q - 2)
     rows = np.arange(N)
-    x0 = q_values[rows, idx_clamped - 1]
-    x1 = q_values[rows, idx_clamped]
-    y0 = q_levels[idx_clamped - 1]
-    y1 = q_levels[idx_clamped]
+    x0 = values[rows, interval]
+    x1 = values[rows, interval + 1]
+    y0 = levels[interval]
+    y1 = levels[interval + 1]
+    h = x1 - x0
 
-    slope = np.divide(
-        y1 - y0,
-        x1 - x0,
-        out=np.zeros_like(y1, dtype=float),
-        where=x1 != x0,
+    first, last = _endpoint_derivatives_numpy(values, level_diffs)
+    d0 = _knot_derivative_numpy(values, level_diffs, interval, first, last)
+    d1 = _knot_derivative_numpy(values, level_diffs, interval + 1, first, last)
+
+    # Clipping avoids polynomial overflow for observations far into a tail.
+    t = np.clip((thresholds - x0) / h, 0.0, 1.0)
+    t2 = t * t
+    t3 = t2 * t
+    if Q == 2:
+        # PCHIP is exactly linear here; this form also preserves the previous
+        # implementation's rounding at simple midpoints.
+        probs = y0 + t * (y1 - y0)
+    else:
+        probs = (
+            (2 * t3 - 3 * t2 + 1) * y0
+            + (t3 - 2 * t2 + t) * h * d0
+            + (-2 * t3 + 3 * t2) * y1
+            + (t3 - t2) * h * d1
+        )
+    probs = np.clip(probs, y0, y1)
+
+    left = levels[0] * np.exp(
+        np.minimum((thresholds - values[:, 0]) * first / levels[0], 0.0)
     )
-    probs = y0 + (thresholds - x0) * slope
+    upper_distance = (thresholds - values[:, -1]) * last / (1.0 - levels[-1])
+    right = levels[-1] - (1.0 - levels[-1]) * np.expm1(-np.maximum(upper_distance, 0.0))
+    probs = np.where(idx == 0, left, probs)
+    probs = np.where(idx == Q, right, probs)
 
-    probs = np.where(idx == 0, q_levels[0], probs)
-    probs = np.where(idx == Q, q_levels[-1], probs)
     if progress is not None:
         progress(N)
-    return np.clip(probs, q_levels[0], q_levels[-1])
+    return np.clip(probs, 0.0, 1.0)
+
+
+def _endpoint_derivatives_torch(torch, values, level_diffs):
+    first_delta = level_diffs[0] / (values[:, 1] - values[:, 0])
+    last_delta = level_diffs[-1] / (values[:, -1] - values[:, -2])
+    if values.shape[1] == 2:
+        return first_delta, last_delta
+
+    h0 = values[:, 1] - values[:, 0]
+    h1 = values[:, 2] - values[:, 1]
+    delta1 = level_diffs[1] / h1
+    first = ((2 * h0 + h1) * first_delta - h0 * delta1) / (h0 + h1)
+    first = torch.where(first > 0, first, first_delta)
+
+    hn = values[:, -1] - values[:, -2]
+    hp = values[:, -2] - values[:, -3]
+    delta_prev = level_diffs[-2] / hp
+    last = ((2 * hn + hp) * last_delta - hn * delta_prev) / (hn + hp)
+    last = torch.where(last > 0, last, last_delta)
+    return first, last
+
+
+def _knot_derivative_torch(values, level_diffs, knot, first, last):
+    if values.shape[1] == 2:
+        return first
+
+    interior = knot.clamp(1, values.shape[1] - 2)
+    x = values.gather(1, interior.unsqueeze(1)).squeeze(1)
+    x_prev = values.gather(1, (interior - 1).unsqueeze(1)).squeeze(1)
+    x_next = values.gather(1, (interior + 1).unsqueeze(1)).squeeze(1)
+    h_prev = x - x_prev
+    h_next = x_next - x
+    delta_prev = level_diffs[interior - 1] / h_prev
+    delta_next = level_diffs[interior] / h_next
+    w1 = 2 * h_next + h_prev
+    w2 = h_next + 2 * h_prev
+    derivative = (w1 + w2) / (w1 / delta_prev + w2 / delta_next)
+    derivative = derivative.where(knot != 0, first)
+    return derivative.where(knot != values.shape[1] - 1, last)
 
 
 def _interpolate_cuda(
     torch, device, q_values, q_levels, thresholds, chunk_size, progress=None
 ):
-    # CSV input is normally float64. Preserving it avoids moving interpolation
-    # boundaries and changing searchsorted results near a predicted quantile.
     dtype = torch.float64
     levels = torch.as_tensor(q_levels, dtype=dtype, device=device)
+    level_diffs = levels[1:] - levels[:-1]
     result = np.empty(q_values.shape[0], dtype=np.result_type(q_values, float))
 
     with torch.inference_mode():
@@ -115,18 +227,42 @@ def _interpolate_cuda(
             idx = torch.searchsorted(
                 values, threshold.unsqueeze(1), right=True
             ).squeeze(1)
-            idx_clamped = idx.clamp(1, values.shape[1] - 1)
-            rows = torch.arange(end - start, device=device)
-            x0 = values[rows, idx_clamped - 1]
-            x1 = values[rows, idx_clamped]
-            y0 = levels[idx_clamped - 1]
-            y1 = levels[idx_clamped]
-            dx = x1 - x0
-            slope = torch.where(dx != 0, (y1 - y0) / dx, torch.zeros_like(dx))
-            probs = y0 + (threshold - x0) * slope
-            probs = torch.where(idx == 0, levels[0], probs)
-            probs = torch.where(idx == values.shape[1], levels[-1], probs)
-            result[start:end] = probs.clamp(levels[0], levels[-1]).cpu().numpy()
+            interval = (idx - 1).clamp(0, values.shape[1] - 2)
+
+            x0 = values.gather(1, interval.unsqueeze(1)).squeeze(1)
+            x1 = values.gather(1, (interval + 1).unsqueeze(1)).squeeze(1)
+            y0 = levels[interval]
+            y1 = levels[interval + 1]
+            h = x1 - x0
+
+            first, last = _endpoint_derivatives_torch(torch, values, level_diffs)
+            d0 = _knot_derivative_torch(values, level_diffs, interval, first, last)
+            d1 = _knot_derivative_torch(values, level_diffs, interval + 1, first, last)
+
+            t = ((threshold - x0) / h).clamp(0.0, 1.0)
+            t2 = t * t
+            t3 = t2 * t
+            if values.shape[1] == 2:
+                probs = y0 + t * (y1 - y0)
+            else:
+                probs = (
+                    (2 * t3 - 3 * t2 + 1) * y0
+                    + (t3 - 2 * t2 + t) * h * d0
+                    + (-2 * t3 + 3 * t2) * y1
+                    + (t3 - t2) * h * d1
+                )
+            probs = probs.clamp(y0, y1)
+
+            left = levels[0] * torch.exp(
+                ((threshold - values[:, 0]) * first / levels[0]).clamp(max=0.0)
+            )
+            upper_distance = (threshold - values[:, -1]) * last / (1.0 - levels[-1])
+            right = levels[-1] - (1.0 - levels[-1]) * torch.expm1(
+                -upper_distance.clamp(min=0.0)
+            )
+            probs = torch.where(idx == 0, left, probs)
+            probs = torch.where(idx == values.shape[1], right, probs)
+            result[start:end] = probs.clamp(0.0, 1.0).cpu().numpy()
             if progress is not None:
                 progress(end)
     return result
@@ -140,26 +276,10 @@ def quantile_pit(
     chunk_size=262144,
     progress=None,
 ):
-    """Compute PIT values P(Y <= y_i | x_i) with per-sample thresholds.
+    """Compute smooth PIT values P(Y <= y_i | x_i).
 
-    Parameters
-    ----------
-    q_values : (N, Q) array
-        Predicted quantile values, sorted along axis=1 (no crossing).
-    q_levels : (Q,) array
-        Quantile levels (taus), sorted in ascending order.
-    thresholds : (N,) array
-        Per-sample threshold (actual observed values).
-    device : str
-        ``"auto"`` selects CUDA when available; ``"cpu"`` forces NumPy.
-    chunk_size : int
-        Maximum rows transferred to CUDA at once.
-
-    Returns
-    -------
-    (N,) array
-        Estimated CDF value for each sample.
+    See :func:`quantile_interpolation` for the PCHIP and tail construction.
     """
-    return _interpolate_linear(
+    return _interpolate_pchip(
         q_values, q_levels, thresholds, device, chunk_size, progress
     )
