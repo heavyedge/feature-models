@@ -15,12 +15,6 @@ parser.add_argument(
     help="Train, validation, test split ratios.",
 )
 parser.add_argument("--num-folds", type=int, default=10, help="Number of folds.")
-parser.add_argument(
-    "--samples-per-x",
-    type=int,
-    default=30,
-    help="Number of rows to draw with replacement for each unique X.",
-)
 parser.add_argument("--random-state", type=int, default=42, help="Random state.")
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
@@ -32,8 +26,6 @@ if not np.isclose(sum(args.split_ratio), 1.0):
     parser.error("split ratios must sum to 1")
 if args.num_folds < 1:
     parser.error("number of folds must be at least 1")
-if args.samples_per_x < 1:
-    parser.error("samples per X must be at least 1")
 
 X = pd.read_csv(args.X, index_col=0)
 if "name" not in X.columns:
@@ -68,11 +60,6 @@ for fold in range(args.num_folds):
         (("train", train_names), ("val", val_names), ("test", test_names))
     ):
         split_df = X[X["name"].isin(names)]
-        split_df = split_df.groupby("name", sort=False, group_keys=False).sample(
-            n=args.samples_per_x,
-            replace=True,
-            random_state=random_state + split_index,
-        )
         split_df.insert(2, "fold", fold)
         split_df.insert(3, "split", split)
         split_dfs.append(split_df)

@@ -67,14 +67,9 @@ out_df = df.iloc[idxs][
 ]
 
 if args.draw is not None:
-    x_columns = [
-        "gap_to_thickness_ratio",
-        "capillary_number",
-        "cosine_of_contact_angle",
-    ]
     rng = np.random.default_rng(args.seed)
     sampled_indices = []
-    for _, group in out_df.groupby(x_columns, sort=False):
+    for _, group in out_df.groupby("name", sort=False):
         sampled_indices.extend(
             rng.choice(group.index, size=min(args.draw, len(group)), replace=False)
         )

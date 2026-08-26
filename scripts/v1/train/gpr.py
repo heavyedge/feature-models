@@ -5,6 +5,7 @@ from models.v1.feature_models import gpr as model_module
 from models.v1.feature_models import load as load_module
 from models.v1.feature_models import scale as scaler_module
 from models.v1.feature_models.likelihoods import GaussianLikelihood
+from scripts.v1.train.batch import load_batched_arrays
 from scripts.v1.train.common import (
     PRIOR_HYPERPARAMETER_DEFAULTS,
     configure_logging,
@@ -19,7 +20,6 @@ from scripts.v1.train.common import (
     validate_train_args,
 )
 from scripts.v1.train.inducing import unique_inducing_points_per_fold
-from scripts.v1.train.batch import load_batched_arrays
 from scripts.v1.train.save import save_gpr
 
 logger = configure_logging(__name__)
