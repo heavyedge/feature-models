@@ -3,6 +3,7 @@
 N_FOLDS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 N_EPOCHS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_TRIALS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
+WRITE_X_ARGS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),--draw 3 --seed 42)
 
 MODELS_v0 := \
 models/v0/feature_models/H.prior_mean.pt \
@@ -62,7 +63,7 @@ _temp/v0/shape_features.csv: $(wildcard _data/v1/shape_features/mean_profiles/da
 	'
 
 _temp/v0/X.csv: scripts/v0/data/write-X.py _temp/v0/dimless.csv
-	python3 $^ -o $@
+	python3 $^ $(WRITE_X_ARGS_v0) -o $@
 
 _temp/v0/Xunique.csv: scripts/v0/data/write-Xunique.py _temp/v0/X.csv
 	python3 $^ --index-col 0 1 -o $@
