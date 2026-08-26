@@ -8,6 +8,9 @@ from sklearn.model_selection import train_test_split
 parser = argparse.ArgumentParser()
 parser.add_argument("X", type=pathlib.Path, help="X csv file.")
 parser.add_argument(
+    "X_index", type=pathlib.Path, help="Mapping from profile names to X indices."
+)
+parser.add_argument(
     "--split-ratio",
     type=float,
     nargs=3,
@@ -33,33 +36,56 @@ if "name" not in X.columns:
 if X["name"].isna().any():
     parser.error("the 'name' column must not contain missing values")
 
-unique_names = X["name"].drop_duplicates().to_numpy()
+X_index = pd.read_csv(args.X_index)
+if list(X_index.columns) != ["name", "index"]:
+    parser.error("X_index must contain exactly the columns 'name' and 'index'")
+if X_index["name"].duplicated().any():
+    parser.error("X_index names must be unique")
+
+index_by_name = X_index.set_index("name")["index"]
+missing_names = sorted(set(X["name"]) - set(index_by_name.index))
+if missing_names:
+    parser.error(
+        "X_index does not contain every X profile name; missing: "
+        + ", ".join(missing_names)
+    )
+
+X_indices = X["name"].map(index_by_name)
+raw_counts = X_indices.value_counts()
+if raw_counts.nunique() != 1:
+    parser.error(
+        "every X index must have the same number of raw rows; got counts "
+        f"{sorted(raw_counts.unique().tolist())}"
+    )
+unique_indices = X_indices.drop_duplicates().to_numpy()
 
 fold_dfs = []
 for fold in range(args.num_folds):
     random_state = args.random_state + fold
     try:
-        train_names, remaining_names = train_test_split(
-            unique_names,
+        train_indices, remaining_indices = train_test_split(
+            unique_indices,
             train_size=train_ratio,
             random_state=random_state,
         )
-        val_names, test_names = train_test_split(
-            remaining_names,
+        val_indices, test_indices = train_test_split(
+            remaining_indices,
             train_size=val_ratio / (val_ratio + test_ratio),
             random_state=random_state,
         )
     except ValueError as error:
         parser.error(
-            f"cannot split {len(unique_names)} unique X values with the requested "
+            f"cannot split {len(unique_indices)} unique X values with the requested "
             f"ratios: {error}"
         )
 
     split_dfs = []
-    for split_index, (split, names) in enumerate(
-        (("train", train_names), ("val", val_names), ("test", test_names))
+    for split, indices in (
+        ("train", train_indices),
+        ("val", val_indices),
+        ("test", test_indices),
     ):
-        split_df = X[X["name"].isin(names)]
+        split_df = X[X_indices.isin(indices)].copy()
         split_df.insert(2, "fold", fold)
         split_df.insert(3, "split", split)
         split_dfs.append(split_df)

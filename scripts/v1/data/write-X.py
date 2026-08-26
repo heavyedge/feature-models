@@ -9,11 +9,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "dimless", type=pathlib.Path, help="Dimensionless variables csv file."
 )
+parser.add_argument(
+    "X_index", type=pathlib.Path, help="Mapping from profile names to X indices."
+)
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 parser.add_argument(
     "--draw",
     type=int,
-    help="Maximum number of raw observations to retain for each X value.",
+    help="Number of raw observations to sample with replacement for each X index.",
 )
 parser.add_argument(
     "--seed", type=int, help="Random seed used when drawing observations."
@@ -24,6 +27,11 @@ if args.draw is not None and args.draw < 1:
     parser.error("--draw must be a positive integer")
 
 df = pd.read_csv(args.dimless)
+X_index = pd.read_csv(args.X_index)
+if list(X_index.columns) != ["name", "index"]:
+    parser.error("X_index must contain exactly the columns 'name' and 'index'")
+if X_index["name"].duplicated().any():
+    parser.error("X_index names must be unique")
 
 groups = df.groupby(
     [
@@ -68,11 +76,29 @@ out_df = df.iloc[idxs][
 
 if args.draw is not None:
     rng = np.random.default_rng(args.seed)
-    sampled_indices = []
-    for _, group in out_df.groupby("name", sort=False):
-        sampled_indices.extend(
-            rng.choice(group.index, size=min(args.draw, len(group)), replace=False)
+    index_by_name = X_index.set_index("name")["index"]
+    missing_names = sorted(set(out_df["name"]) - set(index_by_name.index))
+    if missing_names:
+        parser.error(
+            "X_index does not contain every selected profile name; missing: "
+            + ", ".join(missing_names)
         )
-    out_df = out_df.loc[np.sort(sampled_indices)]
+
+    selected = out_df.assign(_X_index=out_df["name"].map(index_by_name))
+    sampled_indices = []
+    for _, index_group in selected.groupby("_X_index", sort=False):
+        names = index_group["name"].drop_duplicates().to_numpy()
+        quotas = np.full(len(names), args.draw // len(names), dtype=int)
+        remainder = args.draw % len(names)
+        if remainder:
+            quotas[rng.permutation(len(names))[:remainder]] += 1
+
+        for name, quota in zip(names, quotas):
+            if quota == 0:
+                continue
+            name_indices = index_group.index[index_group["name"] == name].to_numpy()
+            sampled_indices.extend(rng.choice(name_indices, size=quota, replace=True))
+
+    out_df = out_df.loc[sampled_indices]
 
 out_df.to_csv(args.out)

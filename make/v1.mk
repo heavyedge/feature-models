@@ -32,39 +32,9 @@ test-v1: $(if $(filter 1,$(PREBUILT_MODELS)),,$(MODELS_v1) $(SCRIPTS_v1))
 
 # Data
 
-_temp/v1/X_index.csv: $(wildcard _data/v1/dimless/mean_profiles/dataset*.csv)
+_temp/v1/X_index.csv: scripts/v1/data/write-Xindex.py $(wildcard _data/v1/dimless/mean_profiles/dataset*.csv)
 	mkdir -p $(@D)
-	python3 -c '
-	import csv
-	from pathlib import Path
-
-	pvs = sorted([Path(f) for f in "$^".split(" ")])
-	x_columns = [
-	    "slurry",
-	    "gap_to_thickness_ratio",
-	    "capillary_number",
-	    "cosine_of_contact_angle",
-	    "feed_slot_height_ratio",
-	    "downstream_lip_length_ratio",
-	    "upstream_lip_length_ratio",
-	]
-	rows = [
-		(pv.stem, row)
-		for pv in pvs
-		for row in csv.DictReader(pv.open(newline=""))
-	]
-	index_by_x = {}
-	out = open("$@", "w", newline="")
-	writer = csv.writer(out)
-	writer.writerow(["name", "index"])
-	[
-		writer.writerow(
-			["{}/{}".format(stem, row["name"]), index_by_x.setdefault(tuple(row[column] for column in x_columns), len(index_by_x))]
-		)
-		for stem, row in rows
-	]
-	out.close()
-	'
+	python3 $^ -o $@
 
 _temp/v1/dimless.csv: $(wildcard _data/v1/dimless/all_profiles/dataset*.csv)
 	mkdir -p $(@D)
@@ -94,13 +64,13 @@ _temp/v1/shape_features.csv: $(wildcard _data/v1/shape_features/all_profiles/dat
 	df.to_csv("$@", index=False)
 	'
 
-_temp/v1/X.csv: scripts/v1/data/write-X.py _temp/v1/dimless.csv
+_temp/v1/X.csv: scripts/v1/data/write-X.py _temp/v1/dimless.csv _temp/v1/X_index.csv
 	python3 $^ --draw $(N_DATA_DRAW_v1) --seed 0 -o $@
 
 _temp/v1/y.csv: scripts/v1/data/write-y.py _temp/v1/X.csv _temp/v1/shape_features.csv
 	python3 $^ --index-col 0 1 2 -o $@
 
-_temp/v1/Xsplit.csv: scripts/v1/data/split-X.py _temp/v1/X.csv
+_temp/v1/Xsplit.csv: scripts/v1/data/split-X.py _temp/v1/X.csv _temp/v1/X_index.csv
 	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS_v1) --random-state=42 -o $@
 
 _temp/v1/ysplit.csv: scripts/v1/data/write-y.py _temp/v1/Xsplit.csv _temp/v1/shape_features.csv
