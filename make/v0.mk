@@ -1,5 +1,6 @@
 .PHONY: models-v0 examples-v0 test-v0
 
+N_FOLDS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 N_EPOCHS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_TRIALS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
 
@@ -67,7 +68,7 @@ _temp/v0/y.csv: scripts/v0/data/write-y.py _temp/v0/X.csv _temp/v0/shape_feature
 	python3 $^ --index-col 0 1 2 -o $@
 
 _temp/v0/Xsplit.csv: scripts/v0/data/split-X.py _temp/v0/X.csv
-	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS) --random-state=42 -o $@
+	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS_v0) --random-state=42 -o $@
 
 _temp/v0/ysplit.csv: scripts/v0/data/write-y.py _temp/v0/Xsplit.csv _temp/v0/shape_features.csv
 	python3 $^ --index-col 0 1 2 3 4 -o $@
