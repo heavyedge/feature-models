@@ -153,9 +153,9 @@ benchmarks/v1/gpr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/fe
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
-benchmarks/v1/gpr.Xpred_2D.csv:
+benchmarks/v1/gpr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt
 	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr _temp/v1/Xpred_2D.csv --index-col 0 1 2 -o $@
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
 benchmarks/v1/gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpr.pt $(SCRIPTS_v1)
 	mkdir -p $(@D)
