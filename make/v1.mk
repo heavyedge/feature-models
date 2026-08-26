@@ -246,6 +246,7 @@ benchmarks/v1/gpr.Xpred_2D.csv \
 examples/v1/Models.gpqr.ipynb: \
 _temp/v1/X.csv _temp/v1/y.csv _temp/v1/Xpred_1D.csv \
 benchmarks/v1/gpqr.Xpred_1D.csv \
+benchmarks/v1/gpqr.X.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
