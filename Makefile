@@ -17,7 +17,6 @@ NUM_LOWER_QUANTILES := 2
 NUM_LATENTS := 3
 
 N_LIKELIHOOD_SAMPLES := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),4,64)
-N_FOLDS := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 N_GRID_1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,200)
 N_GRID_2 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 
@@ -26,12 +25,12 @@ PHI_THRESHOLD := 0.25
 
 all: models examples
 
-models: models-v0 models-v1 models-v2
+models: models-v0 models-v1
 
-examples: examples-v0 examples-v1 examples-v2
+examples: examples-v0 examples-v1
 
 # Set PREBUILT_MODELS=1 to test existing model artifacts without rebuilding them.
-tests: test-v0 test-v1 test-v2
+tests: test-v0 test-v1
 
 clean:
 	shopt -s globstar nullglob
@@ -39,4 +38,3 @@ clean:
 
 include make/v0.mk
 include make/v1.mk
-include make/v2.mk

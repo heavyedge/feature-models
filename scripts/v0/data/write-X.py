@@ -10,7 +10,18 @@ parser.add_argument(
     "dimless", type=pathlib.Path, help="Dimensionless variables csv file."
 )
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
+parser.add_argument(
+    "--draw",
+    type=int,
+    help="Maximum number of raw observations to retain for each X value.",
+)
+parser.add_argument(
+    "--seed", type=int, help="Random seed used when drawing observations."
+)
 args = parser.parse_args()
+
+if args.draw is not None and args.draw < 1:
+    parser.error("--draw must be a positive integer")
 
 df = pd.read_csv(args.dimless)
 
@@ -54,4 +65,19 @@ out_df = df.iloc[idxs][
         "cosine_of_contact_angle",
     ]
 ]
+
+if args.draw is not None:
+    x_columns = [
+        "gap_to_thickness_ratio",
+        "capillary_number",
+        "cosine_of_contact_angle",
+    ]
+    rng = np.random.default_rng(args.seed)
+    sampled_indices = []
+    for _, group in out_df.groupby(x_columns, sort=False):
+        sampled_indices.extend(
+            rng.choice(group.index, size=min(args.draw, len(group)), replace=False)
+        )
+    out_df = out_df.loc[np.sort(sampled_indices)]
+
 out_df.to_csv(args.out)

@@ -1,7 +1,9 @@
 .PHONY: models-v0 examples-v0 test-v0
 
+N_FOLDS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,10)
 N_EPOCHS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_TRIALS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,100)
+WRITE_X_ARGS_v0 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),--draw 3 --seed 42)
 
 MODELS_v0 := \
 models/v0/feature_models/H.prior_mean.pt \
@@ -61,13 +63,16 @@ _temp/v0/shape_features.csv: $(wildcard _data/v1/shape_features/mean_profiles/da
 	'
 
 _temp/v0/X.csv: scripts/v0/data/write-X.py _temp/v0/dimless.csv
-	python3 $^ -o $@
+	python3 $^ $(WRITE_X_ARGS_v0) -o $@
+
+_temp/v0/Xunique.csv: scripts/v0/data/write-Xunique.py _temp/v0/X.csv
+	python3 $^ --index-col 0 1 -o $@
 
 _temp/v0/y.csv: scripts/v0/data/write-y.py _temp/v0/X.csv _temp/v0/shape_features.csv
 	python3 $^ --index-col 0 1 2 -o $@
 
 _temp/v0/Xsplit.csv: scripts/v0/data/split-X.py _temp/v0/X.csv
-	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS) --random-state=42 -o $@
+	python3 $^ --split-ratio 0.8 0.1 0.1 --num-folds $(N_FOLDS_v0) --random-state=42 -o $@
 
 _temp/v0/ysplit.csv: scripts/v0/data/write-y.py _temp/v0/Xsplit.csv _temp/v0/shape_features.csv
 	python3 $^ --index-col 0 1 2 3 4 -o $@
@@ -80,16 +85,16 @@ _temp/v0/y$(1).csv: _temp/v0/ysplit.csv
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v0,$(split))))
 
-_temp/v0/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
+_temp/v0/Xpred_1D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xunique.csv
 	python3 $^ --target gap_to_thickness_ratio --ngrid $(N_GRID_1) -o $@
 
-_temp/v0/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
+_temp/v0/Xpred_2D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xunique.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number --ngrid $(N_GRID_1) -o $@
 
-_temp/v0/Xpred_3D.csv: scripts/v0/data/write-Xpred.py _temp/v0/X.csv
+_temp/v0/Xpred_3D.csv: scripts/v0/data/write-Xpred.py _temp/v0/Xunique.csv
 	python3 $^ --target gap_to_thickness_ratio capillary_number cosine_of_contact_angle --start=0 --stop=1 --ngrid=$(N_GRID_2) -o $@
 
-_temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/X.csv _temp/v0/Xpred_2D.csv
+_temp/v0/delaunay.Xpred_2D.csv: scripts/v0/data/compute-Delaunay.py _temp/v0/Xunique.csv _temp/v0/Xpred_2D.csv
 	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
 
 # Models

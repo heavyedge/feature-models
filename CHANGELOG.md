@@ -26,15 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Joint probability estimation now uses CUDA.
 - Threshold for `phi` is set to `0.25` from `0.5`.
+- Data are splitted and redrawn for unique X.
 
 **v1**
 
 - Quantile interpolation now uses spline with exponential tail model.
-
-**v2**
-
-- GPQR training maximum epoch is increased to `15,000`, from `10,000`.
-- GPQR early stopping patience ratio is decreased to `0.05` from `0.1`.
+- Hyperparameters are optimized by 5-fold cross validation.
 
 ### Removed
 
@@ -143,19 +140,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `predict-gpr.py` now returns mean and std for both latent posterior and predictive posterior.
-
-## [2.0.0a0] - 2026-08-18
-
-- Model: `gpytorch-qr==0.9.0`
-- Dataset:
-  - `heavyedge/profiles:v1.0.0`
-  - `heavyedge/shape-features:v1.1.0`
-
-### Added
-
-- Multi-output prior mean model.
-- Multi-output GPR models.
-- Multi-output GPQR models.
 
 ## [1.0.0rc1] - 2026-08-18
 

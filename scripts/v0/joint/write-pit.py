@@ -12,7 +12,7 @@ parser.add_argument("Y", type=pathlib.Path, help="Training data csv file")
 parser.add_argument(
     "pred",
     type=pathlib.Path,
-    help="npy file of quantile predictions on training points",
+    help="csv file of quantile predictions on training points",
 )
 parser.add_argument("--index-col", type=int, nargs="+", help="Index column(s) in Y.")
 parser.add_argument(

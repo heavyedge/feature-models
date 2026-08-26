@@ -6,8 +6,8 @@ import pandas as pd
 from scipy.spatial import Delaunay
 
 parser = argparse.ArgumentParser()
-parser.add_argument("X_true", type=pathlib.Path, help="Predictor csv file.")
-parser.add_argument("X_pred", type=pathlib.Path, help="Predictor csv file.")
+parser.add_argument("X_true", type=pathlib.Path, help="Unique X csv file.")
+parser.add_argument("X_pred", type=pathlib.Path, help="Grid X csv file.")
 parser.add_argument(
     "--grid",
     type=str,
@@ -18,7 +18,7 @@ parser.add_argument(
 parser.add_argument("-o", "--out", type=pathlib.Path, help="Output csv file.")
 args = parser.parse_args()
 
-Xtrue = pd.read_csv(args.X_true, index_col=[0, 1, 2])
+Xtrue = pd.read_csv(args.X_true, index_col=[0])
 Xpred = pd.read_csv(args.X_pred, index_col=[0, 1, 2])
 
 simplices = np.zeros(len(Xpred), dtype=bool)
