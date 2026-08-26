@@ -243,10 +243,8 @@ benchmarks/v1/gpr.Xpred_2D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
-examples/v1/Models.ipynb: \
+examples/v1/Models.gpqr.ipynb: \
 _temp/v1/X.csv _temp/v1/y.csv _temp/v1/Xpred_1D.csv \
-benchmarks/v1/prior_mean.Xpred_1D.csv \
-benchmarks/v1/gpr.Xpred_1D.csv \
 benchmarks/v1/gpqr.Xpred_1D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@

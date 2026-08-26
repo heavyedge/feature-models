@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Models.prior_mean.ipynb` is added.
 - `Models.gpr.ipynb` is added.
+- `Models.gpqr.ipynb` is added.
 
 ### Changed
 
@@ -30,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - GPQR training maximum epoch is increased to `15,000`, from `10,000`.
 - GPQR early stopping patience ratio is decreased to `0.05` from `0.1`.
+
+### Removed
+
+**v1**
+
+- `Models.ipynb` is removed.
 
 ## [1.0.0rc6] - 2026-08-23
 
