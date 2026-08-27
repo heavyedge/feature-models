@@ -154,24 +154,34 @@ def train_on_all_data(
 ):
     torch.manual_seed(42)
     if has_validation:
-        Xall_base = torch.cat((Xtrain_base, Xval_base), dim=-2)
-        yall = torch.cat((ytrain, yval), dim=-1)
+        # Every fold contains the same train-validation union. Refit one
+        # unbatched model from the first fold instead of retaining K redundant
+        # fold-specific models in the saved checkpoint.
+        Xall_base = torch.cat((Xtrain_base[0], Xval_base[0]), dim=-2)
+        yall = torch.cat((ytrain[0], yval[0]), dim=-1)
+        refit_batch_shape = torch.Size((len(TARGET),))
     else:
         Xall_base = Xtrain_base
         yall = ytrain
+        refit_batch_shape = gp_batch_shape
     Xall = expand_output_batch(Xall_base)
 
+    if mean.batch_shape != Xall_base.shape[:-2]:
+        parser.error("refit prior-mean batch shape must match the refit training data")
+
     likelihood = GaussianLikelihood(
-        batch_shape=gp_batch_shape,
+        batch_shape=refit_batch_shape,
         noise_prior_loc=noise_prior_loc,
         noise_prior_scale=noise_prior_scale,
     ).to(device)
 
+    X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=refit_batch_shape).to(device)
     X_scaler.train()
     with torch.no_grad():
         Xall_scaled = X_scaler(Xall)
     X_scaler.eval()
 
+    y_scaler = scaler_module.StandardScaler(1, batch_shape=refit_batch_shape).to(device)
     y_scaler.train()
     with torch.no_grad():
         res_all = yall - mean(Xall_base)
@@ -180,7 +190,7 @@ def train_on_all_data(
 
     model = model_class(
         inducing_points=unique_inducing_points_per_fold(Xall_scaled),
-        batch_shape=gp_batch_shape,
+        batch_shape=refit_batch_shape,
         lengthscale_prior_loc=lengthscale_prior_loc,
         lengthscale_prior_scale=lengthscale_prior_scale,
     ).to(device)
