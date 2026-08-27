@@ -1,6 +1,6 @@
 .PHONY: models-v1 examples-v1 test-v1
 
-N_DATA_DRAW_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,100)
+N_DATA_DRAW_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,50)
 N_FOLDS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,5)
 N_EPOCHS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
 N_TRIALS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,30)
