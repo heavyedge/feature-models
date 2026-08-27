@@ -105,13 +105,9 @@ models/v1/feature_models/%.py: scripts/v1/model/%.py
 
 ## Prior mean
 
-_temp/v1/prior_mean_cv.pt: scripts/v1/train/prior_mean.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv \
+_temp/v1/cv.prior_mean.pt: scripts/v1/train/prior_mean.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv \
 $(SCRIPTS_v1)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --index-col 0 --batch-col 0 --model PriorMean --num-epochs $(N_EPOCHS_v1) -o $@
-
-_temp/v1/prior_mean.pt: scripts/v1/train/prior_mean.py _temp/v1/Xfit.csv _temp/v1/yfit.csv \
-$(SCRIPTS_v1)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,3,$^) --model PriorMean --num-epochs $(N_EPOCHS_v1) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,5,$^) --index-col 0 --batch-col 0 --model PriorMean --num-epochs $(N_EPOCHS_v1) -o $@
 
 models/v1/feature_models/prior_mean.pt: scripts/v1/train/prior_mean.py _temp/v1/X.csv _temp/v1/y.csv \
 $(SCRIPTS_v1)
@@ -120,67 +116,65 @@ $(SCRIPTS_v1)
 
 ## GPR
 
-_temp/v1/gpr_cv.pt _temp/v1/gpr.study-name &: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/prior_mean_cv.pt \
+_temp/v1/cv.gpr.pt _temp/v1/gpr.study-name &: scripts/v1/train/gpr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt \
 $(SCRIPTS_v1)
 	mkdir -p benchmarks
 	study_name="v1/gpr/$$(date +%Y%m%dT%H%M%S%N%z)"
 	printf '%s\n' "$$study_name" > _temp/v1/gpr.study-name
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/gpr_cv.pt
-
-_temp/v1/gpr.pt: scripts/v1/train/gpr.py _temp/v1/Xfit.csv _temp/v1/yfit.csv _temp/v1/prior_mean.pt \
-_temp/v1/gpr_cv.pt _temp/v1/gpr.study-name $(SCRIPTS_v1)
-	study_name="$$(cat _temp/v1/gpr.study-name)"
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --model GPR --storage=$(OPTUNA_DB) --study-name="$$study_name" -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPR --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpr.pt
 
 models/v1/feature_models/gpr.pt: scripts/v1/train/gpr.py _temp/v1/X.csv _temp/v1/y.csv models/v1/feature_models/prior_mean.pt \
-_temp/v1/gpr_cv.pt _temp/v1/gpr.study-name $(SCRIPTS_v1)
+_temp/v1/gpr.study-name $(SCRIPTS_v1)
 	mkdir -p $(@D)
 	study_name="$$(cat _temp/v1/gpr.study-name)"
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --model GPR --storage=$(OPTUNA_DB) --study-name="$$study_name" -o $@
 
 ## GPQR
 
-_temp/v1/gpqr_independent_cv.pt _temp/v1/gpqr_independent.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/prior_mean_cv.pt \
+_temp/v1/cv.gpqr_independent.pt _temp/v1/gpqr_independent.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt \
 $(SCRIPTS_v1)
 	mkdir -p benchmarks
 	study_name="v1/gpqr_independent/$$(date +%Y%m%dT%H%M%S%N%z)"
 	printf '%s\n' "$$study_name" > _temp/v1/gpqr_independent.study-name
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/gpqr_independent_cv.pt
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_independent.pt
 
-_temp/v1/gpqr_lmc_cv.pt _temp/v1/gpqr_lmc.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/prior_mean_cv.pt \
+_temp/v1/cv.gpqr_lmc.pt _temp/v1/gpqr_lmc.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt \
 $(SCRIPTS_v1)
 	mkdir -p benchmarks
 	study_name="v1/gpqr_lmc/$$(date +%Y%m%dT%H%M%S%N%z)"
 	printf '%s\n' "$$study_name" > _temp/v1/gpqr_lmc.study-name
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/gpqr_lmc_cv.pt
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_lmc.pt
 
-_temp/v1/gpqr_cglmc_cv.pt _temp/v1/gpqr_cglmc.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/prior_mean_cv.pt \
+_temp/v1/cv.gpqr_cglmc.pt _temp/v1/gpqr_cglmc.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt \
 $(SCRIPTS_v1)
 	mkdir -p benchmarks
 	study_name="v1/gpqr_cglmc/$$(date +%Y%m%dT%H%M%S%N%z)"
 	printf '%s\n' "$$study_name" > _temp/v1/gpqr_cglmc.study-name
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/gpqr_cglmc_cv.pt
-
-_temp/v1/gpqr_independent.pt: scripts/v1/train/gpqr.py _temp/v1/Xfit.csv _temp/v1/yfit.csv _temp/v1/prior_mean.pt \
-_temp/v1/gpqr_independent_cv.pt _temp/v1/gpqr_independent.study-name $(SCRIPTS_v1)
-	study_name="$$(cat _temp/v1/gpqr_independent.study-name)"
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o $@
-
-_temp/v1/gpqr_lmc.pt: scripts/v1/train/gpqr.py _temp/v1/Xfit.csv _temp/v1/yfit.csv _temp/v1/prior_mean.pt \
-_temp/v1/gpqr_lmc_cv.pt _temp/v1/gpqr_lmc.study-name $(SCRIPTS_v1)
-	study_name="$$(cat _temp/v1/gpqr_lmc.study-name)"
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o $@
-
-_temp/v1/gpqr_cglmc.pt: scripts/v1/train/gpqr.py _temp/v1/Xfit.csv _temp/v1/yfit.csv _temp/v1/prior_mean.pt \
-_temp/v1/gpqr_cglmc_cv.pt _temp/v1/gpqr_cglmc.study-name $(SCRIPTS_v1)
-	study_name="$$(cat _temp/v1/gpqr_cglmc.study-name)"
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_cglmc.pt
 
 models/v1/feature_models/gpqr.pt: scripts/v1/train/gpqr.py _temp/v1/X.csv _temp/v1/y.csv models/v1/feature_models/prior_mean.pt \
-_temp/v1/gpqr_cglmc_cv.pt _temp/v1/gpqr_cglmc.study-name $(SCRIPTS_v1)
+_temp/v1/gpqr_cglmc.study-name $(SCRIPTS_v1)
 	mkdir -p $(@D)
 	study_name="$$(cat _temp/v1/gpqr_cglmc.study-name)"
 	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o $@
+
+# Model selection
+
+_temp/v1/cv.gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt $(SCRIPTS_v1)
+	mkdir -p $(@D)
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $(wordlist 1,3,$^) --index-col 0 -o $@
+
+benchmarks/v1/pinball_loss.gpr.csv: scripts/v1/model_selection/pinball_loss.py _temp/v1/cv.gpr.Xtest.csv _temp/v1/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --type GPR --quantile-levels $(QUANTILES) -o $@
+
+_temp/v1/cv.gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpqr_%.pt $(SCRIPTS_v1)
+	mkdir -p $(@D)
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --num-samples $(N_SAMPLES_v1) -o $@
+
+benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v1/model_selection/pinball_loss.py _temp/v1/cv.gpqr_%.Xtest.csv _temp/v1/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
 
 # Prediction
 
@@ -196,14 +190,6 @@ benchmarks/v1/gpr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/fe
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
-benchmarks/v1/gpr.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpr.pt $(SCRIPTS_v1)
-	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $(wordlist 1,3,$^) -o $@
-
-benchmarks/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
-	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
-
 benchmarks/v1/gpqr.Xunique.csv: _temp/v1/Xunique.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 --num-samples $(N_SAMPLES_v1) -o $@
@@ -216,43 +202,33 @@ benchmarks/v1/gpqr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/f
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
 
-benchmarks/v1/gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/prior_mean.pt _temp/v1/gpqr_%.pt $(SCRIPTS_v1)
-	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $(wordlist 1,3,$^) --num-samples $(N_SAMPLES_v1) -o $@
-
-# Model selection
-
-benchmarks/v1/pinball_loss.gpr.csv: scripts/v1/model_selection/pinball_loss.py benchmarks/v1/gpr.Xtest.csv _temp/v1/ytest.csv
-	mkdir -p $(@D)
-	python3 $^ --type GPR --quantile-levels $(QUANTILES) -o $@
-
-benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v1/model_selection/pinball_loss.py benchmarks/v1/gpqr_%.Xtest.csv _temp/v1/ytest.csv
-	mkdir -p $(@D)
-	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
-
 # Window prediction
 
-benchmarks/v1/pit.csv: scripts/v1/joint/write-pit.py _temp/v1/y.csv benchmarks/v1/gpqr.X.csv
+_temp/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
+	mkdir -p $(@D)
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
+
+_temp/v1/pit.csv: scripts/v1/joint/write-pit.py _temp/v1/y.csv _temp/v1/gpqr.X.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
-benchmarks/v1/H.marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+_temp/v1/H.marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
 
-benchmarks/v1/phi_1.marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+_temp/v1/phi_1.marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
 
-benchmarks/v1/marginal.%.csv: benchmarks/v1/H.marginal.%.csv benchmarks/v1/phi_1.marginal.%.csv
+benchmarks/v1/marginal.%.csv: _temp/v1/H.marginal.%.csv _temp/v1/phi_1.marginal.%.csv
 	mkdir -p $(@D)
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
-benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v1/joint/write-joint.py _temp/v1/Xpred_1D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_1D.csv
+benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v1/joint/write-joint.py _temp/v1/Xpred_1D.csv _temp/v1/pit.csv benchmarks/v1/marginal.Xpred_1D.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
-benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v1/joint/write-joint.py _temp/v1/Xpred_2D.csv benchmarks/v1/pit.csv benchmarks/v1/marginal.Xpred_2D.csv
+benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v1/joint/write-joint.py _temp/v1/Xpred_2D.csv _temp/v1/pit.csv benchmarks/v1/marginal.Xpred_2D.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
@@ -301,7 +277,7 @@ _temp/v1/Xunique.csv benchmarks/v1/gpqr.Xunique.csv \
 
 examples/v1/Window.ipynb: \
 _temp/v1/X.csv _temp/v1/Xpred_1D.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
-benchmarks/v1/H.marginal.Xpred_2D.csv benchmarks/v1/phi_1.marginal.Xpred_2D.csv \
+benchmarks/v1/marginal.Xpred_2D.csv \
 benchmarks/v1/joint_probability.Xpred_2D.csv \
 benchmarks/v1/joint_probability.Xpred_1D.csv \
 .FORCE
