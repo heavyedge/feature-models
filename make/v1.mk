@@ -66,14 +66,14 @@ _temp/v1/shape_features.csv: $(wildcard _data/v1/shape_features/all_profiles/dat
 	df.to_csv("$@", index=False)
 	'
 
+_temp/v1/Xdraw.csv: scripts/v1/data/write-X.py _temp/v1/dimless.csv _temp/v1/X_index.csv
+	python3 $^ --draw $(N_DATA_DRAW_v1) --seed 0 -o $@
+
 _temp/v1/X.csv: scripts/v1/data/write-X.py _temp/v1/dimless.csv _temp/v1/X_index.csv
 	python3 $^ $(FINAL_DATA_DRAW_ARGS_v1) -o $@
 
 _temp/v1/y.csv: scripts/v1/data/write-y.py _temp/v1/X.csv _temp/v1/shape_features.csv
 	python3 $^ --index-col 0 1 2 -o $@
-
-_temp/v1/Xdraw.csv: scripts/v1/data/write-X.py _temp/v1/dimless.csv _temp/v1/X_index.csv
-	python3 $^ --draw $(N_DATA_DRAW_v1) --seed 0 -o $@
 
 _temp/v1/Xsplit.csv: scripts/v1/data/split-X.py _temp/v1/Xdraw.csv _temp/v1/X_index.csv
 	python3 $^ --test-ratio 0.2 --num-folds $(N_FOLDS_v1) --random-state=42 -o $@
