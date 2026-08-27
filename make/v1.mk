@@ -162,11 +162,19 @@ benchmarks/v1/pinball_loss.gpr.csv: scripts/v1/model_selection/pinball_loss.py _
 	mkdir -p $(@D)
 	python3 $^ --type GPR --quantile-levels $(QUANTILES) -o $@
 
+benchmarks/v1/likelihood.gpr.csv: scripts/v1/model_selection/likelihood.py _temp/v1/cv.gpr.Xtest.csv _temp/v1/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --type GPR -o $@
+
 _temp/v1/cv.gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpqr_%.pt $(SCRIPTS_v1)
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --num-samples $(N_SAMPLES_v1) -o $@
 
 benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v1/model_selection/pinball_loss.py _temp/v1/cv.gpqr_%.Xtest.csv _temp/v1/ytest.csv
+	mkdir -p $(@D)
+	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
+
+benchmarks/v1/likelihood.gpqr_%.csv: scripts/v1/model_selection/likelihood.py _temp/v1/cv.gpqr_%.Xtest.csv _temp/v1/ytest.csv
 	mkdir -p $(@D)
 	python3 $^ --type GPQR --quantile-levels $(QUANTILES) -o $@
 
@@ -243,6 +251,10 @@ benchmarks/v1/pinball_loss.gpr.csv \
 benchmarks/v1/pinball_loss.gpqr_independent.csv \
 benchmarks/v1/pinball_loss.gpqr_lmc.csv \
 benchmarks/v1/pinball_loss.gpqr_cglmc.csv \
+benchmarks/v1/likelihood.gpr.csv \
+benchmarks/v1/likelihood.gpqr_independent.csv \
+benchmarks/v1/likelihood.gpqr_lmc.csv \
+benchmarks/v1/likelihood.gpqr_cglmc.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
