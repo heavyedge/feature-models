@@ -13,6 +13,7 @@ from scripts.v1.train.common import (
     configure_logging,
     create_train_parser,
     fit_all_data,
+    fit_trial,
     initialize_optuna_storage,
     validate_train_args,
 )
@@ -78,12 +79,38 @@ gp_batch_shape = torch.Size((*external_batch_shape, len(TARGET)))
 mean = load_module.load_PriorMean(path=args.prior_mean, device=device)
 mean.eval()
 
+with torch.no_grad():
+    res_train = ytrain - mean(Xtrain_base)
+Xtrain = expand_output_batch(Xtrain_base)
+
 if has_validation:
     Xval_base, yval = load_data(args.Xval, args.yval)
     if Xval_base.shape[:-2] != external_batch_shape:
         parser.error("Training and validation data must have the same batch shape.")
+    with torch.no_grad():
+        res_val = yval - mean(Xval_base)
+    Xval = expand_output_batch(Xval_base)
 
-dim = Xtrain_base.shape[-1]
+dim = Xtrain.shape[-1]
+num_data = Xtrain.shape[-2]
+X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=gp_batch_shape).to(device)
+X_scaler.train()
+with torch.no_grad():
+    Xtrain_scaled = X_scaler(Xtrain)
+X_scaler.eval()
+
+y_scaler = scaler_module.StandardScaler(1, batch_shape=gp_batch_shape).to(device)
+y_scaler.train()
+with torch.no_grad():
+    res_train_scaled = y_scaler(res_train.unsqueeze(-1)).squeeze(-1)
+y_scaler.eval()
+
+if has_validation:
+    with torch.no_grad():
+        Xval_scaled = X_scaler(Xval)
+        res_val_scaled = y_scaler(res_val.unsqueeze(-1)).squeeze(-1)
+
+Xtrain_inducing_points = unique_inducing_points_per_fold(Xtrain_scaled)
 
 
 def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
@@ -153,6 +180,58 @@ def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
     return X_scaler, y_scaler, likelihood, model
 
 
+def select_final_schedule(hyperparameters, gpr_trial):
+    if not has_validation:
+        if "best_epoch" not in gpr_trial.user_attrs:
+            parser.error("the GPR best trial has no early-stopping epoch")
+        return (
+            min(args.num_epochs, max(1, int(gpr_trial.user_attrs["best_epoch"]))),
+            gpr_trial.user_attrs.get("lr_reductions", []),
+        )
+
+    # This is one validation run with the fixed GPR hyperparameters, not an
+    # Optuna trial. Its early-stopping schedule is reused for the final fit.
+    torch.manual_seed(42)
+    likelihood = CenterGapQuantilesLikelihood(
+        quantile_levels=quantiles,
+        central_quantile_idx=central_quantile_idx,
+        batch_shape=gp_batch_shape,
+        noise_prior_loc=hyperparameters["noise_prior_loc"],
+        noise_prior_scale=hyperparameters["noise_prior_scale"],
+    ).to(device)
+    model = model_class(
+        inducing_points=Xtrain_inducing_points.clone().detach(),
+        num_quantiles=num_quantiles,
+        num_lower_quantiles=num_lower_quantiles,
+        num_latents=num_quantiles,
+        batch_shape=gp_batch_shape,
+        lengthscale_prior_loc=hyperparameters["lengthscale_prior_loc"],
+        lengthscale_prior_scale=hyperparameters["lengthscale_prior_scale"],
+    ).to(device)
+    validation_loss, best_epoch, lr_reductions = fit_trial(
+        likelihood=likelihood,
+        model=model,
+        mll=VariationalELBO(likelihood, model, num_data=num_data),
+        parameters=list(model.parameters()) + list(likelihood.parameters()),
+        Xtrain=Xtrain_scaled,
+        ytrain=res_train_scaled,
+        Xval=Xval_scaled,
+        yval=res_val_scaled,
+        args=args,
+        controls=controls,
+        logger=logger,
+        validation_reduce_dims=(-2, -1),
+        num_likelihood_samples=args.num_likelihood_samples,
+        return_training_details=True,
+    )
+    logger.info(
+        "Fixed-hyperparameter validation loss: %.6f (best epoch: %d)",
+        validation_loss,
+        best_epoch,
+    )
+    return best_epoch, lr_reductions
+
+
 try:
     gpr_study = optuna.load_study(
         study_name=args.gpr_study_name,
@@ -173,6 +252,6 @@ logger.info(
 )
 
 X_scaler, y_scaler, likelihood, model = train_on_all_data(
-    best_hyperparameters, args.num_epochs, []
+    best_hyperparameters, *select_final_schedule(best_hyperparameters, gpr_trial)
 )
 save_gpqr(quantiles, X_scaler, y_scaler, likelihood, model, args.out)

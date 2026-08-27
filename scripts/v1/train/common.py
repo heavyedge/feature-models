@@ -478,6 +478,7 @@ def fit_trial(
     validation_reduce_dims,
     trial=None,
     num_likelihood_samples=None,
+    return_training_details=False,
 ):
     parameters = list(parameters)
     optimizer = torch.optim.Adam(parameters, lr=args.learning_rate)
@@ -591,6 +592,8 @@ def fit_trial(
         stop_reason = "max_epochs"
 
     save_trial_progress(stop_reason)
+    if return_training_details:
+        return best_val_loss, best_epoch, lr_reductions
     return best_val_loss
 
 
