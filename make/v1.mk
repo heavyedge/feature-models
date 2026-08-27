@@ -85,7 +85,7 @@ _temp/v1/y$(1).csv: _temp/v1/ysplit.csv
 endef
 $(foreach split,train val test,$(eval $(call SPLIT_v1,$(split))))
 
-_temp/v1/Xunique.csv: scripts/v1/data/write-Xunique.py _temp/v1/X.csv
+_temp/v1/Xunique.csv: scripts/v1/data/write-Xunique.py _temp/v1/X.csv _temp/v1/X_index.csv
 	python3 $^ --index-col 0 1 -o $@
 
 _temp/v1/Xpred_1D.csv: scripts/v1/data/write-Xpred.py _temp/v1/Xunique.csv
