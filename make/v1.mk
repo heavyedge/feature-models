@@ -131,32 +131,26 @@ _temp/v1/gpr.study-name $(SCRIPTS_v1)
 
 ## GPQR
 
-_temp/v1/cv.gpqr_independent.pt _temp/v1/gpqr_independent.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt \
+_temp/v1/cv.gpqr_independent.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/gpr.study-name \
 $(SCRIPTS_v1)
-	mkdir -p benchmarks
-	study_name="v1/gpqr_independent/$$(date +%Y%m%dT%H%M%S%N%z)"
-	printf '%s\n' "$$study_name" > _temp/v1/gpqr_independent.study-name
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_independent.pt
+	gpr_study_name="$$(cat _temp/v1/gpr.study-name)"
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-storage=$(OPTUNA_DB) --gpr-study-name="$$gpr_study_name" --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) -o $@
 
-_temp/v1/cv.gpqr_lmc.pt _temp/v1/gpqr_lmc.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt \
+_temp/v1/cv.gpqr_lmc.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/gpr.study-name \
 $(SCRIPTS_v1)
-	mkdir -p benchmarks
-	study_name="v1/gpqr_lmc/$$(date +%Y%m%dT%H%M%S%N%z)"
-	printf '%s\n' "$$study_name" > _temp/v1/gpqr_lmc.study-name
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_lmc.pt
+	gpr_study_name="$$(cat _temp/v1/gpr.study-name)"
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-storage=$(OPTUNA_DB) --gpr-study-name="$$gpr_study_name" --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) -o $@
 
-_temp/v1/cv.gpqr_cglmc.pt _temp/v1/gpqr_cglmc.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt \
+_temp/v1/cv.gpqr_cglmc.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/gpr.study-name \
 $(SCRIPTS_v1)
-	mkdir -p benchmarks
-	study_name="v1/gpqr_cglmc/$$(date +%Y%m%dT%H%M%S%N%z)"
-	printf '%s\n' "$$study_name" > _temp/v1/gpqr_cglmc.study-name
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --optimize-hyperparameters lengthscale_prior_loc lengthscale_prior_scale --n-trials=$(N_TRIALS_v1) --n-startup-trials=$(N_STARTUP_TRIALS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_cglmc.pt
+	gpr_study_name="$$(cat _temp/v1/gpr.study-name)"
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-storage=$(OPTUNA_DB) --gpr-study-name="$$gpr_study_name" --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) -o $@
 
 models/v1/feature_models/gpqr.pt: scripts/v1/train/gpqr.py _temp/v1/X.csv _temp/v1/y.csv models/v1/feature_models/prior_mean.pt \
-_temp/v1/gpqr_cglmc.study-name $(SCRIPTS_v1)
+_temp/v1/gpr.study-name $(SCRIPTS_v1)
 	mkdir -p $(@D)
-	study_name="$$(cat _temp/v1/gpqr_cglmc.study-name)"
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o $@
+	gpr_study_name="$$(cat _temp/v1/gpr.study-name)"
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --index-col 0 1 2 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --num-epochs $(N_EPOCHS_v1) --storage=$(OPTUNA_DB) --gpr-storage=$(OPTUNA_DB) --gpr-study-name="$$gpr_study_name" -o $@
 
 # Model selection
 
