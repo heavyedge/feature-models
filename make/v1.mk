@@ -3,7 +3,7 @@
 N_DATA_DRAW_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,50)
 N_FOLDS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,5)
 N_EPOCHS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
-N_TRIALS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,30)
+N_TRIALS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10)
 N_STARTUP_TRIALS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,5)
 N_SAMPLES_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,20)
 
