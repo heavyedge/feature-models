@@ -1,20 +1,18 @@
 import numpy as np
-import optuna
 import torch
 from gpytorch.mlls import VariationalELBO
 
 from models.v1.feature_models import gpqr as model_module
 from models.v1.feature_models import load as load_module
+from models.v1.feature_models import prior as prior_module
 from models.v1.feature_models import scale as scaler_module
 from models.v1.feature_models.likelihoods import CenterGapQuantilesLikelihood
 from scripts.v1.train.batch import load_batched_arrays
 from scripts.v1.train.common import (
-    PRIOR_HYPERPARAMETER_DEFAULTS,
     configure_logging,
     create_train_parser,
     fit_all_data,
     fit_trial,
-    initialize_optuna_storage,
     validate_train_args,
 )
 from scripts.v1.train.inducing import unique_inducing_points_per_fold
@@ -23,27 +21,24 @@ from scripts.v1.train.save import save_gpqr
 logger = configure_logging(__name__)
 torch.manual_seed(42)
 
-HYPERPARAMETER_DEFAULTS = PRIOR_HYPERPARAMETER_DEFAULTS.copy()
-
-parser = create_train_parser(HYPERPARAMETER_DEFAULTS, quantiles=True)
+parser = create_train_parser({}, quantiles=True)
 parser.add_argument(
-    "--gpr-storage",
+    "--gpr-model",
     type=str,
     required=True,
-    help="Optuna storage containing the GPR hyperparameter study.",
-)
-parser.add_argument(
-    "--gpr-study-name",
-    type=str,
-    required=True,
-    help="Name of the GPR Optuna study to reuse.",
+    help="Fitted GPR checkpoint whose ARD lengthscale is fixed in the GPQR.",
 )
 args = parser.parse_args()
-controls = validate_train_args(parser, args, logger)
+controls = validate_train_args(
+    parser,
+    args,
+    logger,
+    require_storage_without_validation=False,
+)
 has_validation = controls.has_validation
 device = controls.device
 if args.optimize_hyperparameters:
-    parser.error("GPQR does not optimize hyperparameters; use the GPR study")
+    parser.error("GPQR does not optimize hyperparameters")
 if args.num_epochs is None:
     parser.error("--num-epochs is required for GPQR final training")
 
@@ -76,11 +71,44 @@ Xtrain_base, ytrain = load_data(args.Xtrain, args.ytrain)
 external_batch_shape = Xtrain_base.shape[:-2]
 gp_batch_shape = torch.Size((*external_batch_shape, len(TARGET)))
 
-mean = load_module.load_PriorMean(path=args.prior_mean, device=device)
-mean.eval()
+final_X_scaler, _, _, gpr_model, gpr_metadata = load_module.load_GPR(
+    path=args.gpr_model,
+    device=device,
+    return_metadata=True,
+)
+final_X_scaler.eval()
+gpr_model.eval()
+if final_X_scaler.batch_shape != torch.Size((len(TARGET),)):
+    parser.error(
+        "the fitted GPR X scaler must have one batch per output variable; "
+        f"got {tuple(final_X_scaler.batch_shape)}"
+    )
+final_lengthscale = gpr_model.covar_module.base_kernel.lengthscale.detach().clone()
+
+final_mean = load_module.load_PriorMean(path=args.prior_mean, device=device)
+final_mean.eval()
+if has_validation:
+    try:
+        cv_metadata = gpr_metadata["cross_validation"]
+        mean_checkpoint = cv_metadata["prior_mean"]
+        mean_class = getattr(prior_module, mean_checkpoint["type"])
+        cv_mean = mean_class(**mean_checkpoint["args"]).to(device)
+        cv_mean.load_state_dict(mean_checkpoint["state_dict"])
+    except (AttributeError, KeyError, RuntimeError, TypeError) as exc:
+        parser.error(
+            f"the GPR checkpoint has no valid cross-validation prior mean: {exc}"
+        )
+    cv_mean.eval()
+    if cv_mean.batch_shape != external_batch_shape:
+        parser.error(
+            "GPR metadata and GPQR data have different prior-mean batch shapes: "
+            f"{tuple(cv_mean.batch_shape)} != {tuple(external_batch_shape)}"
+        )
+else:
+    cv_mean = final_mean
 
 with torch.no_grad():
-    res_train = ytrain - mean(Xtrain_base)
+    res_train = ytrain - cv_mean(Xtrain_base)
 Xtrain = expand_output_batch(Xtrain_base)
 
 if has_validation:
@@ -88,16 +116,52 @@ if has_validation:
     if Xval_base.shape[:-2] != external_batch_shape:
         parser.error("Training and validation data must have the same batch shape.")
     with torch.no_grad():
-        res_val = yval - mean(Xval_base)
+        res_val = yval - cv_mean(Xval_base)
     Xval = expand_output_batch(Xval_base)
 
 dim = Xtrain.shape[-1]
 num_data = Xtrain.shape[-2]
-X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=gp_batch_shape).to(device)
-X_scaler.train()
+if final_X_scaler.dim != dim:
+    parser.error(
+        f"the fitted GPR expects {final_X_scaler.dim} features, but the data has {dim}"
+    )
+expected_lengthscale_shape = (len(TARGET), 1, dim)
+if tuple(final_lengthscale.shape) != expected_lengthscale_shape:
+    parser.error(
+        "the fitted GPR must contain one ARD lengthscale vector per output; "
+        f"expected {expected_lengthscale_shape}, got {tuple(final_lengthscale.shape)}"
+    )
+
+if has_validation:
+    try:
+        scaler_checkpoint = cv_metadata["X_scaler"]
+        cv_lengthscale = cv_metadata["lengthscale"].to(device=device)
+        scaler_class = getattr(scaler_module, scaler_checkpoint["type"])
+        cv_X_scaler = scaler_class(**scaler_checkpoint["args"]).to(device)
+        cv_X_scaler.load_state_dict(scaler_checkpoint["state_dict"])
+    except (AttributeError, KeyError, RuntimeError, TypeError) as exc:
+        parser.error(
+            f"the GPR checkpoint has no valid cross-validation metadata: {exc}"
+        )
+    cv_X_scaler.eval()
+    if cv_X_scaler.batch_shape != gp_batch_shape:
+        parser.error(
+            "GPR metadata and GPQR data have different fold batch shapes: "
+            f"{tuple(cv_X_scaler.batch_shape)} != {tuple(gp_batch_shape)}"
+        )
+    expected_cv_lengthscale_shape = (*gp_batch_shape, 1, dim)
+    if tuple(cv_lengthscale.shape) != expected_cv_lengthscale_shape:
+        parser.error(
+            "the GPR cross-validation metadata has an invalid lengthscale shape: "
+            f"expected {expected_cv_lengthscale_shape}, "
+            f"got {tuple(cv_lengthscale.shape)}"
+        )
+else:
+    cv_X_scaler = final_X_scaler
+    cv_lengthscale = final_lengthscale
+
 with torch.no_grad():
-    Xtrain_scaled = X_scaler(Xtrain)
-X_scaler.eval()
+    Xtrain_scaled = cv_X_scaler(Xtrain)
 
 y_scaler = scaler_module.StandardScaler(1, batch_shape=gp_batch_shape).to(device)
 y_scaler.train()
@@ -107,13 +171,13 @@ y_scaler.eval()
 
 if has_validation:
     with torch.no_grad():
-        Xval_scaled = X_scaler(Xval)
+        Xval_scaled = cv_X_scaler(Xval)
         res_val_scaled = y_scaler(res_val.unsqueeze(-1)).squeeze(-1)
 
 Xtrain_inducing_points = unique_inducing_points_per_fold(Xtrain_scaled)
 
 
-def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
+def train_on_all_data(num_epochs, lr_reductions):
     torch.manual_seed(42)
     if has_validation:
         # Every fold contains the same train-validation union. Refit one
@@ -128,27 +192,22 @@ def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
         refit_batch_shape = gp_batch_shape
     Xall = expand_output_batch(Xall_base)
 
-    if mean.batch_shape != Xall_base.shape[:-2]:
+    if final_mean.batch_shape != Xall_base.shape[:-2]:
         parser.error("refit prior-mean batch shape must match the refit training data")
 
     likelihood = CenterGapQuantilesLikelihood(
         quantile_levels=quantiles,
         central_quantile_idx=central_quantile_idx,
         batch_shape=refit_batch_shape,
-        noise_prior_loc=hyperparameters["noise_prior_loc"],
-        noise_prior_scale=hyperparameters["noise_prior_scale"],
     ).to(device)
 
-    X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=refit_batch_shape).to(device)
-    X_scaler.train()
     with torch.no_grad():
-        Xall_scaled = X_scaler(Xall)
-    X_scaler.eval()
+        Xall_scaled = final_X_scaler(Xall)
 
     y_scaler = scaler_module.StandardScaler(1, batch_shape=refit_batch_shape).to(device)
     y_scaler.train()
     with torch.no_grad():
-        res_all = yall - mean(Xall_base)
+        res_all = yall - final_mean(Xall_base)
         res_all_scaled = y_scaler(res_all.unsqueeze(-1)).squeeze(-1)
     y_scaler.eval()
 
@@ -158,15 +217,20 @@ def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
         num_lower_quantiles=num_lower_quantiles,
         num_latents=num_quantiles,
         batch_shape=refit_batch_shape,
-        lengthscale_prior_loc=hyperparameters["lengthscale_prior_loc"],
-        lengthscale_prior_scale=hyperparameters["lengthscale_prior_scale"],
+        fixed_lengthscale=final_lengthscale,
     ).to(device)
+
+    parameters = [
+        parameter
+        for parameter in (*model.parameters(), *likelihood.parameters())
+        if parameter.requires_grad
+    ]
 
     fit_all_data(
         likelihood=likelihood,
         model=model,
         mll=VariationalELBO(likelihood, model, num_data=Xall.shape[-2]),
-        parameters=list(model.parameters()) + list(likelihood.parameters()),
+        parameters=parameters,
         X=Xall_scaled,
         y=res_all_scaled,
         learning_rate=args.learning_rate,
@@ -177,27 +241,24 @@ def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
         logger=logger,
         num_likelihood_samples=args.num_likelihood_samples,
     )
-    return X_scaler, y_scaler, likelihood, model
+    return final_X_scaler, y_scaler, likelihood, model
 
 
-def select_final_schedule(hyperparameters, gpr_trial):
+def select_final_schedule():
     if not has_validation:
-        if "best_epoch" not in gpr_trial.user_attrs:
-            parser.error("the GPR best trial has no early-stopping epoch")
-        return (
-            min(args.num_epochs, max(1, int(gpr_trial.user_attrs["best_epoch"]))),
-            gpr_trial.user_attrs.get("lr_reductions", []),
+        logger.info(
+            "No validation data was provided; training for all %d epochs.",
+            args.num_epochs,
         )
+        return args.num_epochs, []
 
-    # This is one validation run with the fixed GPR hyperparameters, not an
+    # This is one validation run with the fitted GPR lengthscale fixed, not an
     # Optuna trial. Its early-stopping schedule is reused for the final fit.
     torch.manual_seed(42)
     likelihood = CenterGapQuantilesLikelihood(
         quantile_levels=quantiles,
         central_quantile_idx=central_quantile_idx,
         batch_shape=gp_batch_shape,
-        noise_prior_loc=hyperparameters["noise_prior_loc"],
-        noise_prior_scale=hyperparameters["noise_prior_scale"],
     ).to(device)
     model = model_class(
         inducing_points=Xtrain_inducing_points.clone().detach(),
@@ -205,14 +266,18 @@ def select_final_schedule(hyperparameters, gpr_trial):
         num_lower_quantiles=num_lower_quantiles,
         num_latents=num_quantiles,
         batch_shape=gp_batch_shape,
-        lengthscale_prior_loc=hyperparameters["lengthscale_prior_loc"],
-        lengthscale_prior_scale=hyperparameters["lengthscale_prior_scale"],
+        fixed_lengthscale=cv_lengthscale,
     ).to(device)
+    parameters = [
+        parameter
+        for parameter in (*model.parameters(), *likelihood.parameters())
+        if parameter.requires_grad
+    ]
     validation_loss, best_epoch, lr_reductions = fit_trial(
         likelihood=likelihood,
         model=model,
         mll=VariationalELBO(likelihood, model, num_data=num_data),
-        parameters=list(model.parameters()) + list(likelihood.parameters()),
+        parameters=parameters,
         Xtrain=Xtrain_scaled,
         ytrain=res_train_scaled,
         Xval=Xval_scaled,
@@ -225,33 +290,22 @@ def select_final_schedule(hyperparameters, gpr_trial):
         return_training_details=True,
     )
     logger.info(
-        "Fixed-hyperparameter validation loss: %.6f (best epoch: %d)",
+        "Fixed-GPR-lengthscale validation loss: %.6f (best epoch: %d)",
         validation_loss,
         best_epoch,
     )
     return best_epoch, lr_reductions
 
 
-try:
-    gpr_study = optuna.load_study(
-        study_name=args.gpr_study_name,
-        storage=initialize_optuna_storage(args.gpr_storage),
-    )
-except (KeyError, ValueError, optuna.exceptions.OptunaError) as exc:
-    parser.error(f"cannot load GPR study: {exc}")
-
-gpr_trial = gpr_study.best_trial
-best_hyperparameters = {
-    name: gpr_trial.params.get(name, default)
-    for name, default in HYPERPARAMETER_DEFAULTS.items()
-}
 logger.info(
-    "Reusing GPR hyperparameters: %s (validation loss: %.6f)",
-    best_hyperparameters,
-    gpr_trial.value,
+    "Fixing final GPQR lengthscale to fitted GPR ARD values: %s",
+    final_lengthscale.squeeze(-2).cpu().tolist(),
 )
+if has_validation:
+    logger.info(
+        "Using fold-specific GPR lengthscales for GPQR early stopping: shape %s",
+        tuple(cv_lengthscale.shape),
+    )
 
-X_scaler, y_scaler, likelihood, model = train_on_all_data(
-    best_hyperparameters, *select_final_schedule(best_hyperparameters, gpr_trial)
-)
+X_scaler, y_scaler, likelihood, model = train_on_all_data(*select_final_schedule())
 save_gpqr(quantiles, X_scaler, y_scaler, likelihood, model, args.out)
