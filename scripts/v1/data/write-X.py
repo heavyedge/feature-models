@@ -87,6 +87,18 @@ if args.draw is not None:
     selected = out_df.assign(_X_index=out_df["name"].map(index_by_name))
     sampled_indices = []
     for _, index_group in selected.groupby("_X_index", sort=False):
+        if len(index_group) < args.draw:
+            group_indices = index_group.index.to_numpy()
+            extra = rng.choice(
+                group_indices,
+                size=args.draw - len(group_indices),
+                replace=True,
+            )
+            sampled_indices.extend(
+                rng.permutation(np.concatenate((group_indices, extra)))
+            )
+            continue
+
         names = index_group["name"].drop_duplicates().to_numpy()
         quotas = np.full(len(names), args.draw // len(names), dtype=int)
         remainder = args.draw % len(names)
@@ -97,7 +109,16 @@ if args.draw is not None:
             if quota == 0:
                 continue
             name_indices = index_group.index[index_group["name"] == name].to_numpy()
-            sampled_indices.extend(rng.choice(name_indices, size=quota, replace=True))
+            if len(name_indices) >= quota:
+                sampled = rng.choice(name_indices, size=quota, replace=False)
+            else:
+                extra = rng.choice(
+                    name_indices,
+                    size=quota - len(name_indices),
+                    replace=True,
+                )
+                sampled = rng.permutation(np.concatenate((name_indices, extra)))
+            sampled_indices.extend(sampled)
 
     out_df = out_df.loc[sampled_indices]
 
