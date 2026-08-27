@@ -88,15 +88,20 @@ def _load_gp(path, model_module, device):
     return checkpoint, X_scaler, y_scaler, likelihood, model
 
 
-def load_GPR(path=None, device=None):
+def load_GPR(path=None, device=None, *, return_metadata=False):
     """Return the independent three-batch GPR model and its transforms."""
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if path is None:
         path = Path(__file__).parent / "gpr.pt"
 
-    _, X_scaler, y_scaler, likelihood, model = _load_gp(path, gpr_module, device)
-    return X_scaler, y_scaler, likelihood, model
+    checkpoint, X_scaler, y_scaler, likelihood, model = _load_gp(
+        path, gpr_module, device
+    )
+    result = (X_scaler, y_scaler, likelihood, model)
+    if return_metadata:
+        return (*result, checkpoint.get("metadata", {}))
+    return result
 
 
 def load_GPQR(path=None, device=None):

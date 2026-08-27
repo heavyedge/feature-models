@@ -38,8 +38,10 @@ def save_gpr(
     likelihood,
     model,
     path,
+    metadata=None,
 ):
     data = dict(
+        metadata={} if metadata is None else metadata,
         X_scaler=dict(
             type=X_scaler.__class__.__name__,
             args=dict(dim=X_scaler.dim, batch_shape=X_scaler.batch_shape),
@@ -112,6 +114,11 @@ def save_gpqr(
                 num_lower_quantiles=model.num_lower_quantiles[0],
                 num_latents=model.num_latents,
                 **_prior_args(model, "lengthscale"),
+                fixed_lengthscale=(
+                    model.covar_module.base_kernel.lengthscale.detach().clone()
+                    if model.lengthscale_is_fixed
+                    else None
+                ),
                 batch_shape=model.batch_shape,
             ),
             state_dict=model.state_dict(),

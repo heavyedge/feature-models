@@ -59,19 +59,36 @@ Xtrain_base, ytrain = load_data(args.Xtrain, args.ytrain)
 external_batch_shape = Xtrain_base.shape[:-2]
 gp_batch_shape = torch.Size((*external_batch_shape, len(TARGET)))
 
-mean = load_module.load_PriorMean(path=args.prior_mean, device=device)
-mean.eval()
-with torch.no_grad():
-    res_train = ytrain - mean(Xtrain_base)
+final_mean = load_module.load_PriorMean(path=args.prior_mean, device=device)
+final_mean.eval()
 Xtrain = expand_output_batch(Xtrain_base)  # (*K, 3, N, D)
 
 if has_validation:
     Xval_base, yval = load_data(args.Xval, args.yval)
     if Xval_base.shape[:-2] != external_batch_shape:
         parser.error("Training and validation data must have the same batch shape.")
-    with torch.no_grad():
-        res_val = yval - mean(Xval_base)
     Xval = expand_output_batch(Xval_base)
+
+    # The saved prior mean is the final train-validation refit. Fit a separate
+    # fold-batched prior mean on fold-train rows only for leakage-free CV.
+    torch.manual_seed(42)
+    cv_mean = final_mean.__class__(batch_shape=external_batch_shape).to(device)
+    cv_mean.train()
+    cv_mean_optimizer = torch.optim.Adam(cv_mean.parameters(), lr=args.learning_rate)
+    cv_mean_loss = torch.nn.MSELoss()
+    for _ in range(args.num_epochs):
+        cv_mean_optimizer.zero_grad()
+        loss = cv_mean_loss(cv_mean(Xtrain_base), ytrain)
+        loss.backward()
+        cv_mean_optimizer.step()
+    cv_mean.eval()
+else:
+    cv_mean = final_mean
+
+with torch.no_grad():
+    res_train = ytrain - cv_mean(Xtrain_base)
+    if has_validation:
+        res_val = yval - cv_mean(Xval_base)
 
 dim = Xtrain.shape[-1]
 num_data = Xtrain.shape[-2]
@@ -166,7 +183,7 @@ def train_on_all_data(
         refit_batch_shape = gp_batch_shape
     Xall = expand_output_batch(Xall_base)
 
-    if mean.batch_shape != Xall_base.shape[:-2]:
+    if final_mean.batch_shape != Xall_base.shape[:-2]:
         parser.error("refit prior-mean batch shape must match the refit training data")
 
     likelihood = GaussianLikelihood(
@@ -184,7 +201,7 @@ def train_on_all_data(
     y_scaler = scaler_module.StandardScaler(1, batch_shape=refit_batch_shape).to(device)
     y_scaler.train()
     with torch.no_grad():
-        res_all = yall - mean(Xall_base)
+        res_all = yall - final_mean(Xall_base)
         res_all_scaled = y_scaler(res_all.unsqueeze(-1)).squeeze(-1)
     y_scaler.eval()
 
@@ -212,6 +229,44 @@ def train_on_all_data(
     return X_scaler, y_scaler, likelihood, model
 
 
+def fit_cross_validation_model(
+    noise_prior_loc,
+    noise_prior_scale,
+    lengthscale_prior_loc,
+    lengthscale_prior_scale,
+    num_epochs,
+    lr_reductions,
+):
+    """Refit fold batches on fold-train data for leakage-free metadata."""
+    torch.manual_seed(42)
+    likelihood = GaussianLikelihood(
+        batch_shape=gp_batch_shape,
+        noise_prior_loc=noise_prior_loc,
+        noise_prior_scale=noise_prior_scale,
+    ).to(device)
+    model = model_class(
+        inducing_points=Xtrain_inducing_points.clone().detach(),
+        batch_shape=gp_batch_shape,
+        lengthscale_prior_loc=lengthscale_prior_loc,
+        lengthscale_prior_scale=lengthscale_prior_scale,
+    ).to(device)
+    fit_all_data(
+        likelihood=likelihood,
+        model=model,
+        mll=VariationalELBO(likelihood, model, num_data=num_data),
+        parameters=list(model.parameters()) + list(likelihood.parameters()),
+        X=Xtrain_scaled,
+        y=res_train_scaled,
+        learning_rate=args.learning_rate,
+        cholesky_jitter=args.cholesky_jitter,
+        max_grad_norm=args.max_grad_norm,
+        num_epochs=num_epochs,
+        lr_reductions=lr_reductions,
+        logger=logger,
+    )
+    return model
+
+
 study = optimize_or_load_study(
     args=args,
     controls=controls,
@@ -228,6 +283,44 @@ logger.info(
     best_trial.value,
 )
 
+metadata = {}
+if has_validation:
+    cv_model = fit_cross_validation_model(
+        best_hyperparameters["noise_prior_loc"],
+        best_hyperparameters["noise_prior_scale"],
+        best_hyperparameters["lengthscale_prior_loc"],
+        best_hyperparameters["lengthscale_prior_scale"],
+        best_epoch,
+        best_lr_reductions,
+    )
+    cv_lengthscale = cv_model.covar_module.base_kernel.lengthscale.detach().clone()
+    metadata["cross_validation"] = {
+        "lengthscale": cv_lengthscale,
+        "prior_mean": {
+            "type": cv_mean.__class__.__name__,
+            "args": {"batch_shape": cv_mean.batch_shape},
+            "state_dict": {
+                name: value.detach().clone()
+                for name, value in cv_mean.state_dict().items()
+            },
+        },
+        "X_scaler": {
+            "type": X_scaler.__class__.__name__,
+            "args": {
+                "dim": X_scaler.dim,
+                "batch_shape": X_scaler.batch_shape,
+            },
+            "state_dict": {
+                name: value.detach().clone()
+                for name, value in X_scaler.state_dict().items()
+            },
+        },
+    }
+    logger.info(
+        "Saved fold-specific GPR lengthscales with shape %s.",
+        tuple(cv_lengthscale.shape),
+    )
+
 X_scaler, y_scaler, likelihood, model = train_on_all_data(
     best_hyperparameters["noise_prior_loc"],
     best_hyperparameters["noise_prior_scale"],
@@ -236,4 +329,4 @@ X_scaler, y_scaler, likelihood, model = train_on_all_data(
     best_epoch,
     best_lr_reductions,
 )
-save_gpr(X_scaler, y_scaler, likelihood, model, args.out)
+save_gpr(X_scaler, y_scaler, likelihood, model, args.out, metadata=metadata)

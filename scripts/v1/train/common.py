@@ -252,13 +252,19 @@ def create_train_parser(hyperparameter_names, *, target=False, quantiles=False):
     return parser
 
 
-def validate_train_args(parser, args, logger):
+def validate_train_args(
+    parser, args, logger, *, require_storage_without_validation=True
+):
     has_validation = args.Xval is not None or args.yval is not None
     if (args.Xval is None) != (args.yval is None):
         parser.error("Xval and yval must be provided together.")
     if has_validation and args.num_epochs is None:
         parser.error("--num-epochs is required when validation data is provided.")
-    if not has_validation and args.storage is None:
+    if (
+        not has_validation
+        and require_storage_without_validation
+        and args.storage is None
+    ):
         parser.error("--storage is required when validation data is not provided.")
     if has_validation and args.num_epochs <= 0:
         parser.error("--num-epochs must be positive.")
