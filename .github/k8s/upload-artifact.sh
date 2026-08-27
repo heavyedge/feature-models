@@ -12,7 +12,17 @@ asset_name="${artifact_type}-${GITHUB_RELEASE_TAG_NAME}.tar.gz"
 archive_file="$(mktemp --suffix=.tar.gz)"
 trap 'rm -f "$archive_file"' EXIT INT TERM
 
-tar -C "$source_dir" -czf "$archive_file" .
+if [ "$artifact_type" = "benchmarks" ]; then
+  benchmark_db="benchmarks/optuna.db"
+  if [ ! -f "$benchmark_db" ]; then
+    echo "Cannot upload benchmarks: ${benchmark_db} does not exist." >&2
+    exit 1
+  fi
+
+  tar -czf "$archive_file" "$source_dir" "$benchmark_db"
+else
+  tar -C "$source_dir" -czf "$archive_file" .
+fi
 source .github/scripts/app-token.sh
 
 existing_asset_id="$(curl --fail --silent --show-error \
