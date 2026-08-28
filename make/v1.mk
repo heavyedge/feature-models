@@ -134,22 +134,32 @@ _temp/v1/gpr.study-name $(SCRIPTS_v1)
 
 ## GPQR
 
-_temp/v1/cv.gpqr_independent.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
+_temp/v1/cv.gpqr_independent.pt _temp/v1/gpqr_independent.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
 $(SCRIPTS_v1)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) -o $@
+	mkdir -p benchmarks
+	study_name="v1/gpqr_independent/$$(date +%Y%m%dT%H%M%S%N%z)"
+	printf '%s\n' "$$study_name" > _temp/v1/gpqr_independent.study-name
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_independent.pt
 
-_temp/v1/cv.gpqr_lmc.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
+_temp/v1/cv.gpqr_lmc.pt _temp/v1/gpqr_lmc.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
 $(SCRIPTS_v1)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) -o $@
+	mkdir -p benchmarks
+	study_name="v1/gpqr_lmc/$$(date +%Y%m%dT%H%M%S%N%z)"
+	printf '%s\n' "$$study_name" > _temp/v1/gpqr_lmc.study-name
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_lmc.pt
 
-_temp/v1/cv.gpqr_cglmc.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
+_temp/v1/cv.gpqr_cglmc.pt _temp/v1/gpqr_cglmc.study-name &: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
 $(SCRIPTS_v1)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) -o $@
+	mkdir -p benchmarks
+	study_name="v1/gpqr_cglmc/$$(date +%Y%m%dT%H%M%S%N%z)"
+	printf '%s\n' "$$study_name" > _temp/v1/gpqr_cglmc.study-name
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o _temp/v1/cv.gpqr_cglmc.pt
 
 models/v1/feature_models/gpqr.pt: scripts/v1/train/gpqr.py _temp/v1/X.csv _temp/v1/y.csv models/v1/feature_models/prior_mean.pt \
-models/v1/feature_models/gpr.pt $(SCRIPTS_v1)
+models/v1/feature_models/gpr.pt _temp/v1/gpqr_cglmc.study-name $(SCRIPTS_v1)
 	mkdir -p $(@D)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --gpr-model=$(word 5,$^) --index-col 0 1 2 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) -o $@
+	study_name="$$(cat _temp/v1/gpqr_cglmc.study-name)"
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --gpr-model=$(word 5,$^) --index-col 0 1 2 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) --storage=$(OPTUNA_DB) --study-name="$$study_name" -o $@
 
 # Model selection
 

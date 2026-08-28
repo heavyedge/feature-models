@@ -15,6 +15,8 @@ from scripts.v1.train.common import (
     create_train_parser,
     fit_all_data,
     fit_trial,
+    optimize_or_load_study,
+    select_best_trial,
     validate_train_args,
 )
 from scripts.v1.train.inducing import unique_inducing_points_per_fold
@@ -53,14 +55,15 @@ controls = validate_train_args(
     parser,
     args,
     logger,
-    require_storage_without_validation=False,
 )
 has_validation = controls.has_validation
 device = controls.device
 if args.optimize_hyperparameters:
     parser.error("GPQR does not optimize hyperparameters")
 if args.num_epochs is None:
-    parser.error("--num-epochs is required for GPQR final training")
+    parser.error("--num-epochs is required for GPQR training")
+if args.storage is None or args.study_name is None:
+    parser.error("--storage and --study-name are required for GPQR training")
 if args.batch_size is not None and args.batch_size <= 0:
     parser.error("--batch-size must be greater than zero")
 if (
@@ -317,16 +320,9 @@ def train_on_all_data(num_epochs, lr_reductions):
     return final_X_scaler, y_scaler, likelihood, model
 
 
-def select_final_schedule():
+def objective(trial):
     if not has_validation:
-        logger.info(
-            "No validation data was provided; training for all %d epochs.",
-            args.num_epochs,
-        )
-        return args.num_epochs, []
-
-    # This is one validation run with the fitted GPR lengthscale fixed, not an
-    # Optuna trial. Its early-stopping schedule is reused for the final fit.
+        raise RuntimeError("GPQR cross-validation data is required to create a trial")
     torch.manual_seed(42)
     likelihood = CenterGapQuantilesLikelihood(
         quantile_levels=quantiles,
@@ -349,7 +345,7 @@ def select_final_schedule():
         for parameter in (*model.parameters(), *likelihood.parameters())
         if parameter.requires_grad
     ]
-    validation_loss, best_epoch, lr_reductions = fit_trial(
+    return fit_trial(
         likelihood=likelihood,
         model=model,
         mll=VariationalELBO(likelihood, model, num_data=num_data),
@@ -362,16 +358,10 @@ def select_final_schedule():
         controls=controls,
         logger=logger,
         validation_reduce_dims=(-2, -1),
+        trial=trial,
         num_likelihood_samples=args.num_likelihood_samples,
         batch_size=args.batch_size,
-        return_training_details=True,
     )
-    logger.info(
-        "Fixed-GPR-lengthscale validation loss: %.6f (best epoch: %d)",
-        validation_loss,
-        best_epoch,
-    )
-    return best_epoch, lr_reductions
 
 
 logger.info(
@@ -388,5 +378,33 @@ if args.batch_size is not None:
         "Using GPQR observation minibatches of at most %d rows.", args.batch_size
     )
 
-X_scaler, y_scaler, likelihood, model = train_on_all_data(*select_final_schedule())
+study = optimize_or_load_study(
+    args=args,
+    controls=controls,
+    objective=objective,
+    optimized_hyperparameters=set(),
+    baseline_params={},
+)
+if len(study.trials) != 1:
+    parser.error(
+        f"GPQR schedule study {args.study_name!r} must contain exactly one trial; "
+        f"found {len(study.trials)}"
+    )
+best_trial, _, best_epoch, best_lr_reductions = select_best_trial(
+    study,
+    defaults={},
+    optimized_hyperparameters=set(),
+    controls=controls,
+    args=args,
+)
+logger.info(
+    "Selected GPQR schedule from study %s trial %d: %d epochs",
+    args.study_name,
+    best_trial.number,
+    best_epoch,
+)
+
+X_scaler, y_scaler, likelihood, model = train_on_all_data(
+    best_epoch, best_lr_reductions
+)
 save_gpqr(quantiles, X_scaler, y_scaler, likelihood, model, args.out)
