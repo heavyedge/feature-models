@@ -299,6 +299,7 @@ benchmarks/v1/joint_probability.Xpred_1D.csv \
 
 examples/v1/Class_Probability.ipynb: \
 _temp/v1/X.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
+benchmarks/v1/gpr.Xpred_2D.csv \
 benchmarks/v1/phi_1.class_marginal.Xpred_2D.csv benchmarks/v1/phi_3.class_marginal.Xpred_2D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
