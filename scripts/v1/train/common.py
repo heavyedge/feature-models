@@ -16,6 +16,7 @@ from sqlalchemy.engine import make_url
 MAX_DEFAULT_LR_SCHEDULER_PATIENCE = 50
 DEFAULT_CHOLESKY_JITTER = 1e-4
 DEFAULT_MAX_GRAD_NORM = 10.0
+MIN_CIQ_SAMPLING_SIZE = 5000
 PRIOR_HYPERPARAMETER_DEFAULTS = {
     "noise_prior_loc": None,
     "noise_prior_scale": None,
@@ -468,6 +469,31 @@ def _backward_and_step(loss, parameters, optimizer, max_grad_norm):
     return True
 
 
+def _validation_expected_log_prob(likelihood, y, function_dist, logger):
+    """Use scalable CIQ sampling for large validation posteriors.
+
+    The default Lanczos root decomposition can make batched ``torch.linalg.eigh``
+    fail to converge for large, nearly rank-deficient multitask covariances. CIQ
+    avoids that decomposition and is the recommended sampling path once the
+    covariance dimension reaches roughly 5,000.
+    """
+    covariance_size = function_dist.lazy_covariance_matrix.size(-1)
+    use_ciq = covariance_size >= MIN_CIQ_SAMPLING_SIZE
+    try:
+        with gpytorch.settings.ciq_samples(use_ciq):
+            return likelihood.expected_log_prob(y, function_dist)
+    except torch.linalg.LinAlgError:
+        if use_ciq:
+            raise
+        logger.warning(
+            "Lanczos posterior sampling failed for covariance size %d; "
+            "retrying validation with CIQ sampling.",
+            covariance_size,
+        )
+        with gpytorch.settings.ciq_samples(True):
+            return likelihood.expected_log_prob(y, function_dist)
+
+
 def fit_trial(
     *,
     likelihood,
@@ -550,7 +576,13 @@ def fit_trial(
         ):
             likelihood.eval()
             model.eval()
-            val_log_prob = likelihood.expected_log_prob(yval, model(Xval))
+            function_dist = model(Xval)
+            val_log_prob = _validation_expected_log_prob(
+                likelihood,
+                yval,
+                function_dist,
+                logger,
+            )
             val_loss = -val_log_prob.mean(dim=validation_reduce_dims).mean()
 
         current_val_loss = val_loss.item()
