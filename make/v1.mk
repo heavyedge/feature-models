@@ -218,37 +218,49 @@ _temp/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
 
-_temp/v1/pit.csv: scripts/v1/joint/write-pit.py _temp/v1/y.csv _temp/v1/gpqr.X.csv
+_temp/v1/gpqr.pit.csv: scripts/v1/joint/write-pit.gpqr.py _temp/v1/y.csv _temp/v1/gpqr.X.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 --quantiles $(QUANTILES) -o $@
 
-_temp/v1/H.marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+_temp/v1/gpr.H.marginal.%.csv: scripts/v1/joint/write-marginal.gpr.py benchmarks/v1/gpr.%.csv
 	mkdir -p $(@D)
-	$(GPU_PYTHON) $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
+	$(GPU_PYTHON) $^ --target H --threshold $(H_THRESHOLD) -o $@
 
-_temp/v1/phi_1.marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+_temp/v1/gpr.phi_1.marginal.%.csv: scripts/v1/joint/write-marginal.gpr.py benchmarks/v1/gpr.%.csv
 	mkdir -p $(@D)
-	$(GPU_PYTHON) $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
+	$(GPU_PYTHON) $^ --target phi_1 --threshold $(PHI_THRESHOLD) -o $@
 
-benchmarks/v1/marginal.%.csv: _temp/v1/H.marginal.%.csv _temp/v1/phi_1.marginal.%.csv
+benchmarks/v1/gpr.marginal.%.csv: _temp/v1/gpr.H.marginal.%.csv _temp/v1/gpr.phi_1.marginal.%.csv
 	mkdir -p $(@D)
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
-benchmarks/v1/joint_probability.Xpred_1D.csv: scripts/v1/joint/write-joint.py _temp/v1/Xpred_1D.csv _temp/v1/pit.csv benchmarks/v1/marginal.Xpred_1D.csv
+benchmarks/v1/gpr.joint_probability.%.csv: scripts/v1/joint/write-joint.gpr.py benchmarks/v1/gpr.marginal.%.csv
 	mkdir -p $(@D)
-	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
+	$(GPU_PYTHON) $^ -o $@
 
-benchmarks/v1/joint_probability.Xpred_2D.csv: scripts/v1/joint/write-joint.py _temp/v1/Xpred_2D.csv _temp/v1/pit.csv benchmarks/v1/marginal.Xpred_2D.csv
+_temp/v1/gpqr.H.marginal.%.csv: scripts/v1/joint/write-marginal.gpqr.py benchmarks/v1/gpqr.%.csv
+	mkdir -p $(@D)
+	$(GPU_PYTHON) $^ --target H --quantiles $(QUANTILES) --threshold $(H_THRESHOLD) -o $@
+
+_temp/v1/gpqr.phi_1.marginal.%.csv: scripts/v1/joint/write-marginal.gpqr.py benchmarks/v1/gpqr.%.csv
+	mkdir -p $(@D)
+	$(GPU_PYTHON) $^ --target phi_1 --quantiles $(QUANTILES) --threshold $(PHI_THRESHOLD) -o $@
+
+benchmarks/v1/gpqr.marginal.%.csv: _temp/v1/gpqr.H.marginal.%.csv _temp/v1/gpqr.phi_1.marginal.%.csv
+	mkdir -p $(@D)
+	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
+
+benchmarks/v1/gpqr.joint_probability.%.csv: scripts/v1/joint/write-joint.gpqr.py _temp/v1/%.csv _temp/v1/gpqr.pit.csv benchmarks/v1/gpqr.marginal.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
 # Class probability prediction
 
-benchmarks/v1/phi_1.class_marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+benchmarks/v1/gpqr.phi_1.class_marginal.%.csv: scripts/v1/joint/write-marginal.gpqr.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --target phi_1 --quantiles $(QUANTILES) --threshold 0 -o $@
 
-benchmarks/v1/phi_3.class_marginal.%.csv: scripts/v1/joint/write-marginal.py benchmarks/v1/gpqr.%.csv
+benchmarks/v1/gpqr.phi_3.class_marginal.%.csv: scripts/v1/joint/write-marginal.gpqr.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --target phi_3 --quantiles $(QUANTILES) --threshold 0 -o $@
 
@@ -291,14 +303,17 @@ _temp/v1/Xunique.csv benchmarks/v1/gpqr.Xunique.csv \
 
 examples/v1/Window.ipynb: \
 _temp/v1/X.csv _temp/v1/Xpred_1D.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
-benchmarks/v1/marginal.Xpred_2D.csv \
-benchmarks/v1/joint_probability.Xpred_2D.csv \
-benchmarks/v1/joint_probability.Xpred_1D.csv \
+benchmarks/v1/gpr.Xpred_2D.csv \
+benchmarks/v1/gpr.marginal.Xpred_2D.csv \
+benchmarks/v1/gpr.joint_probability.Xpred_2D.csv \
+benchmarks/v1/gpqr.marginal.Xpred_2D.csv \
+benchmarks/v1/gpqr.joint_probability.Xpred_2D.csv \
+benchmarks/v1/gpqr.joint_probability.Xpred_1D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v1/Class_Probability.ipynb: \
 _temp/v1/X.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
-benchmarks/v1/phi_1.class_marginal.Xpred_2D.csv benchmarks/v1/phi_3.class_marginal.Xpred_2D.csv \
+benchmarks/v1/gpqr.phi_1.class_marginal.Xpred_2D.csv benchmarks/v1/gpqr.phi_3.class_marginal.Xpred_2D.csv \
 .FORCE
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
