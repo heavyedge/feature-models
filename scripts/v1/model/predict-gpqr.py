@@ -5,7 +5,10 @@ import pathlib
 import numpy as np
 import pandas as pd
 import torch
-from gpytorch_qr.settings import quantile_gap_lower_bound
+from gpytorch_qr.settings import (
+    enforce_strict_quantile_order,
+    quantile_gap_lower_bound,
+)
 
 from . import gpr as gpr_module
 from . import load as load_module
@@ -85,7 +88,11 @@ def broadcast_y_stat(stat, samples):
 
 
 wrote_output = False
-with torch.no_grad(), quantile_gap_lower_bound(gap_lower_bound):
+with (
+    torch.no_grad(),
+    quantile_gap_lower_bound(gap_lower_bound),
+    enforce_strict_quantile_order(True),
+):
     for start in range(0, X.shape[-2], args.chunk_size):
         X_chunk = X[..., start : start + args.chunk_size, :]
         prior_mean = prior_mean_model(X_chunk)
@@ -103,6 +110,10 @@ with torch.no_grad(), quantile_gap_lower_bound(gap_lower_bound):
             + broadcast_y_stat(y_scaler.X_mean, scaled_samples)
             + gpr_mean.unsqueeze(0).unsqueeze(-1)
         )
+        # The affine shift above can collapse a one-ULP gap established in the
+        # scaled posterior, so apply gpytorch-qr's strict-order hook to the
+        # values that are actually written out as well.
+        samples = gpqr_model._postprocess_quantiles(samples)
         samples_np = samples.cpu().numpy()
 
         chunk_size = X_chunk.shape[-2]
