@@ -7,6 +7,7 @@ from models.v1.feature_models import load as load_module
 from models.v1.feature_models import prior as prior_module
 from models.v1.feature_models import scale as scaler_module
 from models.v1.feature_models.likelihoods import CenterGapQuantilesLikelihood
+from models.v1.feature_models.quantile import DEFAULT_QUANTILE_SLOPE_LOWER_BOUND
 from scripts.v1.train.batch import load_batched_arrays
 from scripts.v1.train.common import (
     configure_logging,
@@ -37,6 +38,12 @@ parser.add_argument(
         "Scalers and inducing points still use the complete dataset."
     ),
 )
+parser.add_argument(
+    "--quantile-slope-lower-bound",
+    type=float,
+    default=DEFAULT_QUANTILE_SLOPE_LOWER_BOUND,
+    help="Lower bound on (f(q2) - f(q1)) / (q2 - q1) in scaled response units.",
+)
 args = parser.parse_args()
 controls = validate_train_args(
     parser,
@@ -52,6 +59,11 @@ if args.num_epochs is None:
     parser.error("--num-epochs is required for GPQR final training")
 if args.batch_size is not None and args.batch_size <= 0:
     parser.error("--batch-size must be greater than zero")
+if (
+    not np.isfinite(args.quantile_slope_lower_bound)
+    or args.quantile_slope_lower_bound <= 0
+):
+    parser.error("--quantile-slope-lower-bound must be finite and positive")
 
 model_class = getattr(model_module, args.model)
 TARGET = tuple(model_class.output_names)
@@ -210,6 +222,7 @@ def train_on_all_data(num_epochs, lr_reductions):
         quantile_levels=quantiles,
         central_quantile_idx=central_quantile_idx,
         batch_shape=refit_batch_shape,
+        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
 
     with torch.no_grad():
@@ -229,6 +242,8 @@ def train_on_all_data(num_epochs, lr_reductions):
         num_latents=num_quantiles,
         batch_shape=refit_batch_shape,
         fixed_lengthscale=final_lengthscale,
+        quantile_levels=quantiles,
+        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
 
     parameters = [
@@ -271,6 +286,7 @@ def select_final_schedule():
         quantile_levels=quantiles,
         central_quantile_idx=central_quantile_idx,
         batch_shape=gp_batch_shape,
+        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
     model = model_class(
         inducing_points=Xtrain_inducing_points.clone().detach(),
@@ -279,6 +295,8 @@ def select_final_schedule():
         num_latents=num_quantiles,
         batch_shape=gp_batch_shape,
         fixed_lengthscale=cv_lengthscale,
+        quantile_levels=quantiles,
+        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
     parameters = [
         parameter

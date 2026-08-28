@@ -7,6 +7,7 @@ N_TRIALS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10)
 N_STARTUP_TRIALS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,5)
 N_SAMPLES_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,20)
 GPQR_BATCH_SIZE_v1 ?= $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),32,1024)
+GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1 ?= 1e-4
 
 MODELS_v1 := \
 models/v1/feature_models/prior_mean.pt \
@@ -18,6 +19,7 @@ models/v1/feature_models/prior.py \
 models/v1/feature_models/scale.py \
 models/v1/feature_models/gpr.py \
 models/v1/feature_models/gpqr.py \
+models/v1/feature_models/quantile.py \
 models/v1/feature_models/likelihoods.py \
 models/v1/feature_models/load.py \
 models/v1/feature_models/batch.py \
@@ -134,20 +136,20 @@ _temp/v1/gpr.study-name $(SCRIPTS_v1)
 
 _temp/v1/cv.gpqr_independent.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
 $(SCRIPTS_v1)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --num-epochs $(N_EPOCHS_v1) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_Independent --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) -o $@
 
 _temp/v1/cv.gpqr_lmc.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
 $(SCRIPTS_v1)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --num-epochs $(N_EPOCHS_v1) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_LMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) -o $@
 
 _temp/v1/cv.gpqr_cglmc.pt: scripts/v1/train/gpqr.py _temp/v1/Xtrain.csv _temp/v1/ytrain.csv _temp/v1/Xval.csv _temp/v1/yval.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt \
 $(SCRIPTS_v1)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --num-epochs $(N_EPOCHS_v1) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,6,$^) --gpr-model=$(word 7,$^) --index-col 0 --batch-col 0 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) -o $@
 
 models/v1/feature_models/gpqr.pt: scripts/v1/train/gpqr.py _temp/v1/X.csv _temp/v1/y.csv models/v1/feature_models/prior_mean.pt \
 models/v1/feature_models/gpr.pt $(SCRIPTS_v1)
 	mkdir -p $(@D)
-	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --gpr-model=$(word 5,$^) --index-col 0 1 2 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --num-epochs $(N_EPOCHS_v1) -o $@
+	PYTHONPATH=. $(GPU_PYTHON) $(wordlist 1,4,$^) --gpr-model=$(word 5,$^) --index-col 0 1 2 --model GPQR_CenterGapLMC --quantiles $(QUANTILES) --num-likelihood-samples $(N_LIKELIHOOD_SAMPLES) --batch-size $(GPQR_BATCH_SIZE_v1) --quantile-slope-lower-bound $(GPQR_QUANTILE_SLOPE_LOWER_BOUND_v1) --num-epochs $(N_EPOCHS_v1) -o $@
 
 # Model selection
 

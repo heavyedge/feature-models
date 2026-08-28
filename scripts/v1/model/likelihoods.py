@@ -5,6 +5,11 @@ from gpytorch_qr.likelihoods import (
     CenterGapQuantilesLikelihood as BaseCenterGapQuantilesLikelihood,
 )
 
+from .quantile import (
+    DEFAULT_QUANTILE_SLOPE_LOWER_BOUND,
+    quantile_slope_offsets,
+)
+
 __all__ = [
     "GaussianLikelihood",
     "CenterGapQuantilesLikelihood",
@@ -46,6 +51,7 @@ class CenterGapQuantilesLikelihood(BaseCenterGapQuantilesLikelihood):
         noise_prior_loc=None,
         noise_prior_scale=None,
         batch_shape=torch.Size(),
+        quantile_slope_lower_bound=DEFAULT_QUANTILE_SLOPE_LOWER_BOUND,
         **kwargs,
     ):
         noise_prior = _make_noise_prior(noise_prior_loc, noise_prior_scale)
@@ -59,6 +65,21 @@ class CenterGapQuantilesLikelihood(BaseCenterGapQuantilesLikelihood):
         )
         self.quantile_levels = quantile_levels
         self.central_quantile_idx = central_quantile_idx
+        self.quantile_slope_lower_bound = float(quantile_slope_lower_bound)
+        quantile_slope_offsets(
+            quantile_levels,
+            central_quantile_idx,
+            self.quantile_slope_lower_bound,
+        )
         self.noise_prior_loc = None if noise_prior is None else noise_prior.loc
         self.noise_prior_scale = None if noise_prior is None else noise_prior.scale
         self.batch_shape = torch.Size(batch_shape)
+
+    def _convert_to_quantiles(self, samples, lower_count):
+        quantiles = super()._convert_to_quantiles(samples, lower_count)
+        return quantiles + quantile_slope_offsets(
+            self.quantile_levels,
+            self.central_quantile_idx,
+            self.quantile_slope_lower_bound,
+            like=quantiles,
+        )
