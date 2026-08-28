@@ -11,6 +11,7 @@ import numpy as np
 import optuna
 import torch
 from gpytorch.distributions import MultivariateNormal
+from linear_operator import to_linear_operator
 from linear_operator.operators import (
     BlockInterleavedLinearOperator,
     DiagLinearOperator,
@@ -506,7 +507,26 @@ def _validation_expected_log_prob(
             DiagLinearOperator(function_dist.variance).add_jitter(jitter_val=jitter),
         )
     else:
-        function_dist = function_dist.to_data_independent_dist(jitter_val=jitter)
+        # GPyTorch's lazy advanced-indexing path can generate invalid CUDA
+        # indices for LMC covariance operators, even for small data chunks.
+        # Materialize only the bounded chunk and take its diagonal data blocks
+        # with tensor views instead. This retains covariance between tasks at
+        # each observation while discarding covariance between observations.
+        num_data, num_tasks = function_dist.mean.shape[-2:]
+        full_covar = function_dist.covariance_matrix
+        if function_dist._interleaved:
+            task_covars = full_covar.reshape(
+                *full_covar.shape[:-2], num_data, num_tasks, num_data, num_tasks
+            ).diagonal(dim1=-4, dim2=-2)
+        else:
+            task_covars = full_covar.reshape(
+                *full_covar.shape[:-2], num_tasks, num_data, num_tasks, num_data
+            ).diagonal(dim1=-3, dim2=-1)
+        task_covars = task_covars.movedim(-1, -3).contiguous()
+        function_dist = MultivariateNormal(
+            function_dist.mean,
+            to_linear_operator(task_covars).add_jitter(jitter_val=jitter),
+        )
     return likelihood.expected_log_prob(y, function_dist)
 
 

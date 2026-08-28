@@ -31,6 +31,7 @@ parser.add_argument(
 parser.add_argument(
     "--batch-size",
     type=int,
+    default=32,
     help=(
         "Observation minibatch size for GPQR optimizer steps and validation. "
         "Scalers and inducing points still use the complete dataset."
