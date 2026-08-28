@@ -242,11 +242,7 @@ benchmarks/v1/gpqr.marginal.%.csv: _temp/v1/gpqr.H.marginal.%.csv _temp/v1/gpqr.
 	mkdir -p $(@D)
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
-benchmarks/v1/gpqr.joint_probability.Xpred_1D.csv: scripts/v1/joint/write-joint.gpqr.py _temp/v1/Xpred_1D.csv _temp/v1/gpqr.pit.csv benchmarks/v1/gpqr.marginal.Xpred_1D.csv
-	mkdir -p $(@D)
-	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
-
-benchmarks/v1/gpqr.joint_probability.Xpred_2D.csv: scripts/v1/joint/write-joint.gpqr.py _temp/v1/Xpred_2D.csv _temp/v1/gpqr.pit.csv benchmarks/v1/gpqr.marginal.Xpred_2D.csv
+benchmarks/v1/gpqr.joint_probability.%.csv: scripts/v1/joint/write-joint.gpqr.py _temp/v1/%.csv _temp/v1/gpqr.pit.csv benchmarks/v1/gpqr.marginal.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
