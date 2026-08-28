@@ -8,7 +8,16 @@ from gpytorch.variational import CholeskyVariationalDistribution, VariationalStr
 
 __all__ = [
     "GPR",
+    "posterior_mean",
 ]
+
+
+def posterior_mean(prior_mean, scaled_posterior, y_scaler):
+    """Return the GPR latent posterior mean in the original response units."""
+    residual_mean = y_scaler.inverse_transform(
+        scaled_posterior.mean.unsqueeze(-1)
+    ).squeeze(-1)
+    return prior_mean + residual_mean
 
 
 class BaseGP(ApproximateGP):
