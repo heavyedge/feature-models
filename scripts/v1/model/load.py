@@ -114,4 +114,5 @@ def load_GPQR(path=None, device=None):
     checkpoint, X_scaler, y_scaler, likelihood, model = _load_gp(
         path, gpqr_module, device
     )
+    model.set_quantile_levels(checkpoint["quantiles"])
     return checkpoint["quantiles"], X_scaler, y_scaler, likelihood, model

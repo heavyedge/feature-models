@@ -101,6 +101,7 @@ def save_gpqr(
             args=dict(
                 quantile_levels=likelihood.quantile_levels,
                 central_quantile_idx=likelihood.central_quantile_idx,
+                quantile_slope_lower_bound=likelihood.quantile_slope_lower_bound,
                 **_prior_args(likelihood, "noise"),
                 batch_shape=likelihood.batch_shape,
             ),
@@ -113,6 +114,8 @@ def save_gpqr(
                 num_quantiles=model.num_quantiles[0],
                 num_lower_quantiles=model.num_lower_quantiles[0],
                 num_latents=model.num_latents,
+                quantile_levels=model.quantile_levels,
+                quantile_slope_lower_bound=model.quantile_slope_lower_bound,
                 **_prior_args(model, "lengthscale"),
                 fixed_lengthscale=(
                     model.covar_module.base_kernel.lengthscale.detach().clone()

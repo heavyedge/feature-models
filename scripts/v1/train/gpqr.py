@@ -7,6 +7,7 @@ from models.v1.feature_models import gpqr as model_module
 from models.v1.feature_models import load as load_module
 from models.v1.feature_models import scale as scaler_module
 from models.v1.feature_models.likelihoods import CenterGapQuantilesLikelihood
+from models.v1.feature_models.quantile import DEFAULT_QUANTILE_SLOPE_LOWER_BOUND
 from scripts.v1.train.batch import load_batched_arrays
 from scripts.v1.train.common import (
     PRIOR_HYPERPARAMETER_DEFAULTS,
@@ -47,6 +48,12 @@ parser.add_argument(
         "Scalers and inducing points still use the complete dataset."
     ),
 )
+parser.add_argument(
+    "--quantile-slope-lower-bound",
+    type=float,
+    default=DEFAULT_QUANTILE_SLOPE_LOWER_BOUND,
+    help="Lower bound on (f(q2) - f(q1)) / (q2 - q1) in scaled response units.",
+)
 args = parser.parse_args()
 controls = validate_train_args(parser, args, logger)
 has_validation = controls.has_validation
@@ -57,6 +64,11 @@ if args.num_epochs is None:
     parser.error("--num-epochs is required for GPQR final training")
 if args.batch_size is not None and args.batch_size <= 0:
     parser.error("--batch-size must be greater than zero")
+if (
+    not np.isfinite(args.quantile_slope_lower_bound)
+    or args.quantile_slope_lower_bound <= 0
+):
+    parser.error("--quantile-slope-lower-bound must be finite and positive")
 
 model_class = getattr(model_module, args.model)
 TARGET = tuple(model_class.output_names)
@@ -148,6 +160,7 @@ def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
         batch_shape=refit_batch_shape,
         noise_prior_loc=hyperparameters["noise_prior_loc"],
         noise_prior_scale=hyperparameters["noise_prior_scale"],
+        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
 
     X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=refit_batch_shape).to(device)
@@ -171,6 +184,8 @@ def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
         batch_shape=refit_batch_shape,
         lengthscale_prior_loc=hyperparameters["lengthscale_prior_loc"],
         lengthscale_prior_scale=hyperparameters["lengthscale_prior_scale"],
+        quantile_levels=quantiles,
+        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
 
     fit_all_data(
@@ -210,6 +225,7 @@ def select_final_schedule(hyperparameters, gpr_trial):
         batch_shape=gp_batch_shape,
         noise_prior_loc=hyperparameters["noise_prior_loc"],
         noise_prior_scale=hyperparameters["noise_prior_scale"],
+        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
     model = model_class(
         inducing_points=Xtrain_inducing_points.clone().detach(),
@@ -219,6 +235,8 @@ def select_final_schedule(hyperparameters, gpr_trial):
         batch_shape=gp_batch_shape,
         lengthscale_prior_loc=hyperparameters["lengthscale_prior_loc"],
         lengthscale_prior_scale=hyperparameters["lengthscale_prior_scale"],
+        quantile_levels=quantiles,
+        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
     validation_loss, best_epoch, lr_reductions = fit_trial(
         likelihood=likelihood,

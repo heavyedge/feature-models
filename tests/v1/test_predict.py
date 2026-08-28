@@ -55,6 +55,14 @@ def test_predict_gpqr(models_path, Xtest_path, tmp_path):
         "2",
     )
     assert len(result) == 2 * 3 * result["quantile"].nunique()
+    prediction_groups = result.groupby(
+        ["index", "batch", "target", "sample"], dropna=False
+    )
+    assert (
+        prediction_groups["value"]
+        .apply(lambda values: values.diff().dropna().gt(0).all())
+        .all()
+    )
 
 
 def test_predict_with_additional_input_batch(models_path, tmp_path):
