@@ -10,6 +10,11 @@ import gpytorch
 import numpy as np
 import optuna
 import torch
+from gpytorch.distributions import MultivariateNormal
+from linear_operator.operators import (
+    BlockInterleavedLinearOperator,
+    DiagLinearOperator,
+)
 from linear_operator.utils.errors import NotPSDError
 from sqlalchemy.engine import make_url
 
@@ -485,7 +490,19 @@ def _validation_expected_log_prob(
     if not use_data_independent_samples:
         return likelihood.expected_log_prob(y, function_dist)
 
-    function_dist = function_dist.to_data_independent_dist(jitter_val=jitter)
+    if isinstance(function_dist.lazy_covariance_matrix, BlockInterleavedLinearOperator):
+        # IndependentMultitaskVariationalStrategy represents task independence
+        # with interleaved covariance blocks. Extracting pointwise task
+        # covariances through MultitaskMultivariateNormal's advanced indexing
+        # can produce out-of-bounds CUDA indices for large validation batches.
+        # These task covariances are diagonal by construction, so build the
+        # equivalent data-independent distribution directly from the variance.
+        function_dist = MultivariateNormal(
+            function_dist.mean,
+            DiagLinearOperator(function_dist.variance).add_jitter(jitter_val=jitter),
+        )
+    else:
+        function_dist = function_dist.to_data_independent_dist(jitter_val=jitter)
     return likelihood.expected_log_prob(y, function_dist)
 
 
