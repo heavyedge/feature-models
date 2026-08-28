@@ -462,6 +462,10 @@ def _cholesky_jitter(value):
 
 def _backward_and_step(loss, parameters, optimizer, max_grad_norm):
     loss.backward()
+    return _clip_and_step(parameters, optimizer, max_grad_norm)
+
+
+def _clip_and_step(parameters, optimizer, max_grad_norm):
     grad_norm = torch.nn.utils.clip_grad_norm_(
         parameters,
         max_norm=max_grad_norm,
@@ -506,6 +510,51 @@ def _validation_expected_log_prob(
     return likelihood.expected_log_prob(y, function_dist)
 
 
+def _training_minibatches(X, y, batch_size):
+    """Yield one shuffled, complete pass over the observation dimension."""
+    num_data = X.shape[-2]
+    if batch_size is None or batch_size >= num_data:
+        yield X, y
+        return
+
+    indices = torch.randperm(num_data, device=X.device)
+    for batch_indices in indices.split(batch_size):
+        yield (
+            X.index_select(-2, batch_indices),
+            y.index_select(-1, batch_indices),
+        )
+
+
+def _validation_loss(
+    *,
+    likelihood,
+    model,
+    X,
+    y,
+    reduce_dims,
+    batch_size,
+    use_data_independent_samples,
+    jitter,
+):
+    """Evaluate the complete validation set in bounded-memory chunks."""
+    num_data = X.shape[-2]
+    chunk_size = num_data if batch_size is None else min(batch_size, num_data)
+    weighted_loss = torch.zeros((), dtype=X.dtype, device=X.device)
+    for start in range(0, num_data, chunk_size):
+        stop = min(start + chunk_size, num_data)
+        function_dist = model(X[..., start:stop, :])
+        log_prob = _validation_expected_log_prob(
+            likelihood,
+            y[..., start:stop],
+            function_dist,
+            use_data_independent_samples=use_data_independent_samples,
+            jitter=jitter,
+        )
+        chunk_loss = -log_prob.mean(dim=reduce_dims).mean()
+        weighted_loss += chunk_loss * (stop - start)
+    return weighted_loss / num_data
+
+
 def fit_trial(
     *,
     likelihood,
@@ -522,6 +571,7 @@ def fit_trial(
     validation_reduce_dims,
     trial=None,
     num_likelihood_samples=None,
+    batch_size=None,
     return_training_details=False,
 ):
     parameters = list(parameters)
@@ -554,23 +604,26 @@ def fit_trial(
         likelihood.train()
         model.train()
         optimizer.zero_grad()
-        cholesky_context, variational_cholesky_context = _cholesky_jitter(
-            args.cholesky_jitter
-        )
-        with (
-            cholesky_context,
-            variational_cholesky_context,
-            _likelihood_samples(num_likelihood_samples),
-        ):
-            train_loss = -mll(model(Xtrain), ytrain).mean()
-        if not torch.isfinite(train_loss):
-            save_trial_progress("non_finite_train_loss")
-            if trial is not None:
-                raise optuna.TrialPruned("Non-finite training loss.")
-            raise RuntimeError("Non-finite training loss during final fit.")
-        if not _backward_and_step(
-            train_loss, parameters, optimizer, args.max_grad_norm
-        ):
+        train_loss = torch.zeros((), dtype=Xtrain.dtype, device=Xtrain.device)
+        for Xbatch, ybatch in _training_minibatches(Xtrain, ytrain, batch_size):
+            batch_weight = Xbatch.shape[-2] / Xtrain.shape[-2]
+            cholesky_context, variational_cholesky_context = _cholesky_jitter(
+                args.cholesky_jitter
+            )
+            with (
+                cholesky_context,
+                variational_cholesky_context,
+                _likelihood_samples(num_likelihood_samples),
+            ):
+                batch_loss = -mll(model(Xbatch), ybatch).mean()
+            if not torch.isfinite(batch_loss):
+                save_trial_progress("non_finite_train_loss")
+                if trial is not None:
+                    raise optuna.TrialPruned("Non-finite training loss.")
+                raise RuntimeError("Non-finite training loss during final fit.")
+            (batch_loss * batch_weight).backward()
+            train_loss += batch_loss.detach() * batch_weight
+        if not _clip_and_step(parameters, optimizer, args.max_grad_norm):
             save_trial_progress("non_finite_gradient")
             if trial is not None:
                 raise optuna.TrialPruned("Non-finite gradient.")
@@ -588,15 +641,16 @@ def fit_trial(
         ):
             likelihood.eval()
             model.eval()
-            function_dist = model(Xval)
-            val_log_prob = _validation_expected_log_prob(
-                likelihood,
-                yval,
-                function_dist,
+            val_loss = _validation_loss(
+                likelihood=likelihood,
+                model=model,
+                X=Xval,
+                y=yval,
+                reduce_dims=validation_reduce_dims,
+                batch_size=batch_size,
                 use_data_independent_samples=num_likelihood_samples is not None,
                 jitter=args.cholesky_jitter,
             )
-            val_loss = -val_log_prob.mean(dim=validation_reduce_dims).mean()
 
         current_val_loss = val_loss.item()
         training_loss_history.append(train_loss.item())
@@ -663,6 +717,7 @@ def fit_all_data(
     lr_reductions,
     logger,
     num_likelihood_samples=None,
+    batch_size=None,
 ):
     parameters = list(parameters)
     optimizer = torch.optim.Adam(parameters, lr=learning_rate)
@@ -673,18 +728,23 @@ def fit_all_data(
         likelihood.train()
         model.train()
         optimizer.zero_grad()
-        cholesky_context, variational_cholesky_context = _cholesky_jitter(
-            cholesky_jitter
-        )
-        with (
-            cholesky_context,
-            variational_cholesky_context,
-            _likelihood_samples(num_likelihood_samples),
-        ):
-            loss = -mll(model(X), y).mean()
-        if not torch.isfinite(loss):
-            raise RuntimeError("Non-finite training loss during final fit.")
-        if not _backward_and_step(loss, parameters, optimizer, max_grad_norm):
+        loss = torch.zeros((), dtype=X.dtype, device=X.device)
+        for Xbatch, ybatch in _training_minibatches(X, y, batch_size):
+            batch_weight = Xbatch.shape[-2] / X.shape[-2]
+            cholesky_context, variational_cholesky_context = _cholesky_jitter(
+                cholesky_jitter
+            )
+            with (
+                cholesky_context,
+                variational_cholesky_context,
+                _likelihood_samples(num_likelihood_samples),
+            ):
+                batch_loss = -mll(model(Xbatch), ybatch).mean()
+            if not torch.isfinite(batch_loss):
+                raise RuntimeError("Non-finite training loss during final fit.")
+            (batch_loss * batch_weight).backward()
+            loss += batch_loss.detach() * batch_weight
+        if not _clip_and_step(parameters, optimizer, max_grad_norm):
             raise RuntimeError("Non-finite gradient during final fit.")
 
         completed_epoch = epoch + 1

@@ -28,6 +28,14 @@ parser.add_argument(
     required=True,
     help="Fitted GPR checkpoint whose ARD lengthscale is fixed in the GPQR.",
 )
+parser.add_argument(
+    "--batch-size",
+    type=int,
+    help=(
+        "Observation minibatch size for GPQR optimizer steps and validation. "
+        "Scalers and inducing points still use the complete dataset."
+    ),
+)
 args = parser.parse_args()
 controls = validate_train_args(
     parser,
@@ -41,6 +49,8 @@ if args.optimize_hyperparameters:
     parser.error("GPQR does not optimize hyperparameters")
 if args.num_epochs is None:
     parser.error("--num-epochs is required for GPQR final training")
+if args.batch_size is not None and args.batch_size <= 0:
+    parser.error("--batch-size must be greater than zero")
 
 model_class = getattr(model_module, args.model)
 TARGET = tuple(model_class.output_names)
@@ -240,6 +250,7 @@ def train_on_all_data(num_epochs, lr_reductions):
         lr_reductions=lr_reductions,
         logger=logger,
         num_likelihood_samples=args.num_likelihood_samples,
+        batch_size=args.batch_size,
     )
     return final_X_scaler, y_scaler, likelihood, model
 
@@ -287,6 +298,7 @@ def select_final_schedule():
         logger=logger,
         validation_reduce_dims=(-2, -1),
         num_likelihood_samples=args.num_likelihood_samples,
+        batch_size=args.batch_size,
         return_training_details=True,
     )
     logger.info(
@@ -305,6 +317,10 @@ if has_validation:
     logger.info(
         "Using fold-specific GPR lengthscales for GPQR early stopping: shape %s",
         tuple(cv_lengthscale.shape),
+    )
+if args.batch_size is not None:
+    logger.info(
+        "Using GPQR observation minibatches of at most %d rows.", args.batch_size
     )
 
 X_scaler, y_scaler, likelihood, model = train_on_all_data(*select_final_schedule())
