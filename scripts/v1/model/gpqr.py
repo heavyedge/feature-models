@@ -121,7 +121,7 @@ class BaseGP(CenterGapQuantileGP):
         )
 
     def mean_quantiles_delta(self, x):
-        quantiles = super().mean_quantiles_delta(x)
+        quantiles = super().mean_quantiles_delta(x).to(torch.float64)
         return quantiles + quantile_slope_offsets(
             self.quantile_levels,
             self.num_lower_quantiles[0],
