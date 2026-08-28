@@ -11,12 +11,6 @@ from gpytorch.variational import (
 from gpytorch_qr.models import CenterGapQuantileGP
 from gpytorch_qr.variational import CenterGapLMCVariationalStrategy
 
-from .quantile import (
-    DEFAULT_QUANTILE_SLOPE_LOWER_BOUND,
-    LowerBoundedCenterGapToQuantileTransform,
-    quantile_slope_offsets,
-)
-
 __all__ = [
     "GPQR_Independent",
     "GPQR_LMC",
@@ -40,7 +34,6 @@ class BaseGP(CenterGapQuantileGP):
         fixed_lengthscale=None,
         batch_shape=torch.Size(),
         quantile_levels=None,
-        quantile_slope_lower_bound=DEFAULT_QUANTILE_SLOPE_LOWER_BOUND,
     ):
         N, D = inducing_points.shape[-2:]
         if fixed_lengthscale is not None and (
@@ -86,48 +79,14 @@ class BaseGP(CenterGapQuantileGP):
             covar,
             [num_quantiles],
             [num_lower_quantiles],
+            quantile_levels=(None if quantile_levels is None else [quantile_levels]),
         )
 
         self.num_latents = num_latents
         self.batch_shape = torch.Size(batch_shape)
-        self.quantile_slope_lower_bound = float(quantile_slope_lower_bound)
-        self.register_buffer("quantile_levels", None, persistent=False)
-        if quantile_levels is not None:
-            self.set_quantile_levels(quantile_levels)
         self.lengthscale_is_fixed = fixed_lengthscale is not None
         if fixed_lengthscale is not None:
             self._set_fixed_lengthscale(fixed_lengthscale, D)
-
-    def set_quantile_levels(self, quantile_levels):
-        transform = LowerBoundedCenterGapToQuantileTransform(
-            quantile_levels,
-            self.num_lower_quantiles[0],
-            self.quantile_slope_lower_bound,
-        )
-        self.quantile_levels = transform.quantile_levels.detach().clone()
-
-    def _quantile_transform(self):
-        if self.quantile_levels is None:
-            raise RuntimeError("quantile_levels must be set before prediction")
-        return LowerBoundedCenterGapToQuantileTransform(
-            self.quantile_levels,
-            self.num_lower_quantiles[0],
-            self.quantile_slope_lower_bound,
-        )
-
-    def joint_quantile_posterior(self, x):
-        return torch.distributions.TransformedDistribution(
-            self(x), self._quantile_transform()
-        )
-
-    def mean_quantiles_delta(self, x):
-        quantiles = super().mean_quantiles_delta(x).to(torch.float64)
-        return quantiles + quantile_slope_offsets(
-            self.quantile_levels,
-            self.num_lower_quantiles[0],
-            self.quantile_slope_lower_bound,
-            like=quantiles,
-        )
 
     def _set_fixed_lengthscale(self, lengthscale, dim):
         """Copy a GPR ARD lengthscale across GPQR latent processes and freeze it."""
@@ -203,7 +162,6 @@ class GPQR_Independent(BaseGP):
         fixed_lengthscale=None,
         batch_shape=torch.Size(),
         quantile_levels=None,
-        quantile_slope_lower_bound=DEFAULT_QUANTILE_SLOPE_LOWER_BOUND,
     ):
         super().__init__(
             inducing_points,
@@ -215,7 +173,6 @@ class GPQR_Independent(BaseGP):
             fixed_lengthscale,
             batch_shape,
             quantile_levels,
-            quantile_slope_lower_bound,
         )
 
     @staticmethod

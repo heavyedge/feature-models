@@ -50,8 +50,23 @@ def load_PriorMean(path=None, device=None):
     return model
 
 
-def _load_gp(path, model_module, device):
-    checkpoint = torch.load(path, map_location=device, weights_only=False)
+def _load_state_dict(module, state_dict):
+    state_dict = dict(state_dict)
+    expected = module.state_dict()
+    compatibility_buffers = {
+        "lower_counts",
+        "num_quantiles",
+        "quantile_level_offsets",
+    }
+    for key, value in expected.items():
+        if key not in state_dict and key.rsplit(".", 1)[-1] in compatibility_buffers:
+            state_dict[key] = value
+    module.load_state_dict(state_dict)
+
+
+def _load_gp(path, model_module, device, *, checkpoint=None):
+    if checkpoint is None:
+        checkpoint = torch.load(path, map_location=device, weights_only=False)
 
     xscaler_class = getattr(scale_module, checkpoint["X_scaler"]["type"])
     X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
@@ -69,7 +84,7 @@ def _load_gp(path, model_module, device):
         "noise_prior_scale",
     )
     likelihood = likelihood_class(**likelihood_args)
-    likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
+    _load_state_dict(likelihood, checkpoint["likelihood"]["state_dict"])
 
     model_class = getattr(model_module, checkpoint["model"]["type"])
     model_args = _prior_args(
@@ -79,7 +94,7 @@ def _load_gp(path, model_module, device):
         "lengthscale_prior_scale",
     )
     model = model_class(**model_args)
-    model.load_state_dict(checkpoint["model"]["state_dict"])
+    _load_state_dict(model, checkpoint["model"]["state_dict"])
 
     X_scaler.to(device)
     y_scaler.to(device)
@@ -111,8 +126,27 @@ def load_GPQR(path=None, device=None):
     if path is None:
         path = Path(__file__).parent / "gpqr.pt"
 
-    checkpoint, X_scaler, y_scaler, likelihood, model = _load_gp(
-        path, gpqr_module, device
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    legacy_model_lower_bound = checkpoint["model"]["args"].pop(
+        "quantile_slope_lower_bound", None
     )
-    model.set_quantile_levels(checkpoint["quantiles"])
-    return checkpoint["quantiles"], X_scaler, y_scaler, likelihood, model
+    legacy_likelihood_lower_bound = checkpoint["likelihood"]["args"].pop(
+        "quantile_slope_lower_bound", None
+    )
+    lower_bound = checkpoint.get(
+        "quantile_gap_lower_bound",
+        legacy_model_lower_bound or legacy_likelihood_lower_bound or 1e-4,
+    )
+    checkpoint["model"]["args"]["quantile_levels"] = checkpoint["quantiles"]
+
+    checkpoint, X_scaler, y_scaler, likelihood, model = _load_gp(
+        path, gpqr_module, device, checkpoint=checkpoint
+    )
+    return (
+        checkpoint["quantiles"],
+        float(lower_bound),
+        X_scaler,
+        y_scaler,
+        likelihood,
+        model,
+    )

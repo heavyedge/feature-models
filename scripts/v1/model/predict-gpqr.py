@@ -5,6 +5,7 @@ import pathlib
 import numpy as np
 import pandas as pd
 import torch
+from gpytorch_qr.settings import quantile_gap_lower_bound
 
 from . import gpr as gpr_module
 from . import load as load_module
@@ -42,9 +43,14 @@ X = torch.tensor(X_values, dtype=torch.float32, device=device)
 
 prior_mean_model = load_module.load_PriorMean(args.prior_mean_model, device)
 gpr_X_scaler, gpr_y_scaler, _, gpr_model = load_module.load_GPR(args.gpr_model, device)
-quantiles, X_scaler, y_scaler, likelihood, gpqr_model = load_module.load_GPQR(
-    args.gpqr_model, device
-)
+(
+    quantiles,
+    gap_lower_bound,
+    X_scaler,
+    y_scaler,
+    likelihood,
+    gpqr_model,
+) = load_module.load_GPQR(args.gpqr_model, device)
 for module in (
     prior_mean_model,
     gpr_X_scaler,
@@ -79,7 +85,7 @@ def broadcast_y_stat(stat, samples):
 
 
 wrote_output = False
-with torch.no_grad():
+with torch.no_grad(), quantile_gap_lower_bound(gap_lower_bound):
     for start in range(0, X.shape[-2], args.chunk_size):
         X_chunk = X[..., start : start + args.chunk_size, :]
         prior_mean = prior_mean_model(X_chunk)

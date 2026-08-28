@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [UNRELEASED]
 
-- Model: `gpytorch-qr==0.9.0`
+- Model: `gpytorch-qr==0.10.0`
 - Dataset:
   - `heavyedge/profiles:v1.0.0`
   - `heavyedge/shape-features:v1.1.0`
@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Data are splitted and redrawn for unique X.
 - Quantile interpolation now uses spline with exponential tail model.
 - Hyperparameters are optimized by 5-fold cross validation.
+- GPQR now use GPR posterior mean as prior mean.
+- GPQR now use GPR lengthscale.
 
 ### Removed
 

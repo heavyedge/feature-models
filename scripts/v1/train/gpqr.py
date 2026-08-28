@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from gpytorch.mlls import VariationalELBO
+from gpytorch_qr.settings import quantile_gap_lower_bound
 
 from models.v1.feature_models import gpqr as model_module
 from models.v1.feature_models import gpr as gpr_module
@@ -8,7 +9,6 @@ from models.v1.feature_models import load as load_module
 from models.v1.feature_models import prior as prior_module
 from models.v1.feature_models import scale as scaler_module
 from models.v1.feature_models.likelihoods import CenterGapQuantilesLikelihood
-from models.v1.feature_models.quantile import DEFAULT_QUANTILE_SLOPE_LOWER_BOUND
 from scripts.v1.train.batch import load_batched_arrays
 from scripts.v1.train.common import (
     configure_logging,
@@ -45,9 +45,9 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
-    "--quantile-slope-lower-bound",
+    "--quantile-gap-lower-bound",
     type=float,
-    default=DEFAULT_QUANTILE_SLOPE_LOWER_BOUND,
+    default=1e-4,
     help="Lower bound on (f(q2) - f(q1)) / (q2 - q1) in scaled response units.",
 )
 args = parser.parse_args()
@@ -66,11 +66,10 @@ if args.storage is None or args.study_name is None:
     parser.error("--storage and --study-name are required for GPQR training")
 if args.batch_size is not None and args.batch_size <= 0:
     parser.error("--batch-size must be greater than zero")
-if (
-    not np.isfinite(args.quantile_slope_lower_bound)
-    or args.quantile_slope_lower_bound <= 0
-):
-    parser.error("--quantile-slope-lower-bound must be finite and positive")
+try:
+    quantile_gap_context = quantile_gap_lower_bound(args.quantile_gap_lower_bound)
+except ValueError as exc:
+    parser.error(str(exc))
 
 model_class = getattr(model_module, args.model)
 TARGET = tuple(model_class.output_names)
@@ -265,7 +264,6 @@ def train_on_all_data(num_epochs, lr_reductions):
         quantile_levels=quantiles,
         central_quantile_idx=central_quantile_idx,
         batch_shape=refit_batch_shape,
-        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
 
     with torch.no_grad():
@@ -292,7 +290,6 @@ def train_on_all_data(num_epochs, lr_reductions):
         batch_shape=refit_batch_shape,
         fixed_lengthscale=final_lengthscale,
         quantile_levels=quantiles,
-        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
 
     parameters = [
@@ -328,7 +325,6 @@ def objective(trial):
         quantile_levels=quantiles,
         central_quantile_idx=central_quantile_idx,
         batch_shape=gp_batch_shape,
-        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
     model = model_class(
         inducing_points=Xtrain_inducing_points.clone().detach(),
@@ -338,7 +334,6 @@ def objective(trial):
         batch_shape=gp_batch_shape,
         fixed_lengthscale=cv_lengthscale,
         quantile_levels=quantiles,
-        quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
     parameters = [
         parameter
@@ -378,33 +373,42 @@ if args.batch_size is not None:
         "Using GPQR observation minibatches of at most %d rows.", args.batch_size
     )
 
-study = optimize_or_load_study(
-    args=args,
-    controls=controls,
-    objective=objective,
-    optimized_hyperparameters=set(),
-    baseline_params={},
-)
-if len(study.trials) != 1:
-    parser.error(
-        f"GPQR schedule study {args.study_name!r} must contain exactly one trial; "
-        f"found {len(study.trials)}"
+with quantile_gap_context:
+    study = optimize_or_load_study(
+        args=args,
+        controls=controls,
+        objective=objective,
+        optimized_hyperparameters=set(),
+        baseline_params={},
     )
-best_trial, _, best_epoch, best_lr_reductions = select_best_trial(
-    study,
-    defaults={},
-    optimized_hyperparameters=set(),
-    controls=controls,
-    args=args,
-)
-logger.info(
-    "Selected GPQR schedule from study %s trial %d: %d epochs",
-    args.study_name,
-    best_trial.number,
-    best_epoch,
-)
+    if len(study.trials) != 1:
+        parser.error(
+            f"GPQR schedule study {args.study_name!r} must contain exactly one trial; "
+            f"found {len(study.trials)}"
+        )
+    best_trial, _, best_epoch, best_lr_reductions = select_best_trial(
+        study,
+        defaults={},
+        optimized_hyperparameters=set(),
+        controls=controls,
+        args=args,
+    )
+    logger.info(
+        "Selected GPQR schedule from study %s trial %d: %d epochs",
+        args.study_name,
+        best_trial.number,
+        best_epoch,
+    )
 
-X_scaler, y_scaler, likelihood, model = train_on_all_data(
-    best_epoch, best_lr_reductions
-)
-save_gpqr(quantiles, X_scaler, y_scaler, likelihood, model, args.out)
+    X_scaler, y_scaler, likelihood, model = train_on_all_data(
+        best_epoch, best_lr_reductions
+    )
+    save_gpqr(
+        quantiles,
+        X_scaler,
+        y_scaler,
+        likelihood,
+        model,
+        args.out,
+        quantile_gap_lower_bound=args.quantile_gap_lower_bound,
+    )

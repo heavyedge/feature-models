@@ -18,9 +18,38 @@ def test_load_gpqr(models_path, monkeypatch):
     monkeypatch.syspath_prepend(str(models_path))
     from feature_models.load import load_GPQR
 
-    quantiles, _, _, likelihood, model = load_GPQR()
+    quantiles, lower_bound, _, _, likelihood, model = load_GPQR()
     assert model.batch_shape[-1] == 3
     assert quantiles.ndim == 1
-    assert model.quantile_levels.equal(quantiles)
-    assert model.quantile_slope_lower_bound > 0
-    assert likelihood.quantile_slope_lower_bound == model.quantile_slope_lower_bound
+    assert lower_bound > 0
+    assert model.quantile_level_offsets.equal(
+        quantiles - quantiles[model.num_lower_quantiles[0]]
+    )
+    assert likelihood.quantile_level_offsets.equal(
+        quantiles - quantiles[model.num_lower_quantiles[0]]
+    )
+
+
+def test_save_gpqr_preserves_quantile_gap_lower_bound(
+    models_path, monkeypatch, tmp_path
+):
+    monkeypatch.syspath_prepend(str(models_path))
+    from feature_models.load import load_GPQR
+
+    from scripts.v1.train.save import save_gpqr
+
+    quantiles, lower_bound, X_scaler, y_scaler, likelihood, model = load_GPQR()
+    checkpoint_path = tmp_path / "gpqr.pt"
+    save_gpqr(
+        quantiles,
+        X_scaler,
+        y_scaler,
+        likelihood,
+        model,
+        checkpoint_path,
+        quantile_gap_lower_bound=lower_bound,
+    )
+
+    loaded_quantiles, loaded_lower_bound, *_ = load_GPQR(checkpoint_path)
+    assert loaded_quantiles.equal(quantiles)
+    assert loaded_lower_bound == lower_bound
