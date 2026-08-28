@@ -38,6 +38,15 @@ parser.add_argument(
     required=True,
     help="Name of the GPR Optuna study to reuse.",
 )
+parser.add_argument(
+    "--batch-size",
+    type=int,
+    default=32,
+    help=(
+        "Observation minibatch size for GPQR optimizer steps and validation. "
+        "Scalers and inducing points still use the complete dataset."
+    ),
+)
 args = parser.parse_args()
 controls = validate_train_args(parser, args, logger)
 has_validation = controls.has_validation
@@ -46,6 +55,8 @@ if args.optimize_hyperparameters:
     parser.error("GPQR does not optimize hyperparameters; use the GPR study")
 if args.num_epochs is None:
     parser.error("--num-epochs is required for GPQR final training")
+if args.batch_size is not None and args.batch_size <= 0:
+    parser.error("--batch-size must be greater than zero")
 
 model_class = getattr(model_module, args.model)
 TARGET = tuple(model_class.output_names)
@@ -176,6 +187,7 @@ def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
         lr_reductions=lr_reductions,
         logger=logger,
         num_likelihood_samples=args.num_likelihood_samples,
+        batch_size=args.batch_size,
     )
     return X_scaler, y_scaler, likelihood, model
 
@@ -222,6 +234,7 @@ def select_final_schedule(hyperparameters, gpr_trial):
         logger=logger,
         validation_reduce_dims=(-2, -1),
         num_likelihood_samples=args.num_likelihood_samples,
+        batch_size=args.batch_size,
         return_training_details=True,
     )
     logger.info(
@@ -239,6 +252,11 @@ try:
     )
 except (KeyError, ValueError, optuna.exceptions.OptunaError) as exc:
     parser.error(f"cannot load GPR study: {exc}")
+
+if args.batch_size is not None:
+    logger.info(
+        "Using GPQR observation minibatches of at most %d rows.", args.batch_size
+    )
 
 gpr_trial = gpr_study.best_trial
 best_hyperparameters = {
