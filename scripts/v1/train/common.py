@@ -16,7 +16,6 @@ from sqlalchemy.engine import make_url
 MAX_DEFAULT_LR_SCHEDULER_PATIENCE = 50
 DEFAULT_CHOLESKY_JITTER = 1e-4
 DEFAULT_MAX_GRAD_NORM = 10.0
-MIN_CIQ_SAMPLING_SIZE = 5000
 PRIOR_HYPERPARAMETER_DEFAULTS = {
     "noise_prior_loc": None,
     "noise_prior_scale": None,
@@ -469,29 +468,25 @@ def _backward_and_step(loss, parameters, optimizer, max_grad_norm):
     return True
 
 
-def _validation_expected_log_prob(likelihood, y, function_dist, logger):
-    """Use scalable CIQ sampling for large validation posteriors.
+def _validation_expected_log_prob(
+    likelihood,
+    y,
+    function_dist,
+    *,
+    use_data_independent_samples,
+    jitter,
+):
+    """Evaluate pointwise likelihoods without sampling the full joint GP.
 
-    The default Lanczos root decomposition can make batched ``torch.linalg.eigh``
-    fail to converge for large, nearly rank-deficient multitask covariances. CIQ
-    avoids that decomposition and is the recommended sampling path once the
-    covariance dimension reaches roughly 5,000.
+    The expected log likelihood is pointwise. Remove covariance across data
+    points while retaining the multitask covariance within each point, avoiding
+    an unnecessary ``(N * Q)^2`` joint covariance root decomposition.
     """
-    covariance_size = function_dist.lazy_covariance_matrix.size(-1)
-    use_ciq = covariance_size >= MIN_CIQ_SAMPLING_SIZE
-    try:
-        with gpytorch.settings.ciq_samples(use_ciq):
-            return likelihood.expected_log_prob(y, function_dist)
-    except torch.linalg.LinAlgError:
-        if use_ciq:
-            raise
-        logger.warning(
-            "Lanczos posterior sampling failed for covariance size %d; "
-            "retrying validation with CIQ sampling.",
-            covariance_size,
-        )
-        with gpytorch.settings.ciq_samples(True):
-            return likelihood.expected_log_prob(y, function_dist)
+    if not use_data_independent_samples:
+        return likelihood.expected_log_prob(y, function_dist)
+
+    function_dist = function_dist.to_data_independent_dist(jitter_val=jitter)
+    return likelihood.expected_log_prob(y, function_dist)
 
 
 def fit_trial(
@@ -581,7 +576,8 @@ def fit_trial(
                 likelihood,
                 yval,
                 function_dist,
-                logger,
+                use_data_independent_samples=num_likelihood_samples is not None,
+                jitter=args.cholesky_jitter,
             )
             val_loss = -val_log_prob.mean(dim=validation_reduce_dims).mean()
 
