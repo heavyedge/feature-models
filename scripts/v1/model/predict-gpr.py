@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from . import gpr as gpr_module
 from . import load as load_module
 from .batch import load_batched_features
 
@@ -59,9 +60,7 @@ with torch.no_grad():
         latent = gpr_model(X_scaled)
         predictive = likelihood(latent)
 
-        latent_mean = prior_mean + y_scaler.inverse_transform(
-            latent.mean.unsqueeze(-1)
-        ).squeeze(-1)
+        latent_mean = gpr_module.posterior_mean(prior_mean, latent, y_scaler)
         predictive_mean = prior_mean + y_scaler.inverse_transform(
             predictive.mean.unsqueeze(-1)
         ).squeeze(-1)

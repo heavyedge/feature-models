@@ -315,6 +315,30 @@ if has_validation:
                 for name, value in X_scaler.state_dict().items()
             },
         },
+        "y_scaler": {
+            "type": y_scaler.__class__.__name__,
+            "args": {
+                "dim": y_scaler.dim,
+                "batch_shape": y_scaler.batch_shape,
+            },
+            "state_dict": {
+                name: value.detach().clone()
+                for name, value in y_scaler.state_dict().items()
+            },
+        },
+        "model": {
+            "type": cv_model.__class__.__name__,
+            "args": {
+                "inducing_points": cv_model.inducing_points.detach().clone(),
+                "lengthscale_prior_loc": cv_model.lengthscale_prior_loc,
+                "lengthscale_prior_scale": cv_model.lengthscale_prior_scale,
+                "batch_shape": cv_model.batch_shape,
+            },
+            "state_dict": {
+                name: value.detach().clone()
+                for name, value in cv_model.state_dict().items()
+            },
+        },
     }
     logger.info(
         "Saved fold-specific GPR lengthscales with shape %s.",
