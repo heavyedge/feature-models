@@ -28,6 +28,23 @@ def test_center_gap_transform_enforces_quantile_slope_lower_bound():
     assert torch.all(quantiles.diff(dim=-1) > 0)
 
 
+def test_center_gap_transform_retains_lower_bound_after_large_location_shift():
+    lower_bound = 1e-4
+    transform = LowerBoundedCenterGapToQuantileTransform(
+        QUANTILE_LEVELS,
+        central_quantile_idx=2,
+        quantile_slope_lower_bound=lower_bound,
+    )
+    center_and_gaps = torch.tensor([[1.0, -100.0, -100.0, -100.0, -100.0]])
+
+    quantiles = transform(center_and_gaps) + torch.tensor(10_000.0)
+    slopes = quantiles.diff(dim=-1) / QUANTILE_LEVELS.diff()
+
+    assert quantiles.dtype == torch.float64
+    assert torch.all(slopes >= lower_bound * 0.99)
+    assert torch.all(quantiles.diff(dim=-1) > 0)
+
+
 def test_quantile_slope_offsets_leave_central_quantile_unchanged():
     offsets = quantile_slope_offsets(
         QUANTILE_LEVELS,

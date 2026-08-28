@@ -18,6 +18,8 @@ from scripts.v1.train.common import (
     fit_all_data,
     fit_trial,
     initialize_optuna_storage,
+    optimize_or_load_study,
+    select_best_trial,
     validate_train_args,
 )
 from scripts.v1.train.inducing import unique_inducing_points_per_fold
@@ -63,13 +65,19 @@ parser.add_argument(
     help="Lower bound on (f(q2) - f(q1)) / (q2 - q1) in scaled response units.",
 )
 args = parser.parse_args()
-controls = validate_train_args(parser, args, logger)
+controls = validate_train_args(
+    parser,
+    args,
+    logger,
+)
 has_validation = controls.has_validation
 device = controls.device
 if args.optimize_hyperparameters:
     parser.error("GPQR does not optimize hyperparameters; use the GPR study")
 if args.num_epochs is None:
-    parser.error("--num-epochs is required for GPQR final training")
+    parser.error("--num-epochs is required for GPQR training")
+if args.storage is None or args.study_name is None:
+    parser.error("--storage and --study-name are required for GPQR training")
 if args.batch_size is not None and args.batch_size <= 0:
     parser.error("--batch-size must be greater than zero")
 if (
@@ -305,24 +313,16 @@ def train_on_all_data(hyperparameters, num_epochs, lr_reductions):
     return final_X_scaler, y_scaler, likelihood, model
 
 
-def select_final_schedule(hyperparameters, gpr_trial):
+def objective(trial):
     if not has_validation:
-        if "best_epoch" not in gpr_trial.user_attrs:
-            parser.error("the GPR best trial has no early-stopping epoch")
-        return (
-            min(args.num_epochs, max(1, int(gpr_trial.user_attrs["best_epoch"]))),
-            gpr_trial.user_attrs.get("lr_reductions", []),
-        )
-
-    # This is one validation run with GPR-derived prior hyperparameters, not
-    # an Optuna trial. Its early-stopping schedule is reused for the final fit.
+        raise RuntimeError("GPQR cross-validation data is required to create a trial")
     torch.manual_seed(42)
     likelihood = CenterGapQuantilesLikelihood(
         quantile_levels=quantiles,
         central_quantile_idx=central_quantile_idx,
         batch_shape=gp_batch_shape,
-        noise_prior_loc=hyperparameters["noise_prior_loc"],
-        noise_prior_scale=hyperparameters["noise_prior_scale"],
+        noise_prior_loc=best_hyperparameters["noise_prior_loc"],
+        noise_prior_scale=best_hyperparameters["noise_prior_scale"],
         quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
     model = model_class(
@@ -331,16 +331,21 @@ def select_final_schedule(hyperparameters, gpr_trial):
         num_lower_quantiles=num_lower_quantiles,
         num_latents=num_quantiles,
         batch_shape=gp_batch_shape,
-        lengthscale_prior_loc=hyperparameters["lengthscale_prior_loc"],
-        lengthscale_prior_scale=hyperparameters["lengthscale_prior_scale"],
+        lengthscale_prior_loc=best_hyperparameters["lengthscale_prior_loc"],
+        lengthscale_prior_scale=best_hyperparameters["lengthscale_prior_scale"],
         quantile_levels=quantiles,
         quantile_slope_lower_bound=args.quantile_slope_lower_bound,
     ).to(device)
-    validation_loss, best_epoch, lr_reductions = fit_trial(
+    parameters = [
+        parameter
+        for parameter in (*model.parameters(), *likelihood.parameters())
+        if parameter.requires_grad
+    ]
+    return fit_trial(
         likelihood=likelihood,
         model=model,
         mll=VariationalELBO(likelihood, model, num_data=num_data),
-        parameters=list(model.parameters()) + list(likelihood.parameters()),
+        parameters=parameters,
         Xtrain=Xtrain_scaled,
         ytrain=res_train_scaled,
         Xval=Xval_scaled,
@@ -349,16 +354,10 @@ def select_final_schedule(hyperparameters, gpr_trial):
         controls=controls,
         logger=logger,
         validation_reduce_dims=(-2, -1),
+        trial=trial,
         num_likelihood_samples=args.num_likelihood_samples,
         batch_size=args.batch_size,
-        return_training_details=True,
     )
-    logger.info(
-        "GPR-hyperparameter validation loss: %.6f (best epoch: %d)",
-        validation_loss,
-        best_epoch,
-    )
-    return best_epoch, lr_reductions
 
 
 try:
@@ -385,7 +384,33 @@ logger.info(
     gpr_trial.value,
 )
 
+study = optimize_or_load_study(
+    args=args,
+    controls=controls,
+    objective=objective,
+    optimized_hyperparameters=set(),
+    baseline_params={},
+)
+if len(study.trials) != 1:
+    parser.error(
+        f"GPQR schedule study {args.study_name!r} must contain exactly one trial; "
+        f"found {len(study.trials)}"
+    )
+best_trial, _, best_epoch, best_lr_reductions = select_best_trial(
+    study,
+    defaults={},
+    optimized_hyperparameters=set(),
+    controls=controls,
+    args=args,
+)
+logger.info(
+    "Selected GPQR schedule from study %s trial %d: %d epochs",
+    args.study_name,
+    best_trial.number,
+    best_epoch,
+)
+
 X_scaler, y_scaler, likelihood, model = train_on_all_data(
-    best_hyperparameters, *select_final_schedule(best_hyperparameters, gpr_trial)
+    best_hyperparameters, best_epoch, best_lr_reductions
 )
 save_gpqr(quantiles, X_scaler, y_scaler, likelihood, model, args.out)

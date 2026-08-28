@@ -13,6 +13,13 @@ __all__ = [
 DEFAULT_QUANTILE_SLOPE_LOWER_BOUND = 1e-4
 
 
+def _stable_quantile_dtype(value):
+    """Return a dtype that can retain small gaps after large location shifts."""
+    if value.dtype in (torch.float16, torch.bfloat16, torch.float32):
+        return torch.float64
+    return value.dtype
+
+
 def _validate_quantile_parameters(
     quantile_levels, central_quantile_idx, quantile_slope_lower_bound
 ):
@@ -74,7 +81,12 @@ class LowerBoundedCenterGapToQuantileTransform(CenterGapToQuantileTransform):
         )
 
     def _call(self, x):
-        return super()._call(x) + self._slope_offsets(x)
+        # Predictions are subsequently shifted by the (unscaled) GPR mean.  In
+        # float32 that common shift can round lower-bound-sized gaps back to
+        # zero.  Keep transformed quantiles in float64 through those operations.
+        quantiles = super()._call(x).to(dtype=_stable_quantile_dtype(x))
+        return quantiles + self._slope_offsets(quantiles)
 
     def _inverse(self, y):
+        y = y.to(dtype=_stable_quantile_dtype(y))
         return super()._inverse(y - self._slope_offsets(y))
