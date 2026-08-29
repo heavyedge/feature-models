@@ -17,11 +17,19 @@ export HF_TOKEN="${HF_TOKEN:-$HUGGINGFACE_TOKEN}"
 
 mkdir -p ./_data/v1/
 
-hf download heavyedge/profiles --repo-type dataset --revision v1.0.0 --include "v1/process_variables/*.csv" --include "v1/datapackage.json" --local-dir _data/
+hf download heavyedge/profiles --repo-type dataset --revision v1.0.0 --include "v1/process_variables/*.csv" --include "v1/profiles/mean_profiles/*.tar.gz" --include "v1/datapackage.json" --local-dir _data/
 
 hf download heavyedge/shape-features --repo-type dataset --revision v1.1.0 --include "v1/shape_features/" --local-dir _data/
 
 # Postprocess data
+
+for dataset in _data/v1/profiles/mean_profiles/*.tar.gz; do
+    stem=$(basename "$dataset" .tar.gz)
+    dirname=_data/v1/profiles/mean_profiles/"$stem"
+    mkdir -p "$dirname"
+    tar -xzf "$dataset" -C "$dirname"
+done
+rm -f _data/v1/profiles/mean_profiles/*.tar.gz
 
 ## Write dimensionless data
 

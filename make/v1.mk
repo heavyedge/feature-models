@@ -1,5 +1,7 @@
 .PHONY: models-v1 examples-v1 test-v1
 
+PROFILES_v1 := $(shell ls -d _data/v1/profiles/mean_profiles/dataset* | xargs -n 1 basename)
+
 N_DATA_DRAW_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),3,50)
 N_FOLDS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),2,5)
 N_EPOCHS_v1 := $(if $(filter 1,$(HEAVYEDGE_TEST_MODE)),1,10000)
@@ -98,6 +100,27 @@ _temp/v1/Xpred_2D.csv: scripts/v1/data/write-Xpred.py _temp/v1/Xunique.csv
 
 _temp/v1/delaunay.Xpred_2D.csv: scripts/v1/data/compute-Delaunay.py _temp/v1/Xunique.csv _temp/v1/Xpred_2D.csv
 	python3 $^ --grid gap_to_thickness_ratio capillary_number -o $@
+
+# e.g., _temp/v1/mean_profiles/dataset1.h5
+define MERGE_PROFILES_v1
+_temp/v1/$(1)/$(2).h5: $(shell ls _data/v1/profiles/$(1)/$(2)/*.h5)
+	mkdir -p $$(@D)
+	heavyedge merge $$^ -o $$@
+endef
+$(foreach \
+	dataset, \
+	$(PROFILES_v1), \
+	$(eval $(call MERGE_PROFILES_v1,mean_profiles,$(dataset))) \
+)
+
+_temp/v1/mean_profiles.h5: $(foreach dataset,$(PROFILES_v1),_temp/v1/mean_profiles/$(dataset).h5)
+	heavyedge merge $^ -o $@
+
+_temp/v1/profile_index.npy: scripts/v1/data/profile-index.py _temp/v1/X.csv _temp/v1/X_index.csv
+	python3 $^ -o $@
+
+_temp/v1/profiles.h5: _temp/v1/mean_profiles.h5 _temp/v1/profile_index.npy
+	heavyedge filter $^ -o $@
 
 # Models
 
@@ -302,7 +325,7 @@ _temp/v1/Xunique.csv benchmarks/v1/gpqr.Xunique.csv \
 	$(GPU_JUPYTER) nbconvert --to notebook --execute --inplace $@
 
 examples/v1/Window.ipynb: \
-_temp/v1/X.csv _temp/v1/Xpred_1D.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv \
+_temp/v1/X.csv _temp/v1/Xunique.csv _temp/v1/Xpred_1D.csv _temp/v1/Xpred_2D.csv _temp/v1/delaunay.Xpred_2D.csv _temp/v1/profiles.h5 \
 benchmarks/v1/gpr.Xpred_2D.csv \
 benchmarks/v1/gpr.marginal.Xpred_2D.csv \
 benchmarks/v1/gpr.joint_probability.Xpred_2D.csv \
