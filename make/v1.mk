@@ -237,9 +237,17 @@ benchmarks/v1/gpqr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/f
 
 # Window prediction
 
+_temp/v1/gpr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt
+	mkdir -p $(@D)
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
+
 _temp/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
+
+_temp/v1/gpr.pit.csv: scripts/v1/joint/write-pit.gpr.py _temp/v1/y.csv _temp/v1/gpr.X.csv
+	mkdir -p $(@D)
+	$(GPU_PYTHON) $^ --index-col 0 -o $@
 
 _temp/v1/gpqr.pit.csv: scripts/v1/joint/write-pit.gpqr.py _temp/v1/y.csv _temp/v1/gpqr.X.csv
 	mkdir -p $(@D)
@@ -257,9 +265,9 @@ benchmarks/v1/gpr.marginal.%.csv: _temp/v1/gpr.H.marginal.%.csv _temp/v1/gpr.phi
 	mkdir -p $(@D)
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
-benchmarks/v1/gpr.joint_probability.%.csv: scripts/v1/joint/write-joint.gpr.py benchmarks/v1/gpr.marginal.%.csv
+benchmarks/v1/gpr.joint_probability.%.csv: scripts/v1/joint/write-joint.py _temp/v1/%.csv _temp/v1/gpr.pit.csv benchmarks/v1/gpr.marginal.%.csv
 	mkdir -p $(@D)
-	$(GPU_PYTHON) $^ -o $@
+	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 
 _temp/v1/gpqr.H.marginal.%.csv: scripts/v1/joint/write-marginal.gpqr.py benchmarks/v1/gpqr.%.csv
 	mkdir -p $(@D)
@@ -273,7 +281,7 @@ benchmarks/v1/gpqr.marginal.%.csv: _temp/v1/gpqr.H.marginal.%.csv _temp/v1/gpqr.
 	mkdir -p $(@D)
 	python3 -c "import pandas as pd; frames = [pd.read_csv(f) for f in '$^'.split(' ')]; pd.concat(frames, ignore_index=True).to_csv('$@', index=False)"
 
-benchmarks/v1/gpqr.joint_probability.%.csv: scripts/v1/joint/write-joint.gpqr.py _temp/v1/%.csv _temp/v1/gpqr.pit.csv benchmarks/v1/gpqr.marginal.%.csv
+benchmarks/v1/gpqr.joint_probability.%.csv: scripts/v1/joint/write-joint.py _temp/v1/%.csv _temp/v1/gpqr.pit.csv benchmarks/v1/gpqr.marginal.%.csv
 	mkdir -p $(@D)
 	$(GPU_PYTHON) $^ --index-col 0 1 2 -o $@
 

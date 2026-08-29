@@ -13,14 +13,15 @@ parser.add_argument("pit", type=pathlib.Path, help="PIT csv file.")
 parser.add_argument(
     "marginal",
     type=pathlib.Path,
-    help="Marginal probability csv files.",
+    help="Marginal probability csv file.",
 )
 parser.add_argument("--index-col", type=int, nargs="+", help="Index columns of X.")
 parser.add_argument(
     "-o",
     "--out",
     type=pathlib.Path,
-    help="Output csv file of joint probability.",
+    required=True,
+    help="Output csv file of joint probabilities.",
 )
 parser.add_argument(
     "--device", default="auto", help="Compute device: auto, cpu, or e.g. cuda:0."
@@ -48,6 +49,8 @@ def values_by_target(path, value_column):
         raise ValueError(
             f"{path} is missing required columns: {sorted(missing_columns)}."
         )
+    if frame.duplicated(keys + ["target"]).any():
+        raise ValueError(f"{path} contains duplicate prediction-target rows.")
     return (
         frame.set_index(keys + ["target"])[value_column]
         .unstack("target")
@@ -66,13 +69,21 @@ pit_values = pit_values.reindex(columns=marginal_values.columns)
 if pit_values.isna().any().any() or marginal_values.isna().any().any():
     raise ValueError("Each index, batch, and sample must have values for every target.")
 
+pit_array = pit_values.to_numpy(dtype=float)
+marginal_array = marginal_values.to_numpy(dtype=float)
+if not np.isfinite(pit_array).all() or ((pit_array < 0) | (pit_array > 1)).any():
+    raise ValueError("PIT values must be finite and in [0, 1].")
+if (
+    not np.isfinite(marginal_array).all()
+    or ((marginal_array < 0) | (marginal_array > 1)).any()
+):
+    raise ValueError("Marginal probabilities must be finite and in [0, 1].")
+
 prediction_indices = marginal_values.index.get_level_values("index").to_numpy()
 if not np.issubdtype(prediction_indices.dtype, np.integer) or (
     (prediction_indices < 0).any() or (prediction_indices >= len(Xpred)).any()
 ):
     raise ValueError("Marginal prediction indices must refer to rows in X.")
-if "cosine_of_contact_angle" not in Xpred:
-    raise ValueError("X must contain a 'cosine_of_contact_angle' column.")
 
 logging.info(
     "Computing joint probability for %s (%s predictions, %s PIT rows)",
@@ -80,11 +91,10 @@ logging.info(
     f"{len(marginal_values):,}",
     f"{len(pit_values):,}",
 )
-output_stem = args.out.stem if args.out is not None else "<stdout>"
-progress = ProgressLogger(f"{output_stem} | Joint probability", len(marginal_values))
+progress = ProgressLogger(f"{args.out.stem} | Joint probability", len(marginal_values))
 joint_prob = empirical_copula(
-    pit_values.to_numpy(),
-    marginal_values.to_numpy(),
+    pit_array,
+    marginal_array,
     chunk_size=args.chunk_size,
     train_chunk_size=args.train_chunk_size,
     device=args.device,
