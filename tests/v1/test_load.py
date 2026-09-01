@@ -23,10 +23,10 @@ def test_load_gpqr(models_path, monkeypatch):
     assert quantiles.ndim == 1
     assert lower_bound > 0
     assert model.quantile_level_offsets.equal(
-        quantiles - quantiles[model.num_lower_quantiles[0]]
+        quantiles - quantiles[model.central_quantile_idx[0]]
     )
     assert likelihood.quantile_level_offsets.equal(
-        quantiles - quantiles[model.num_lower_quantiles[0]]
+        quantiles - quantiles[model.central_quantile_idx[0]]
     )
 
 
