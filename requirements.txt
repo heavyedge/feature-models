@@ -4,6 +4,7 @@ torch
 scikit-learn
 gpytorch
 gpytorch-qr==1.0.0
+heavyedge
 pandas
 optuna
 xarray
