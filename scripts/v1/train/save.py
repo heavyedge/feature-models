@@ -103,7 +103,7 @@ def save_gpqr(
             type=likelihood.__class__.__name__,
             args=dict(
                 quantile_levels=quantiles,
-                central_quantile_idx=model.num_lower_quantiles[0],
+                central_quantile_idx=model.central_quantile_idx[0],
                 **_prior_args(likelihood, "noise"),
                 batch_shape=likelihood.batch_shape,
             ),
@@ -114,7 +114,7 @@ def save_gpqr(
             args=dict(
                 inducing_points=model.inducing_points,
                 num_quantiles=model.num_quantiles[0],
-                num_lower_quantiles=model.num_lower_quantiles[0],
+                central_quantile_idx=model.central_quantile_idx[0],
                 num_latents=model.num_latents,
                 quantile_levels=quantiles,
                 **_prior_args(model, "lengthscale"),

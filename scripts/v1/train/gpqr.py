@@ -76,7 +76,7 @@ TARGET = tuple(model_class.output_names)
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32, device=device)
 central_quantile_idx = int(np.argmin(np.abs(quantiles.cpu().numpy() - 0.5)))
 num_quantiles = len(quantiles)
-num_lower_quantiles = central_quantile_idx
+central_quantile_idx = central_quantile_idx
 
 
 def load_data(X_path, y_path):
@@ -285,7 +285,7 @@ def train_on_all_data(num_epochs, lr_reductions):
     model = model_class(
         inducing_points=unique_inducing_points_per_fold(Xall_scaled),
         num_quantiles=num_quantiles,
-        num_lower_quantiles=num_lower_quantiles,
+        central_quantile_idx=central_quantile_idx,
         num_latents=num_quantiles,
         batch_shape=refit_batch_shape,
         fixed_lengthscale=final_lengthscale,
@@ -329,7 +329,7 @@ def objective(trial):
     model = model_class(
         inducing_points=Xtrain_inducing_points.clone().detach(),
         num_quantiles=num_quantiles,
-        num_lower_quantiles=num_lower_quantiles,
+        central_quantile_idx=central_quantile_idx,
         num_latents=num_quantiles,
         batch_shape=gp_batch_shape,
         fixed_lengthscale=cv_lengthscale,

@@ -27,7 +27,7 @@ class BaseGP(CenterGapQuantileGP):
         self,
         inducing_points,
         num_quantiles,
-        num_lower_quantiles,
+        central_quantile_idx,
         num_latents,
         lengthscale_prior_loc=None,
         lengthscale_prior_scale=None,
@@ -78,7 +78,7 @@ class BaseGP(CenterGapQuantileGP):
             mean,
             covar,
             [num_quantiles],
-            [num_lower_quantiles],
+            [central_quantile_idx],
             quantile_levels=(None if quantile_levels is None else [quantile_levels]),
         )
 
@@ -155,7 +155,7 @@ class GPQR_Independent(BaseGP):
         self,
         inducing_points,
         num_quantiles,
-        num_lower_quantiles,
+        central_quantile_idx,
         num_latents,
         lengthscale_prior_loc=None,
         lengthscale_prior_scale=None,
@@ -166,7 +166,7 @@ class GPQR_Independent(BaseGP):
         super().__init__(
             inducing_points,
             num_quantiles,
-            num_lower_quantiles,
+            central_quantile_idx,
             num_quantiles,
             lengthscale_prior_loc,
             lengthscale_prior_scale,
