@@ -1,7 +1,6 @@
 import torch
 from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
-from gpytorch.priors import LogNormalPrior
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
     IndependentMultitaskVariationalStrategy,
@@ -29,19 +28,11 @@ class BaseGP(CenterGapQuantileGP):
         num_quantiles,
         central_quantile_idx,
         num_latents,
-        lengthscale_prior_loc=None,
-        lengthscale_prior_scale=None,
-        fixed_lengthscale=None,
+        lengthscale,
         batch_shape=torch.Size(),
         quantile_levels=None,
     ):
         N, D = inducing_points.shape[-2:]
-        if fixed_lengthscale is not None and (
-            lengthscale_prior_loc is not None or lengthscale_prior_scale is not None
-        ):
-            raise ValueError(
-                "fixed_lengthscale cannot be combined with a lengthscale prior"
-            )
         full_batch_shape = torch.Size([*batch_shape, num_latents])
         variational_distribution = CholeskyVariationalDistribution(
             N,
@@ -59,16 +50,10 @@ class BaseGP(CenterGapQuantileGP):
         )
 
         mean = ConstantMean(batch_shape=full_batch_shape)
-        lengthscale_prior = None
-        if lengthscale_prior_loc is not None and lengthscale_prior_scale is not None:
-            lengthscale_prior = LogNormalPrior(
-                lengthscale_prior_loc, lengthscale_prior_scale
-            )
         covar = ScaleKernel(
             RBFKernel(
                 ard_num_dims=D,
                 batch_shape=full_batch_shape,
-                lengthscale_prior=lengthscale_prior,
             ),
             batch_shape=full_batch_shape,
         )
@@ -84,11 +69,9 @@ class BaseGP(CenterGapQuantileGP):
 
         self.num_latents = num_latents
         self.batch_shape = torch.Size(batch_shape)
-        self.lengthscale_is_fixed = fixed_lengthscale is not None
-        if fixed_lengthscale is not None:
-            self._set_fixed_lengthscale(fixed_lengthscale, D)
+        self._freeze_lengthscale(lengthscale, D)
 
-    def _set_fixed_lengthscale(self, lengthscale, dim):
+    def _freeze_lengthscale(self, lengthscale, dim):
         """Copy a GPR ARD lengthscale across GPQR latent processes and freeze it."""
         kernel = self.covar_module.base_kernel
         target = kernel.lengthscale
@@ -123,7 +106,7 @@ class BaseGP(CenterGapQuantileGP):
                 ).expand_as(target)
             else:
                 raise ValueError(
-                    "fixed_lengthscale must have shape "
+                    "lengthscale must have shape "
                     f"{tuple(shared_shape)}, {tuple(batched_shape)}, "
                     f"or {tuple(target.shape)}; got {tuple(lengthscale.shape)}"
                 )
@@ -139,16 +122,6 @@ class BaseGP(CenterGapQuantileGP):
     def inducing_points(self):
         return self.variational_strategy.base_variational_strategy.inducing_points
 
-    @property
-    def lengthscale_prior_loc(self):
-        prior = getattr(self.covar_module.base_kernel, "lengthscale_prior", None)
-        return None if prior is None else prior.loc
-
-    @property
-    def lengthscale_prior_scale(self):
-        prior = getattr(self.covar_module.base_kernel, "lengthscale_prior", None)
-        return None if prior is None else prior.scale
-
 
 class GPQR_Independent(BaseGP):
     def __init__(
@@ -157,9 +130,7 @@ class GPQR_Independent(BaseGP):
         num_quantiles,
         central_quantile_idx,
         num_latents,
-        lengthscale_prior_loc=None,
-        lengthscale_prior_scale=None,
-        fixed_lengthscale=None,
+        lengthscale,
         batch_shape=torch.Size(),
         quantile_levels=None,
     ):
@@ -168,9 +139,7 @@ class GPQR_Independent(BaseGP):
             num_quantiles,
             central_quantile_idx,
             num_quantiles,
-            lengthscale_prior_loc,
-            lengthscale_prior_scale,
-            fixed_lengthscale,
+            lengthscale,
             batch_shape,
             quantile_levels,
         )

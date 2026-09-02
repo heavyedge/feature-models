@@ -288,7 +288,7 @@ def train_on_all_data(num_epochs, lr_reductions):
         central_quantile_idx=central_quantile_idx,
         num_latents=num_quantiles,
         batch_shape=refit_batch_shape,
-        fixed_lengthscale=final_lengthscale,
+        lengthscale=final_lengthscale,
         quantile_levels=quantiles,
     ).to(device)
 
@@ -332,7 +332,7 @@ def objective(trial):
         central_quantile_idx=central_quantile_idx,
         num_latents=num_quantiles,
         batch_shape=gp_batch_shape,
-        fixed_lengthscale=cv_lengthscale,
+        lengthscale=cv_lengthscale,
         quantile_levels=quantiles,
     ).to(device)
     parameters = [

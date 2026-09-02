@@ -117,12 +117,7 @@ def save_gpqr(
                 central_quantile_idx=model.central_quantile_idx[0],
                 num_latents=model.num_latents,
                 quantile_levels=quantiles,
-                **_prior_args(model, "lengthscale"),
-                fixed_lengthscale=(
-                    model.covar_module.base_kernel.lengthscale.detach().clone()
-                    if model.lengthscale_is_fixed
-                    else None
-                ),
+                lengthscale=model.covar_module.base_kernel.lengthscale.detach().clone(),
                 batch_shape=model.batch_shape,
             ),
             state_dict=model.state_dict(),

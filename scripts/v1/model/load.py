@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 
 from . import gpqr as gpqr_module
 from . import gpr as gpr_module
@@ -87,14 +88,39 @@ def _load_gp(path, model_module, device, *, checkpoint=None):
     _load_state_dict(likelihood, checkpoint["likelihood"]["state_dict"])
 
     model_class = getattr(model_module, checkpoint["model"]["type"])
-    model_args = _prior_args(
-        checkpoint["model"],
-        "lengthscale_prior",
-        "lengthscale_prior_loc",
-        "lengthscale_prior_scale",
-    )
+    if model_module is gpqr_module:
+        model_args = dict(checkpoint["model"]["args"])
+        # Checkpoints written before GPQR lengthscales became mandatory stored
+        # either ``fixed_lengthscale`` or a learned raw lengthscale.  Preserve
+        # their fitted value while loading them under the new fixed-only API.
+        lengthscale = model_args.pop("lengthscale", None)
+        if lengthscale is None:
+            lengthscale = model_args.pop("fixed_lengthscale", None)
+        if lengthscale is None:
+            raw_lengthscale = checkpoint["model"]["state_dict"].get(
+                "covar_module.base_kernel.raw_lengthscale"
+            )
+            if raw_lengthscale is None:
+                raise ValueError("GPQR checkpoint is missing its lengthscale")
+            lengthscale = F.softplus(raw_lengthscale)
+        model_args["lengthscale"] = lengthscale
+        model_args.pop("lengthscale_prior_loc", None)
+        model_args.pop("lengthscale_prior_scale", None)
+        model_state_dict = {
+            key: value
+            for key, value in checkpoint["model"]["state_dict"].items()
+            if "lengthscale_prior" not in key
+        }
+    else:
+        model_args = _prior_args(
+            checkpoint["model"],
+            "lengthscale_prior",
+            "lengthscale_prior_loc",
+            "lengthscale_prior_scale",
+        )
+        model_state_dict = checkpoint["model"]["state_dict"]
     model = model_class(**model_args)
-    _load_state_dict(model, checkpoint["model"]["state_dict"])
+    _load_state_dict(model, model_state_dict)
 
     X_scaler.to(device)
     y_scaler.to(device)
