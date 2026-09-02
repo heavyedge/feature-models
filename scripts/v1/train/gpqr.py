@@ -29,8 +29,8 @@ parser.add_argument(
     type=str,
     required=True,
     help=(
-        "Fitted GPR checkpoint used as the GPQR mean function and whose ARD "
-        "lengthscale is fixed in the GPQR."
+        "Fitted GPR checkpoint whose input scaler and ARD lengthscale are "
+        "reused and fixed in the GPQR."
     ),
 )
 parser.add_argument(
@@ -91,23 +91,19 @@ gp_batch_shape = torch.Size((*external_batch_shape, len(TARGET)))
 
 (
     final_X_scaler,
-    final_gpr_y_scaler,
+    _,
     _,
     final_gpr_model,
     gpr_metadata,
 ) = load_module.load_GPR(path=args.gpr_model, device=device, return_metadata=True)
 final_X_scaler.eval()
-final_gpr_y_scaler.eval()
 final_gpr_model.eval()
 final_gpr_batch_shape = torch.Size((len(TARGET),))
 if (
     final_X_scaler.batch_shape != final_gpr_batch_shape
-    or final_gpr_y_scaler.batch_shape != final_gpr_batch_shape
     or final_gpr_model.batch_shape != final_gpr_batch_shape
 ):
-    parser.error(
-        "the fitted GPR model and scalers must have one batch per output variable"
-    )
+    parser.error("the fitted GPR model and X scaler must have one batch per output")
 final_lengthscale = (
     final_gpr_model.covar_module.base_kernel.lengthscale.detach().clone()
 )
@@ -162,11 +158,6 @@ if has_validation:
         cv_X_scaler = scaler_class(**scaler_checkpoint["args"]).to(device)
         cv_X_scaler.load_state_dict(scaler_checkpoint["state_dict"])
 
-        y_scaler_checkpoint = cv_metadata["y_scaler"]
-        y_scaler_class = getattr(scaler_module, y_scaler_checkpoint["type"])
-        cv_gpr_y_scaler = y_scaler_class(**y_scaler_checkpoint["args"]).to(device)
-        cv_gpr_y_scaler.load_state_dict(y_scaler_checkpoint["state_dict"])
-
         model_checkpoint = cv_metadata["model"]
         cv_gpr_model_class = getattr(gpr_module, model_checkpoint["type"])
         cv_gpr_model = cv_gpr_model_class(**model_checkpoint["args"]).to(device)
@@ -179,11 +170,9 @@ if has_validation:
             f"the GPR checkpoint has no valid cross-validation metadata: {exc}"
         )
     cv_X_scaler.eval()
-    cv_gpr_y_scaler.eval()
     cv_gpr_model.eval()
     if (
         cv_X_scaler.batch_shape != gp_batch_shape
-        or cv_gpr_y_scaler.batch_shape != gp_batch_shape
         or cv_gpr_model.batch_shape != gp_batch_shape
     ):
         parser.error("GPR metadata and GPQR data have different fold batch shapes")
@@ -196,24 +185,11 @@ if has_validation:
         )
 else:
     cv_X_scaler = final_X_scaler
-    cv_gpr_y_scaler = final_gpr_y_scaler
-    cv_gpr_model = final_gpr_model
     cv_lengthscale = final_lengthscale
 
 
-def gpr_posterior_mean(X_base, prior_mean, X_scaler, y_scaler, model):
-    scaled_posterior = model(X_scaler(expand_output_batch(X_base)))
-    return gpr_module.posterior_mean(
-        prior_mean(X_base),
-        scaled_posterior,
-        y_scaler,
-    )
-
-
 with torch.no_grad():
-    res_train = ytrain - gpr_posterior_mean(
-        Xtrain_base, cv_mean, cv_X_scaler, cv_gpr_y_scaler, cv_gpr_model
-    )
+    res_train = ytrain - cv_mean(Xtrain_base)
     Xtrain_scaled = cv_X_scaler(Xtrain)
 
 y_scaler = scaler_module.StandardScaler(1, batch_shape=gp_batch_shape).to(device)
@@ -224,9 +200,7 @@ y_scaler.eval()
 
 if has_validation:
     with torch.no_grad():
-        res_val = yval - gpr_posterior_mean(
-            Xval_base, cv_mean, cv_X_scaler, cv_gpr_y_scaler, cv_gpr_model
-        )
+        res_val = yval - cv_mean(Xval_base)
         Xval_scaled = cv_X_scaler(Xval)
         res_val_scaled = y_scaler(res_val.unsqueeze(-1)).squeeze(-1)
 
@@ -263,13 +237,7 @@ def train_on_all_data(num_epochs, lr_reductions):
     y_scaler = scaler_module.StandardScaler(1, batch_shape=refit_batch_shape).to(device)
     y_scaler.train()
     with torch.no_grad():
-        res_all = yall - gpr_posterior_mean(
-            Xall_base,
-            final_mean,
-            final_X_scaler,
-            final_gpr_y_scaler,
-            final_gpr_model,
-        )
+        res_all = yall - final_mean(Xall_base)
         res_all_scaled = y_scaler(res_all.unsqueeze(-1)).squeeze(-1)
     y_scaler.eval()
 

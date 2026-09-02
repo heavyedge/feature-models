@@ -187,9 +187,9 @@ benchmarks/v1/likelihood.gpr.csv: scripts/v1/model_selection/likelihood.py _temp
 	mkdir -p $(@D)
 	python3 $^ --type GPR -o $@
 
-_temp/v1/cv.gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpr.pt _temp/v1/cv.gpqr_%.pt $(SCRIPTS_v1)
+_temp/v1/cv.gpqr_%.Xtest.csv: _temp/v1/Xtest.csv _temp/v1/cv.prior_mean.pt _temp/v1/cv.gpqr_%.pt $(SCRIPTS_v1)
 	mkdir -p $(@D)
-	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $(wordlist 1,4,$^) --index-col 0 --num-samples $(N_SAMPLES_v1) -o $@
+	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $(wordlist 1,3,$^) --index-col 0 --num-samples $(N_SAMPLES_v1) -o $@
 
 benchmarks/v1/pinball_loss.gpqr_%.csv: scripts/v1/model_selection/pinball_loss.py _temp/v1/cv.gpqr_%.Xtest.csv _temp/v1/ytest.csv
 	mkdir -p $(@D)
@@ -213,15 +213,15 @@ benchmarks/v1/gpr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/fe
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
-benchmarks/v1/gpqr.Xunique.csv: _temp/v1/Xunique.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt models/v1/feature_models/gpqr.pt
+benchmarks/v1/gpqr.Xunique.csv: _temp/v1/Xunique.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 --num-samples $(N_SAMPLES_v1) -o $@
 
-benchmarks/v1/gpqr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt models/v1/feature_models/gpqr.pt
+benchmarks/v1/gpqr.Xpred_1D.csv: _temp/v1/Xpred_1D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
 
-benchmarks/v1/gpqr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt models/v1/feature_models/gpqr.pt
+benchmarks/v1/gpqr.Xpred_2D.csv: _temp/v1/Xpred_2D.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
 
@@ -231,7 +231,7 @@ _temp/v1/gpr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpr $< --index-col 0 1 2 -o $@
 
-_temp/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpr.pt models/v1/feature_models/gpqr.pt
+_temp/v1/gpqr.X.csv: _temp/v1/X.csv $(SCRIPTS_v1) models/v1/feature_models/prior_mean.pt models/v1/feature_models/gpqr.pt
 	mkdir -p $(@D)
 	$(GPU_PYTHON) -m models.v1.feature_models.predict-gpqr $< --index-col 0 1 2 --num-samples $(N_SAMPLES_v1) -o $@
 
