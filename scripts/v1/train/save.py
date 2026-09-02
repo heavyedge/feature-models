@@ -7,17 +7,6 @@ __all__ = [
 ]
 
 
-def _prior_args(module, name):
-    loc = getattr(module, f"{name}_prior_loc", None)
-    scale = getattr(module, f"{name}_prior_scale", None)
-    if loc is None or scale is None:
-        loc = scale = None
-    return {
-        f"{name}_prior_loc": loc,
-        f"{name}_prior_scale": scale,
-    }
-
-
 def save_prior_mean(model, path):
     data = dict(
         model=dict(
@@ -54,17 +43,15 @@ def save_gpr(
         ),
         likelihood=dict(
             type=likelihood.__class__.__name__,
-            args=dict(
-                **_prior_args(likelihood, "noise"),
-                batch_shape=likelihood.batch_shape,
-            ),
+            args=dict(batch_shape=likelihood.batch_shape),
             state_dict=likelihood.state_dict(),
         ),
         model=dict(
             type=model.__class__.__name__,
             args=dict(
                 inducing_points=model.inducing_points,
-                **_prior_args(model, "lengthscale"),
+                lengthscale_prior_loc=model.lengthscale_prior_loc,
+                lengthscale_prior_scale=model.lengthscale_prior_scale,
                 batch_shape=model.batch_shape,
             ),
             state_dict=model.state_dict(),
@@ -104,7 +91,6 @@ def save_gpqr(
             args=dict(
                 quantile_levels=quantiles,
                 central_quantile_idx=model.central_quantile_idx[0],
-                **_prior_args(likelihood, "noise"),
                 batch_shape=likelihood.batch_shape,
             ),
             state_dict=likelihood.state_dict(),
@@ -117,7 +103,7 @@ def save_gpqr(
                 central_quantile_idx=model.central_quantile_idx[0],
                 num_latents=model.num_latents,
                 quantile_levels=quantiles,
-                lengthscale=model.covar_module.base_kernel.lengthscale.detach().clone(),
+                lengthscale=model.lengthscale.detach().clone(),
                 batch_shape=model.batch_shape,
             ),
             state_dict=model.state_dict(),

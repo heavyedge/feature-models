@@ -80,38 +80,13 @@ class BaseGP(CenterGapQuantileGP):
             dtype=target.dtype,
             device=target.device,
         )
-
-        if lengthscale.shape == target.shape:
-            expanded = lengthscale
-        else:
-            if lengthscale.shape[-2:] == (1, dim):
-                lengthscale = lengthscale.squeeze(-2)
-            shared_shape = self.batch_shape[-1:] + torch.Size((dim,))
-            batched_shape = self.batch_shape + torch.Size((dim,))
-            if lengthscale.shape == batched_shape:
-                expanded = lengthscale.reshape(
-                    *self.batch_shape,
-                    1,
-                    1,
-                    dim,
-                ).expand_as(target)
-            elif lengthscale.shape == shared_shape:
-                external_dims = len(self.batch_shape) - 1
-                expanded = lengthscale.reshape(
-                    *((1,) * external_dims),
-                    self.batch_shape[-1],
-                    1,
-                    1,
-                    dim,
-                ).expand_as(target)
-            else:
-                raise ValueError(
-                    "lengthscale must have shape "
-                    f"{tuple(shared_shape)}, {tuple(batched_shape)}, "
-                    f"or {tuple(target.shape)}; got {tuple(lengthscale.shape)}"
-                )
-
-        kernel.lengthscale = expanded
+        expected_shape = self.batch_shape + torch.Size((1, dim))
+        if lengthscale.shape != expected_shape:
+            raise ValueError(
+                f"lengthscale must have shape {tuple(expected_shape)}; "
+                f"got {tuple(lengthscale.shape)}"
+            )
+        kernel.lengthscale = lengthscale.unsqueeze(-3).expand_as(target)
         kernel.raw_lengthscale.requires_grad_(False)
 
     @staticmethod
@@ -121,6 +96,10 @@ class BaseGP(CenterGapQuantileGP):
     @property
     def inducing_points(self):
         return self.variational_strategy.base_variational_strategy.inducing_points
+
+    @property
+    def lengthscale(self):
+        return self.covar_module.base_kernel.lengthscale.select(-3, 0)
 
 
 class GPQR_Independent(BaseGP):

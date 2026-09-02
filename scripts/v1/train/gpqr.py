@@ -14,9 +14,7 @@ from scripts.v1.train.common import (
     configure_logging,
     create_train_parser,
     fit_all_data,
-    fit_trial,
-    optimize_or_load_study,
-    select_best_trial,
+    fit_with_validation,
     validate_train_args,
 )
 from scripts.v1.train.inducing import unique_inducing_points_per_fold
@@ -51,19 +49,11 @@ parser.add_argument(
     help="Lower bound on (f(q2) - f(q1)) / (q2 - q1) in scaled response units.",
 )
 args = parser.parse_args()
-controls = validate_train_args(
-    parser,
-    args,
-    logger,
-)
+controls = validate_train_args(parser, args, logger)
 has_validation = controls.has_validation
 device = controls.device
-if args.optimize_hyperparameters:
-    parser.error("GPQR does not optimize hyperparameters")
 if args.num_epochs is None:
     parser.error("--num-epochs is required for GPQR training")
-if args.storage is None or args.study_name is None:
-    parser.error("--storage and --study-name are required for GPQR training")
 if args.batch_size is not None and args.batch_size <= 0:
     parser.error("--batch-size must be greater than zero")
 try:
@@ -76,7 +66,6 @@ TARGET = tuple(model_class.output_names)
 quantiles = torch.tensor(args.quantiles, dtype=torch.float32, device=device)
 central_quantile_idx = int(np.argmin(np.abs(quantiles.cpu().numpy() - 0.5)))
 num_quantiles = len(quantiles)
-central_quantile_idx = central_quantile_idx
 
 
 def load_data(X_path, y_path):
@@ -169,7 +158,6 @@ if tuple(final_lengthscale.shape) != expected_lengthscale_shape:
 if has_validation:
     try:
         scaler_checkpoint = cv_metadata["X_scaler"]
-        cv_lengthscale = cv_metadata["lengthscale"].to(device=device)
         scaler_class = getattr(scaler_module, scaler_checkpoint["type"])
         cv_X_scaler = scaler_class(**scaler_checkpoint["args"]).to(device)
         cv_X_scaler.load_state_dict(scaler_checkpoint["state_dict"])
@@ -183,6 +171,9 @@ if has_validation:
         cv_gpr_model_class = getattr(gpr_module, model_checkpoint["type"])
         cv_gpr_model = cv_gpr_model_class(**model_checkpoint["args"]).to(device)
         cv_gpr_model.load_state_dict(model_checkpoint["state_dict"])
+        cv_lengthscale = (
+            cv_gpr_model.covar_module.base_kernel.lengthscale.detach().clone()
+        )
     except (AttributeError, KeyError, RuntimeError, TypeError) as exc:
         parser.error(
             f"the GPR checkpoint has no valid cross-validation metadata: {exc}"
@@ -317,9 +308,7 @@ def train_on_all_data(num_epochs, lr_reductions):
     return final_X_scaler, y_scaler, likelihood, model
 
 
-def objective(trial):
-    if not has_validation:
-        raise RuntimeError("GPQR cross-validation data is required to create a trial")
+def select_training_schedule():
     torch.manual_seed(42)
     likelihood = CenterGapQuantilesLikelihood(
         quantile_levels=quantiles,
@@ -340,7 +329,7 @@ def objective(trial):
         for parameter in (*model.parameters(), *likelihood.parameters())
         if parameter.requires_grad
     ]
-    return fit_trial(
+    _, best_epoch, lr_reductions = fit_with_validation(
         likelihood=likelihood,
         model=model,
         mll=VariationalELBO(likelihood, model, num_data=num_data),
@@ -353,10 +342,11 @@ def objective(trial):
         controls=controls,
         logger=logger,
         validation_reduce_dims=(-2, -1),
-        trial=trial,
         num_likelihood_samples=args.num_likelihood_samples,
         batch_size=args.batch_size,
+        return_training_details=True,
     )
+    return best_epoch, lr_reductions
 
 
 logger.info(
@@ -374,31 +364,11 @@ if args.batch_size is not None:
     )
 
 with quantile_gap_context:
-    study = optimize_or_load_study(
-        args=args,
-        controls=controls,
-        objective=objective,
-        optimized_hyperparameters=set(),
-        baseline_params={},
-    )
-    if len(study.trials) != 1:
-        parser.error(
-            f"GPQR schedule study {args.study_name!r} must contain exactly one trial; "
-            f"found {len(study.trials)}"
-        )
-    best_trial, _, best_epoch, best_lr_reductions = select_best_trial(
-        study,
-        defaults={},
-        optimized_hyperparameters=set(),
-        controls=controls,
-        args=args,
-    )
-    logger.info(
-        "Selected GPQR schedule from study %s trial %d: %d epochs",
-        args.study_name,
-        best_trial.number,
-        best_epoch,
-    )
+    if has_validation:
+        best_epoch, best_lr_reductions = select_training_schedule()
+        logger.info("Selected GPQR training length: %d epochs", best_epoch)
+    else:
+        best_epoch, best_lr_reductions = args.num_epochs, []
 
     X_scaler, y_scaler, likelihood, model = train_on_all_data(
         best_epoch, best_lr_reductions

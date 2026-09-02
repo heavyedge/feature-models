@@ -22,15 +22,11 @@ from sqlalchemy.engine import make_url
 MAX_DEFAULT_LR_SCHEDULER_PATIENCE = 50
 DEFAULT_CHOLESKY_JITTER = 1e-4
 DEFAULT_MAX_GRAD_NORM = 10.0
-PRIOR_HYPERPARAMETER_DEFAULTS = {
-    "noise_prior_loc": None,
-    "noise_prior_scale": None,
+LENGTHSCALE_HYPERPARAMETER_DEFAULTS = {
     "lengthscale_prior_loc": None,
     "lengthscale_prior_scale": None,
 }
-PRIOR_HYPERPARAMETER_BASELINES = {
-    "noise_prior_loc": -4.0,
-    "noise_prior_scale": 0.5,
+LENGTHSCALE_HYPERPARAMETER_BASELINES = {
     "lengthscale_prior_loc": -1.0,
     "lengthscale_prior_scale": 0.5,
 }
@@ -59,8 +55,7 @@ def configure_logging(name):
 def create_train_parser(hyperparameter_names, *, target=False, quantiles=False):
     parser = argparse.ArgumentParser()
     model_group = parser.add_argument_group("input data and model")
-    training_group = parser.add_argument_group("per-trial training")
-    hpo_group = parser.add_argument_group("hyperparameter optimization")
+    training_group = parser.add_argument_group("training")
 
     model_group.add_argument(
         "Xtrain", type=pathlib.Path, help="Training feature csv file."
@@ -176,101 +171,85 @@ def create_train_parser(hyperparameter_names, *, target=False, quantiles=False):
         help="Maximum total gradient norm before each optimizer step.",
     )
 
-    hpo_group.add_argument(
-        "--optimize-hyperparameters",
-        nargs="+",
-        choices=tuple(hyperparameter_names),
-        default=(),
-        help=(
-            "Hyperparameters to optimize with Optuna when validation data is "
-            "provided; all others use their defaults."
-        ),
-    )
-    hpo_group.add_argument(
-        "--n-trials",
-        type=int,
-        default=100,
-        help="Number of trials for hyperparameter optimization.",
-    )
-    hpo_group.add_argument(
-        "--n-startup-trials",
-        type=int,
-        default=10,
-        help="Completed random trials before TPE sampling and median pruning begin.",
-    )
-    hpo_group.add_argument(
-        "--pruning-warmup-ratio",
-        type=float,
-        default=0.05,
-        help="Fraction of maximum epochs to run before median pruning begins.",
-    )
-    hpo_group.add_argument(
-        "--pruning-patience-ratio",
-        type=float,
-        default=0.02,
-        help=(
-            "Fraction of maximum epochs without sufficient validation improvement "
-            "required before accepting a median-pruner decision."
-        ),
-    )
-    hpo_group.add_argument(
-        "--noise-prior-loc-min",
-        type=float,
-        default=-8.0,
-        help="Smallest log-space location for the noise LogNormal prior.",
-    )
-    hpo_group.add_argument(
-        "--noise-prior-loc-max",
-        type=float,
-        default=-1.0,
-        help="Largest log-space location for the noise LogNormal prior.",
-    )
-    hpo_group.add_argument(
-        "--lengthscale-prior-loc-min",
-        type=float,
-        default=-3.0,
-        help="Smallest log-space location for the lengthscale LogNormal prior.",
-    )
-    hpo_group.add_argument(
-        "--lengthscale-prior-loc-max",
-        type=float,
-        default=1.0,
-        help="Largest log-space location for the lengthscale LogNormal prior.",
-    )
-    hpo_group.add_argument(
-        "--prior-scale-min",
-        type=float,
-        default=0.1,
-        help="Smallest log-space scale for the LogNormal prior.",
-    )
-    hpo_group.add_argument(
-        "--prior-scale-max",
-        type=float,
-        default=1.5,
-        help="Largest log-space scale for the LogNormal prior.",
-    )
-    hpo_group.add_argument(
-        "--storage", type=str, default=None, help="Optuna storage URL."
-    )
-    hpo_group.add_argument(
-        "--study-name", type=str, default=None, help="Optuna study name."
-    )
+    if hyperparameter_names:
+        hpo_group = parser.add_argument_group("lengthscale hyperparameter optimization")
+        hpo_group.add_argument(
+            "--optimize-hyperparameters",
+            nargs="+",
+            choices=tuple(hyperparameter_names),
+            default=(),
+            help=(
+                "Lengthscale-prior hyperparameters to optimize with Optuna when "
+                "validation data is provided; all others use their defaults."
+            ),
+        )
+        hpo_group.add_argument(
+            "--n-trials",
+            type=int,
+            default=100,
+            help="Number of trials for hyperparameter optimization.",
+        )
+        hpo_group.add_argument(
+            "--n-startup-trials",
+            type=int,
+            default=10,
+            help="Completed random trials before TPE sampling and pruning begin.",
+        )
+        hpo_group.add_argument(
+            "--pruning-warmup-ratio",
+            type=float,
+            default=0.05,
+            help="Fraction of maximum epochs to run before median pruning begins.",
+        )
+        hpo_group.add_argument(
+            "--pruning-patience-ratio",
+            type=float,
+            default=0.02,
+            help=(
+                "Fraction of maximum epochs without sufficient validation "
+                "improvement before accepting a median-pruner decision."
+            ),
+        )
+        hpo_group.add_argument(
+            "--lengthscale-prior-loc-min",
+            type=float,
+            default=-3.0,
+            help="Smallest log-space location for the lengthscale LogNormal prior.",
+        )
+        hpo_group.add_argument(
+            "--lengthscale-prior-loc-max",
+            type=float,
+            default=1.0,
+            help="Largest log-space location for the lengthscale LogNormal prior.",
+        )
+        hpo_group.add_argument(
+            "--lengthscale-prior-scale-min",
+            type=float,
+            default=0.1,
+            help="Smallest scale for the lengthscale LogNormal prior.",
+        )
+        hpo_group.add_argument(
+            "--lengthscale-prior-scale-max",
+            type=float,
+            default=1.5,
+            help="Largest scale for the lengthscale LogNormal prior.",
+        )
+        hpo_group.add_argument(
+            "--storage", type=str, default=None, help="Optuna storage URL."
+        )
+        hpo_group.add_argument(
+            "--study-name", type=str, default=None, help="Optuna study name."
+        )
     return parser
 
 
-def validate_train_args(
-    parser, args, logger, *, require_storage_without_validation=True
-):
+def validate_train_args(parser, args, logger):
     has_validation = args.Xval is not None or args.yval is not None
     if (args.Xval is None) != (args.yval is None):
         parser.error("Xval and yval must be provided together.")
     if has_validation and args.num_epochs is None:
         parser.error("--num-epochs is required when validation data is provided.")
-    if (
-        not has_validation
-        and require_storage_without_validation
-        and args.storage is None
-    ):
+    if not has_validation and hasattr(args, "storage") and args.storage is None:
         parser.error("--storage is required when validation data is not provided.")
     if has_validation and args.num_epochs <= 0:
         parser.error("--num-epochs must be positive.")
@@ -292,9 +271,9 @@ def validate_train_args(
         parser.error("--early-stopping-patience-ratio must be in (0, 1].")
     if args.early_stopping_min_delta < 0:
         parser.error("--early-stopping-min-delta cannot be negative.")
-    if args.n_trials <= 0:
+    if hasattr(args, "n_trials") and args.n_trials <= 0:
         parser.error("--n-trials must be positive.")
-    if args.n_startup_trials < 0:
+    if hasattr(args, "n_startup_trials") and args.n_startup_trials < 0:
         parser.error("--n-startup-trials cannot be negative.")
     if hasattr(args, "quantiles"):
         if len(args.quantiles) < 2:
@@ -305,16 +284,20 @@ def validate_train_args(
             left >= right for left, right in zip(args.quantiles, args.quantiles[1:])
         ):
             parser.error("--quantiles values must be strictly increasing.")
-    if not 0 <= args.pruning_warmup_ratio <= 1:
-        parser.error("--pruning-warmup-ratio must be in [0, 1].")
-    if not 0 <= args.pruning_patience_ratio <= 1:
-        parser.error("--pruning-patience-ratio must be in [0, 1].")
-    if args.prior_scale_min <= 0 or args.prior_scale_min >= args.prior_scale_max:
-        parser.error("Prior scale bounds must be positive and strictly increasing.")
-    if args.noise_prior_loc_min >= args.noise_prior_loc_max:
-        parser.error("Noise-prior location bounds must be strictly increasing.")
-    if args.lengthscale_prior_loc_min >= args.lengthscale_prior_loc_max:
-        parser.error("Lengthscale-prior location bounds must be strictly increasing.")
+    if hasattr(args, "pruning_warmup_ratio"):
+        if not 0 <= args.pruning_warmup_ratio <= 1:
+            parser.error("--pruning-warmup-ratio must be in [0, 1].")
+        if not 0 <= args.pruning_patience_ratio <= 1:
+            parser.error("--pruning-patience-ratio must be in [0, 1].")
+        if (
+            args.lengthscale_prior_scale_min <= 0
+            or args.lengthscale_prior_scale_min >= args.lengthscale_prior_scale_max
+        ):
+            parser.error(
+                "Lengthscale-prior scale bounds must be positive and increasing."
+            )
+        if args.lengthscale_prior_loc_min >= args.lengthscale_prior_loc_max:
+            parser.error("Lengthscale-prior bounds must be strictly increasing.")
 
     device = torch.device(
         args.device
@@ -329,17 +312,28 @@ def validate_train_args(
             MAX_DEFAULT_LR_SCHEDULER_PATIENCE,
             max(1, round(args.num_epochs * args.lr_scheduler_patience_ratio)),
         )
-        pruning_warmup = max(0, round(args.num_epochs * args.pruning_warmup_ratio))
-        pruning_patience = max(1, round(args.num_epochs * args.pruning_patience_ratio))
-        pruning_interval = max(1, min(25, pruning_patience // 2))
-        logger.info(
-            "Training controls: scheduler patience=%d, early-stopping patience=%d, "
-            "pruning warmup=%d, pruning patience=%d epochs.",
-            lr_scheduler_patience,
-            early_stopping_patience,
-            pruning_warmup,
-            pruning_patience,
-        )
+        if hasattr(args, "pruning_warmup_ratio"):
+            pruning_warmup = max(0, round(args.num_epochs * args.pruning_warmup_ratio))
+            pruning_patience = max(
+                1, round(args.num_epochs * args.pruning_patience_ratio)
+            )
+            pruning_interval = max(1, min(25, pruning_patience // 2))
+            logger.info(
+                "Training controls: scheduler patience=%d, early-stopping "
+                "patience=%d, pruning warmup=%d, pruning patience=%d epochs.",
+                lr_scheduler_patience,
+                early_stopping_patience,
+                pruning_warmup,
+                pruning_patience,
+            )
+        else:
+            pruning_warmup = pruning_patience = pruning_interval = 0
+            logger.info(
+                "Training controls: scheduler patience=%d, early-stopping "
+                "patience=%d epochs.",
+                lr_scheduler_patience,
+                early_stopping_patience,
+            )
     else:
         early_stopping_patience = 0
         lr_scheduler_patience = 0
@@ -357,16 +351,8 @@ def validate_train_args(
     )
 
 
-def suggest_prior_hyperparameters(trial, defaults, optimized, args):
+def suggest_lengthscale_hyperparameters(trial, defaults, optimized, args):
     hyperparameters = defaults.copy()
-    if "noise_prior_loc" in optimized:
-        hyperparameters["noise_prior_loc"] = trial.suggest_float(
-            "noise_prior_loc", args.noise_prior_loc_min, args.noise_prior_loc_max
-        )
-    if "noise_prior_scale" in optimized:
-        hyperparameters["noise_prior_scale"] = trial.suggest_float(
-            "noise_prior_scale", args.prior_scale_min, args.prior_scale_max, log=True
-        )
     if "lengthscale_prior_loc" in optimized:
         hyperparameters["lengthscale_prior_loc"] = trial.suggest_float(
             "lengthscale_prior_loc",
@@ -376,41 +362,27 @@ def suggest_prior_hyperparameters(trial, defaults, optimized, args):
     if "lengthscale_prior_scale" in optimized:
         hyperparameters["lengthscale_prior_scale"] = trial.suggest_float(
             "lengthscale_prior_scale",
-            args.prior_scale_min,
-            args.prior_scale_max,
+            args.lengthscale_prior_scale_min,
+            args.lengthscale_prior_scale_max,
             log=True,
         )
     return hyperparameters
 
 
-def prior_baseline(args):
+def lengthscale_baseline(args):
     return {
-        "noise_prior_loc": float(
-            np.clip(
-                PRIOR_HYPERPARAMETER_BASELINES["noise_prior_loc"],
-                args.noise_prior_loc_min,
-                args.noise_prior_loc_max,
-            )
-        ),
-        "noise_prior_scale": float(
-            np.clip(
-                PRIOR_HYPERPARAMETER_BASELINES["noise_prior_scale"],
-                args.prior_scale_min,
-                args.prior_scale_max,
-            )
-        ),
         "lengthscale_prior_loc": float(
             np.clip(
-                PRIOR_HYPERPARAMETER_BASELINES["lengthscale_prior_loc"],
+                LENGTHSCALE_HYPERPARAMETER_BASELINES["lengthscale_prior_loc"],
                 args.lengthscale_prior_loc_min,
                 args.lengthscale_prior_loc_max,
             )
         ),
         "lengthscale_prior_scale": float(
             np.clip(
-                PRIOR_HYPERPARAMETER_BASELINES["lengthscale_prior_scale"],
-                args.prior_scale_min,
-                args.prior_scale_max,
+                LENGTHSCALE_HYPERPARAMETER_BASELINES["lengthscale_prior_scale"],
+                args.lengthscale_prior_scale_min,
+                args.lengthscale_prior_scale_max,
             )
         ),
     }
@@ -575,7 +547,7 @@ def _validation_loss(
     return weighted_loss / num_data
 
 
-def fit_trial(
+def fit_with_validation(
     *,
     likelihood,
     model,

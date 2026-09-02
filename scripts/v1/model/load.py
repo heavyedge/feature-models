@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import torch
-import torch.nn.functional as F
 
 from . import gpqr as gpqr_module
 from . import gpr as gpr_module
@@ -74,17 +73,7 @@ def load_GPQR(path=None, device=None):
         path = Path(__file__).parent / "gpqr.pt"
 
     checkpoint = torch.load(path, map_location=device, weights_only=False)
-    legacy_model_lower_bound = checkpoint["model"]["args"].pop(
-        "quantile_slope_lower_bound", None
-    )
-    legacy_likelihood_lower_bound = checkpoint["likelihood"]["args"].pop(
-        "quantile_slope_lower_bound", None
-    )
-    lower_bound = checkpoint.get(
-        "quantile_gap_lower_bound",
-        legacy_model_lower_bound or legacy_likelihood_lower_bound or 1e-4,
-    )
-    checkpoint["model"]["args"]["quantile_levels"] = checkpoint["quantiles"]
+    lower_bound = checkpoint["quantile_gap_lower_bound"]
 
     xscaler_class = getattr(scale_module, checkpoint["X_scaler"]["type"])
     X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
@@ -99,30 +88,8 @@ def load_GPQR(path=None, device=None):
     likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
 
     model_class = getattr(gpqr_module, checkpoint["model"]["type"])
-    model_args = dict(checkpoint["model"]["args"])
-    # Checkpoints written before GPQR lengthscales became mandatory stored
-    # either ``fixed_lengthscale`` or a learned raw lengthscale.  Preserve
-    # their fitted value while loading them under the new fixed-only API.
-    lengthscale = model_args.pop("lengthscale", None)
-    if lengthscale is None:
-        lengthscale = model_args.pop("fixed_lengthscale", None)
-    if lengthscale is None:
-        raw_lengthscale = checkpoint["model"]["state_dict"].get(
-            "covar_module.base_kernel.raw_lengthscale"
-        )
-        if raw_lengthscale is None:
-            raise ValueError("GPQR checkpoint is missing its lengthscale")
-        lengthscale = F.softplus(raw_lengthscale)
-    model_args["lengthscale"] = lengthscale
-    model_args.pop("lengthscale_prior_loc", None)
-    model_args.pop("lengthscale_prior_scale", None)
-    model_state_dict = {
-        key: value
-        for key, value in checkpoint["model"]["state_dict"].items()
-        if "lengthscale_prior" not in key
-    }
-    model = model_class(**model_args)
-    model.load_state_dict(model_state_dict)
+    model = model_class(**checkpoint["model"]["args"])
+    model.load_state_dict(checkpoint["model"]["state_dict"])
 
     X_scaler.to(device)
     y_scaler.to(device)
