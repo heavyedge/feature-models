@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `gpytorch-qr` dependency is upgraded to v1.0.0.
+- GPQR models now use `PriorMean` as prior mean, not the posterior mean of GPR.
 
 ## [1.0.0rc8] - 2026-08-28
 

@@ -10,7 +10,6 @@ from gpytorch_qr.settings import (
     quantile_gap_lower_bound,
 )
 
-from . import gpr as gpr_module
 from . import load as load_module
 from .batch import load_batched_features
 
@@ -22,7 +21,6 @@ logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser(description="Predict with the v1 batched GPQR.")
 parser.add_argument("X", type=pathlib.Path, help="Input feature CSV.")
 parser.add_argument("prior_mean_model", type=pathlib.Path, nargs="?")
-parser.add_argument("gpr_model", type=pathlib.Path, nargs="?")
 parser.add_argument("gpqr_model", type=pathlib.Path, nargs="?")
 parser.add_argument("--index-col", type=int, nargs="*")
 parser.add_argument("--batch-col", type=int, nargs="*", default=[])
@@ -45,7 +43,6 @@ except ValueError as exc:
 X = torch.tensor(X_values, dtype=torch.float32, device=device)
 
 prior_mean_model = load_module.load_PriorMean(args.prior_mean_model, device)
-gpr_X_scaler, gpr_y_scaler, _, gpr_model = load_module.load_GPR(args.gpr_model, device)
 (
     quantiles,
     gap_lower_bound,
@@ -56,9 +53,6 @@ gpr_X_scaler, gpr_y_scaler, _, gpr_model = load_module.load_GPR(args.gpr_model, 
 ) = load_module.load_GPQR(args.gpqr_model, device)
 for module in (
     prior_mean_model,
-    gpr_X_scaler,
-    gpr_y_scaler,
-    gpr_model,
     X_scaler,
     y_scaler,
     likelihood,
@@ -66,11 +60,8 @@ for module in (
 ):
     module.eval()
 targets = tuple(gpqr_model.output_names)
-if (
-    tuple(prior_mean_model.output_names) != targets
-    or tuple(gpr_model.output_names) != targets
-):
-    parser.error("prior-mean, GPR, and GPQR output names differ")
+if tuple(prior_mean_model.output_names) != targets:
+    parser.error("prior-mean and GPQR output names differ")
 quantile_levels = quantiles.detach().cpu().numpy()
 Q = len(quantiles)
 
@@ -97,10 +88,6 @@ with (
         X_chunk = X[..., start : start + args.chunk_size, :]
         prior_mean = prior_mean_model(X_chunk)
         X_expanded = expand_output_batch(X_chunk)
-        gpr_scaled_posterior = gpr_model(gpr_X_scaler(X_expanded))
-        gpr_mean = gpr_module.posterior_mean(
-            prior_mean, gpr_scaled_posterior, gpr_y_scaler
-        )
         X_scaled = X_scaler(X_expanded)
         scaled_posterior = gpqr_model.joint_quantile_posterior(X_scaled)
         scaled_samples = scaled_posterior.rsample(torch.Size([args.num_samples]))
@@ -108,7 +95,7 @@ with (
         samples = (
             scaled_samples * broadcast_y_stat(y_scaler.X_scale, scaled_samples)
             + broadcast_y_stat(y_scaler.X_mean, scaled_samples)
-            + gpr_mean.unsqueeze(0).unsqueeze(-1)
+            + prior_mean.unsqueeze(0).unsqueeze(-1)
         )
         # The affine shift above can collapse a one-ULP gap established in the
         # scaled posterior, so apply gpytorch-qr's strict-order hook to the
