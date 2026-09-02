@@ -1,6 +1,6 @@
 numpy
 scipy
-torch
+torch==2.13.0
 scikit-learn
 gpytorch
 gpytorch-qr==1.0.0
