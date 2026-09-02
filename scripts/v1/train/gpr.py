@@ -7,16 +7,16 @@ from models.v1.feature_models import scale as scaler_module
 from models.v1.feature_models.likelihoods import GaussianLikelihood
 from scripts.v1.train.batch import load_batched_arrays
 from scripts.v1.train.common import (
-    PRIOR_HYPERPARAMETER_DEFAULTS,
+    LENGTHSCALE_HYPERPARAMETER_DEFAULTS,
     configure_logging,
     create_train_parser,
     fit_all_data,
-    fit_trial,
+    fit_with_validation,
+    lengthscale_baseline,
     optimize_or_load_study,
-    prior_baseline,
     reuse_duplicate_trial,
     select_best_trial,
-    suggest_prior_hyperparameters,
+    suggest_lengthscale_hyperparameters,
     validate_train_args,
 )
 from scripts.v1.train.inducing import unique_inducing_points_per_fold
@@ -25,7 +25,7 @@ from scripts.v1.train.save import save_gpr
 logger = configure_logging(__name__)
 torch.manual_seed(42)
 
-HYPERPARAMETER_DEFAULTS = PRIOR_HYPERPARAMETER_DEFAULTS.copy()
+HYPERPARAMETER_DEFAULTS = LENGTHSCALE_HYPERPARAMETER_DEFAULTS.copy()
 
 parser = create_train_parser(HYPERPARAMETER_DEFAULTS)
 args = parser.parse_args()
@@ -114,19 +114,13 @@ Xtrain_inducing_points = unique_inducing_points_per_fold(Xtrain_scaled)
 
 
 def train_with_hyperparameters(
-    noise_prior_loc,
-    noise_prior_scale,
     lengthscale_prior_loc,
     lengthscale_prior_scale,
     trial=None,
 ):
     """Train all output batches under one shared HPO configuration."""
     torch.manual_seed(42)
-    likelihood = GaussianLikelihood(
-        noise_prior_loc=noise_prior_loc,
-        noise_prior_scale=noise_prior_scale,
-        batch_shape=gp_batch_shape,
-    ).to(device)
+    likelihood = GaussianLikelihood(batch_shape=gp_batch_shape).to(device)
     model = model_class(
         inducing_points=Xtrain_inducing_points.clone().detach(),
         batch_shape=gp_batch_shape,
@@ -134,7 +128,7 @@ def train_with_hyperparameters(
         lengthscale_prior_scale=lengthscale_prior_scale,
     ).to(device)
 
-    return fit_trial(
+    return fit_with_validation(
         likelihood=likelihood,
         model=model,
         mll=VariationalELBO(likelihood, model, num_data=num_data),
@@ -152,7 +146,7 @@ def train_with_hyperparameters(
 
 
 def objective(trial):
-    hyperparameters = suggest_prior_hyperparameters(
+    hyperparameters = suggest_lengthscale_hyperparameters(
         trial, HYPERPARAMETER_DEFAULTS, optimized_hyperparameters, args
     )
     duplicate_value = reuse_duplicate_trial(trial, logger)
@@ -162,8 +156,6 @@ def objective(trial):
 
 
 def train_on_all_data(
-    noise_prior_loc,
-    noise_prior_scale,
     lengthscale_prior_loc,
     lengthscale_prior_scale,
     num_epochs,
@@ -186,11 +178,7 @@ def train_on_all_data(
     if final_mean.batch_shape != Xall_base.shape[:-2]:
         parser.error("refit prior-mean batch shape must match the refit training data")
 
-    likelihood = GaussianLikelihood(
-        batch_shape=refit_batch_shape,
-        noise_prior_loc=noise_prior_loc,
-        noise_prior_scale=noise_prior_scale,
-    ).to(device)
+    likelihood = GaussianLikelihood(batch_shape=refit_batch_shape).to(device)
 
     X_scaler = scaler_module.MinMaxScaler(dim, batch_shape=refit_batch_shape).to(device)
     X_scaler.train()
@@ -230,8 +218,6 @@ def train_on_all_data(
 
 
 def fit_cross_validation_model(
-    noise_prior_loc,
-    noise_prior_scale,
     lengthscale_prior_loc,
     lengthscale_prior_scale,
     num_epochs,
@@ -239,11 +225,7 @@ def fit_cross_validation_model(
 ):
     """Refit fold batches on fold-train data for leakage-free metadata."""
     torch.manual_seed(42)
-    likelihood = GaussianLikelihood(
-        batch_shape=gp_batch_shape,
-        noise_prior_loc=noise_prior_loc,
-        noise_prior_scale=noise_prior_scale,
-    ).to(device)
+    likelihood = GaussianLikelihood(batch_shape=gp_batch_shape).to(device)
     model = model_class(
         inducing_points=Xtrain_inducing_points.clone().detach(),
         batch_shape=gp_batch_shape,
@@ -272,7 +254,7 @@ study = optimize_or_load_study(
     controls=controls,
     objective=objective,
     optimized_hyperparameters=optimized_hyperparameters,
-    baseline_params=prior_baseline(args),
+    baseline_params=lengthscale_baseline(args),
 )
 best_trial, best_hyperparameters, best_epoch, best_lr_reductions = select_best_trial(
     study, HYPERPARAMETER_DEFAULTS, optimized_hyperparameters, controls, args
@@ -286,16 +268,12 @@ logger.info(
 metadata = {}
 if has_validation:
     cv_model = fit_cross_validation_model(
-        best_hyperparameters["noise_prior_loc"],
-        best_hyperparameters["noise_prior_scale"],
         best_hyperparameters["lengthscale_prior_loc"],
         best_hyperparameters["lengthscale_prior_scale"],
         best_epoch,
         best_lr_reductions,
     )
-    cv_lengthscale = cv_model.covar_module.base_kernel.lengthscale.detach().clone()
     metadata["cross_validation"] = {
-        "lengthscale": cv_lengthscale,
         "prior_mean": {
             "type": cv_mean.__class__.__name__,
             "args": {"batch_shape": cv_mean.batch_shape},
@@ -340,14 +318,7 @@ if has_validation:
             },
         },
     }
-    logger.info(
-        "Saved fold-specific GPR lengthscales with shape %s.",
-        tuple(cv_lengthscale.shape),
-    )
-
 X_scaler, y_scaler, likelihood, model = train_on_all_data(
-    best_hyperparameters["noise_prior_loc"],
-    best_hyperparameters["noise_prior_scale"],
     best_hyperparameters["lengthscale_prior_loc"],
     best_hyperparameters["lengthscale_prior_scale"],
     best_epoch,

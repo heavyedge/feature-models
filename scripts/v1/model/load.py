@@ -15,26 +15,6 @@ __all__ = [
 ]
 
 
-def _prior_args(component, prior_name, loc_name, scale_name):
-    args = dict(component["args"])
-    state_dict = component["state_dict"]
-    loc_key = next(
-        (key for key in state_dict if key.endswith(f"{prior_name}._buffered_loc")),
-        None,
-    )
-    scale_key = next(
-        (key for key in state_dict if key.endswith(f"{prior_name}._buffered_scale")),
-        None,
-    )
-    if loc_key is None or scale_key is None:
-        args[loc_name] = None
-        args[scale_name] = None
-    else:
-        args[loc_name] = state_dict[loc_key]
-        args[scale_name] = state_dict[scale_key]
-    return args
-
-
 def load_PriorMean(path=None, device=None):
     """Return the batched prior-mean model."""
     if device is None:
@@ -50,23 +30,14 @@ def load_PriorMean(path=None, device=None):
     return model
 
 
-def _load_state_dict(module, state_dict):
-    state_dict = dict(state_dict)
-    expected = module.state_dict()
-    compatibility_buffers = {
-        "lower_counts",
-        "num_quantiles",
-        "quantile_level_offsets",
-    }
-    for key, value in expected.items():
-        if key not in state_dict and key.rsplit(".", 1)[-1] in compatibility_buffers:
-            state_dict[key] = value
-    module.load_state_dict(state_dict)
+def load_GPR(path=None, device=None, *, return_metadata=False):
+    """Return the independent three-batch GPR model and its transforms."""
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if path is None:
+        path = Path(__file__).parent / "gpr.pt"
 
-
-def _load_gp(path, model_module, device, *, checkpoint=None):
-    if checkpoint is None:
-        checkpoint = torch.load(path, map_location=device, weights_only=False)
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
 
     xscaler_class = getattr(scale_module, checkpoint["X_scaler"]["type"])
     X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
@@ -77,42 +48,17 @@ def _load_gp(path, model_module, device, *, checkpoint=None):
     y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
 
     likelihood_class = getattr(likelihood_module, checkpoint["likelihood"]["type"])
-    likelihood_args = _prior_args(
-        checkpoint["likelihood"],
-        "noise_prior",
-        "noise_prior_loc",
-        "noise_prior_scale",
-    )
-    likelihood = likelihood_class(**likelihood_args)
-    _load_state_dict(likelihood, checkpoint["likelihood"]["state_dict"])
+    likelihood = likelihood_class(**checkpoint["likelihood"]["args"])
+    likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
 
-    model_class = getattr(model_module, checkpoint["model"]["type"])
-    model_args = _prior_args(
-        checkpoint["model"],
-        "lengthscale_prior",
-        "lengthscale_prior_loc",
-        "lengthscale_prior_scale",
-    )
-    model = model_class(**model_args)
-    _load_state_dict(model, checkpoint["model"]["state_dict"])
+    model_class = getattr(gpr_module, checkpoint["model"]["type"])
+    model = model_class(**checkpoint["model"]["args"])
+    model.load_state_dict(checkpoint["model"]["state_dict"])
 
     X_scaler.to(device)
     y_scaler.to(device)
     likelihood.to(device)
     model.to(device)
-    return checkpoint, X_scaler, y_scaler, likelihood, model
-
-
-def load_GPR(path=None, device=None, *, return_metadata=False):
-    """Return the independent three-batch GPR model and its transforms."""
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if path is None:
-        path = Path(__file__).parent / "gpr.pt"
-
-    checkpoint, X_scaler, y_scaler, likelihood, model = _load_gp(
-        path, gpr_module, device
-    )
     result = (X_scaler, y_scaler, likelihood, model)
     if return_metadata:
         return (*result, checkpoint.get("metadata", {}))
@@ -127,21 +73,28 @@ def load_GPQR(path=None, device=None):
         path = Path(__file__).parent / "gpqr.pt"
 
     checkpoint = torch.load(path, map_location=device, weights_only=False)
-    legacy_model_lower_bound = checkpoint["model"]["args"].pop(
-        "quantile_slope_lower_bound", None
-    )
-    legacy_likelihood_lower_bound = checkpoint["likelihood"]["args"].pop(
-        "quantile_slope_lower_bound", None
-    )
-    lower_bound = checkpoint.get(
-        "quantile_gap_lower_bound",
-        legacy_model_lower_bound or legacy_likelihood_lower_bound or 1e-4,
-    )
-    checkpoint["model"]["args"]["quantile_levels"] = checkpoint["quantiles"]
+    lower_bound = checkpoint["quantile_gap_lower_bound"]
 
-    checkpoint, X_scaler, y_scaler, likelihood, model = _load_gp(
-        path, gpqr_module, device, checkpoint=checkpoint
-    )
+    xscaler_class = getattr(scale_module, checkpoint["X_scaler"]["type"])
+    X_scaler = xscaler_class(**checkpoint["X_scaler"]["args"])
+    X_scaler.load_state_dict(checkpoint["X_scaler"]["state_dict"])
+
+    yscaler_class = getattr(scale_module, checkpoint["y_scaler"]["type"])
+    y_scaler = yscaler_class(**checkpoint["y_scaler"]["args"])
+    y_scaler.load_state_dict(checkpoint["y_scaler"]["state_dict"])
+
+    likelihood_class = getattr(likelihood_module, checkpoint["likelihood"]["type"])
+    likelihood = likelihood_class(**checkpoint["likelihood"]["args"])
+    likelihood.load_state_dict(checkpoint["likelihood"]["state_dict"])
+
+    model_class = getattr(gpqr_module, checkpoint["model"]["type"])
+    model = model_class(**checkpoint["model"]["args"])
+    model.load_state_dict(checkpoint["model"]["state_dict"])
+
+    X_scaler.to(device)
+    y_scaler.to(device)
+    likelihood.to(device)
+    model.to(device)
     return (
         checkpoint["quantiles"],
         float(lower_bound),
